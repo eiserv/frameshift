@@ -98,17 +98,13 @@ Frameshift follows [Semantic Versioning](https://semver.org/).
 3. Merging the release pull request (a deliberate maintainer action) triggers the next run on `main`. That run creates the Git tag (`vX.Y.Z`) and the GitHub Release with release notes. The job outputs `release_created` and `tag_name`.
 4. Packaging runs as a dependent job in the same workflow run and attaches the binaries to that release (section 6.3).
 
-Configuration (decided in M1): manifest-based configuration with a single root package, tags without component prefix (`v0.1.0`), `bump-minor-pre-major`, and a release strategy matching the chosen language. For Go, a strategy that needs no version file, with the version injected at build time from the tag. For Rust, the `rust` strategy, which updates `Cargo.toml`. Changelog sections show features, fixes, performance improvements, reverts, and breaking changes. Other commit types are hidden.
+Configuration (decided in M1): manifest-based configuration with a single root package, tags without component prefix (`v0.1.0`), `bump-minor-pre-major`, and the `rust` release strategy, which updates the version in `Cargo.toml` (for a Cargo workspace, the workspace configuration is set up accordingly in M1). Changelog sections show features, fixes, performance improvements, reverts, and breaking changes. Other commit types are hidden.
 
 ### 5.2 `GITHUB_TOKEN` trigger behavior
 
 GitHub Actions does not create new workflow runs for events caused by the built-in `GITHUB_TOKEN`, to prevent recursive runs. The exceptions are `workflow_dispatch` and `repository_dispatch`. For `pull_request` events (`opened`, `synchronize`, `reopened`) caused by a workflow using `GITHUB_TOKEN`, GitHub creates runs that require approval from a user with write access. This has two consequences:
 
-- **Release pull request CI.** If Release Please uses `GITHUB_TOKEN`, CI on the release pull request waits for manual approval. Two options:
-  - approve the runs manually (acceptable in the private phase, because release pull requests are infrequent);
-  - generate a short-lived token from a GitHub App installed only on this repository, so CI runs automatically.
-
-  A fine-grained personal access token with an expiry is the fallback. The choice is made in M1.
+- **Release pull request CI.** If Release Please used `GITHUB_TOKEN`, CI on the release pull request would wait for manual approval. Decision (`P-014`): the release job generates a short-lived token from a GitHub App that is installed only on this repository and has only the permissions Release Please needs. CI on release pull requests therefore runs automatically, and no long-lived personal token is involved.
 - **Packaging trigger.** A release or tag created with `GITHUB_TOKEN` does not trigger workflows listening to `release` or `push: tags` events. Packaging will therefore run in the same workflow run, as a job that depends on the Release Please job and is conditioned on `release_created`. It is planned as a reusable workflow (`workflow_call`). For manual reruns, the packaging workflow will also accept `workflow_dispatch` with a tag input. That event type does create runs even when dispatched with `GITHUB_TOKEN`.
 
 Illustrative structure (documentation only, not a workflow file):
@@ -148,7 +144,7 @@ jobs:
 ### 6.2 CI
 
 - Formatting and linting with the language's standard tools.
-- Static analysis: vet-style checks, exhaustiveness checks for closed kinds (`Q-010`), import-boundary checks, vulnerability scanning.
+- Static analysis: Clippy with the project's lint configuration (including the ban on wildcard arms over closed enumerations and on `unsafe` code), dependency boundary checks between crates, dependency audits and vulnerability scanning.
 - Unit, fixture, golden, classification, negative, safety, determinism, and CLI end-to-end tests.
 - Cross-platform test matrix (Linux, Windows, macOS, and ARM64 runners where available), scaled by the tiers in [TESTING.md](TESTING.md) to respect the Actions minutes available to private repositories.
 - Cross-builds for every release target, to catch platform-specific build breaks early.
@@ -157,7 +153,7 @@ jobs:
 
 ### 6.3 Packaging
 
-1. Build the binary for each target with the pinned toolchain and reproducibility flags (section 9). With Go, all targets can be cross-compiled from one Linux runner with CGO disabled. With Rust, native runners per operating system are the practical approach.
+1. Build the binary for each target with the pinned Rust toolchain and reproducibility flags (section 9), on native runners per operating system. Both macOS architectures can be built on an ARM64 macOS runner. Linux binaries are statically linked against musl, so they run on any distribution without depending on its glibc version. If musl's memory allocator measurably affects performance, a dedicated allocator is evaluated under its own decision record.
 2. Smoke-test each binary on a native runner where one exists. `frameshift version` must report the tag's version and commit, and `frameshift inspect` must succeed on a small fixture.
 3. Create deterministic archives (section 8).
 4. Generate the checksum file.
@@ -172,7 +168,7 @@ jobs:
 | Linux x86_64 | 1 | Native runners |
 | Linux ARM64 | 1 | GitHub provides Linux ARM64 standard runners for private repositories (2 vCPUs) |
 | Windows x86_64 | 1 | Native runners |
-| Windows ARM64 | 1, if the selected toolchain supports it | GitHub provides Windows ARM64 standard runners for private repositories. Go supports `windows/arm64`. Rust supports `aarch64-pc-windows-msvc`. |
+| Windows ARM64 | 1 | GitHub provides Windows ARM64 standard runners for private repositories. Rust supports the `aarch64-pc-windows-msvc` target. |
 | macOS ARM64 | 1 | Native runners |
 | macOS x86_64 | 2 | Built (cross-compiled, or on an Intel runner while available). Intel macOS runner availability is declining, so the current runner labels must be checked when the workflows are built. Native testing happens only when such a runner exists. |
 
@@ -215,7 +211,7 @@ Each archive contains one top-level directory, `frameshift-<version>-<os>-<arch>
 
 - **Toolchain pinning.** The exact compiler version (including the patch level) is pinned in the repository and used by CI and local builds alike. Upgrades are deliberate `build` commits.
 - **Build inputs.** Builds depend only on the source at the tagged commit, the pinned toolchain, and pinned dependencies. Version and commit are injected from the tag and commit. No timestamps or host information are embedded.
-- **Path independence.** Absolute build paths are stripped from binaries (for example Go's `-trimpath`, or Rust's path remapping).
+- **Path independence.** Absolute build paths are removed from binaries with Rust's path remapping options.
 - **Deterministic archives.**
   - Entries are sorted.
   - File modification times come from `SOURCE_DATE_EPOCH`, which is derived from the commit time.
@@ -235,7 +231,7 @@ Each archive contains one top-level directory, `frameshift-<version>-<os>-<arch>
 | Keyless signing of the checksum file | Origin verification independent of the GitHub interface | Adds a development tool | Evaluate for the public phase |
 | macOS Developer ID signing and notarization | Gatekeeper accepts binaries downloaded through browsers | Apple Developer Program membership | Deferred (`DF-004`) |
 | Windows Authenticode signing | SmartScreen reputation | Certificate cost | Deferred (`DF-004`) |
-| Software bill of materials | Dependency transparency | Small value while dependencies are minimal | Evaluate. Go binaries already embed module information. |
+| Software bill of materials | Dependency transparency | Small value while dependencies are minimal | Evaluate, including embedding dependency information in the binary |
 
 **Immutable releases and Release Please.** Release Please normally publishes the release immediately, and packaging attaches assets afterwards. With immutable releases enabled, those uploads would fail. The planned solution:
 
@@ -251,7 +247,7 @@ How Release Please handles tag creation for draft releases must be validated in 
 
 - Workflows default to `permissions: contents: read`.
 - The Release Please job gets `contents: write` and `pull-requests: write`. The packaging job gets `contents: write` for uploads. Attestations would additionally need `id-token: write` and `attestations: write`.
-- Secrets are limited to the optional GitHub App credentials for release pull request CI. They are only available to the release job. Pull request workflows receive no secrets.
+- Secrets are limited to the GitHub App credentials for release pull request CI. They are only available to the release job. Pull request workflows receive no secrets.
 - All third-party actions are pinned to full commit SHAs. Updates are reviewed like dependency updates.
 - Release workflows use a concurrency group, so overlapping runs cannot race.
 - Workflow logs never print tokens or environment dumps.
@@ -281,7 +277,6 @@ How Release Please handles tag creation for draft releases must be validated in 
 
 ## 15. Open items
 
-- Token strategy for release pull request CI: manual approval, a GitHub App, or a fine-grained token (M1).
 - Release Please strategy and configuration for the chosen language (M1).
 - Draft and immutable release flow (experiment E5, M11).
 - Archive creation tool (M11).
