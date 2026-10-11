@@ -119,7 +119,7 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Status:** Accepted (2026-10-11).
 - **Decision:** Short-lived feature branches. Small, self-contained commits. Conventional Commits in English for commit messages and pull request titles. Pull-request-based integration into `main`. Squash merges only. Unrelated changes in separate branches and pull requests. See [RELEASES.md](RELEASES.md).
 - **Repository configuration (2026-10-12):** At the project owner's request, enabled only squash merging on `eiserv/frameshift`, disabled merge commits and rebase merging, and selected the PR title and body as the squash commit defaults. Read-back confirmed these settings and private visibility. Branch protection remains a separate setup item.
-- **One-run exception (2026-10-12):** The project owner explicitly authorized committing the verified template-scanner increment directly on local `main`. This overrides the pull-request requirement for this increment only. It does not change the default workflow, authorize a direct remote push, or establish branch protection.
+- **One-run exception (2026-10-12):** The project owner explicitly authorized committing the verified template-scanner increment directly on `main`, then explicitly authorized pushing it to `origin/main` in a follow-up instruction. This overrides the pull-request and direct-push restrictions for this increment and its documentation updates only. It does not change the default workflow or establish branch protection.
 
 ### D-011: Release management with Release Please
 
