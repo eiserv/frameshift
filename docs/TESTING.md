@@ -1,6 +1,6 @@
 # Testing and Verification Strategy
 
-**Status: plan.** No tests, fixtures, or test infrastructure exist yet. This document defines how Frameshift itself will be tested and how the accuracy of its migrations will be measured. Verifying a user's migrated project (`frameshift verify`) is a product feature, defined in section 16 of [ARCHITECTURE.md](ARCHITECTURE.md). This document covers testing Frameshift and uses those verification levels where relevant.
+**Status: strategy with initial M0 tests.** Six source-text and ten public-engine rewriting contract tests run with Cargo on Windows x86_64. They cover byte preservation, Unicode and newline positions, invalid spans, UTF-8 errors, size limits, edit conflicts, complete source accounting, byte provenance, and permutation-invariant results. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for commands and actual test locations. Parser, migration, golden, fuzzing, CI, and cross-platform test infrastructure remain planned. This document defines how Frameshift itself will be tested and how the accuracy of its migrations will be measured. Verifying a user's migrated project (`frameshift verify`) is a product feature, defined in section 16 of [ARCHITECTURE.md](ARCHITECTURE.md). This document covers testing Frameshift and uses those verification levels where relevant.
 
 ## 1. Goals
 

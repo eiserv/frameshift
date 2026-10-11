@@ -1,6 +1,6 @@
 # Roadmap
 
-**Status: plan.** Nothing on this roadmap is implemented. Milestones are defined by capabilities and technical dependencies, not by calendar dates (`D-014`). The three-stage strategy is an accepted decision (`D-016`). The contents of each stage are a plan and will be refined as work progresses.
+**Status: plan with M0 in progress.** The minimal Rust workspace, source-text foundation, and span edit core are implemented (`D-032`, [IMPLEMENTATION.md](IMPLEMENTATION.md)). E1 and E2 remain open; no milestone is complete. Milestones are defined by capabilities and technical dependencies, not by calendar dates (`D-014`). The three-stage strategy is an accepted decision (`D-016`). The contents of each stage are a plan and will be refined as work progresses.
 
 **Stages versus version numbers.** "V1", "V2", and "V3" name product stages. They are not semantic version numbers. The first stable release, 1.0.0, is planned for when V1's acceptance criteria are met. After that, major version numbers follow breaking changes to the CLI and document contracts, not stage boundaries (see [RELEASES.md](RELEASES.md)).
 
@@ -44,7 +44,7 @@ Each milestone ends with a capability that is demonstrable and tested.
 
 | Milestone | Capability | Main contents | Depends on |
 | --- | --- | --- | --- |
-| **M0** Foundation decisions | Core techniques validated in Rust | Experiments E1 (parser and tree design) and E2 (edit-based rewriting and Astro printing). `P-002` and `P-003` accepted or replaced. Rust toolchain version chosen. Private GitHub repository and branch protection set up, with the user's authorization. | None |
+| **M0** Foundation decisions | Core techniques validated in Rust | Experiments E1 (parser and tree design) and E2 (edit-based rewriting and Astro printing). `P-002` and `P-003` accepted or replaced. Rust 1.98.0 chosen (`D-032`). Minimal build tooling may be introduced here for the experiments, before the M1 shell. Private GitHub repository and branch protection set up, with the user's authorization. | None |
 | **M1** Bootstrap and engine skeleton | A buildable, tested, releasable shell | Package layout following the architecture's layers. Foundation layer: findings, identifiers, path model, deterministic collections, limits. `frameshift version` and `help`. Golden and determinism test harnesses. CI with formatting, linting, tests on three operating systems, cross-builds for all targets, and Conventional Commit checks. Release Please and basic packaging with checksums. | M0 |
 | **M2** Discovery and inspection | `frameshift inspect` | Safe filesystem walker (symbolic link policy, limits, ignore rules including `.gitignore`). Snapshot store with hashing. JSON and JSONC parsers. Package manifest model. Lockfile parsers (npm, pnpm YAML subset, Yarn classic and Berry, Bun text). Workspace detection. Framework, version, and router detection. Adversarial fixtures. | M1 |
 | **M3** Parsing | Production parsers | JS, TS, JSX, and TSX parser evolved from E1. CSS and SCSS tokenizer and structural parser. Position tables, comment lists, resource limits. Conformance suites. Continuous fuzzing. | M1 (and E1) |

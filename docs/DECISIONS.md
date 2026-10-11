@@ -39,22 +39,23 @@ Statuses change only through an edit to this file in a pull request. A changed d
 | D-029 | Location format | Accepted |
 | D-030 | Selection of the real-world evaluation corpus | Accepted |
 | D-031 | Second migration path | Accepted |
+| D-032 | M0 tooling and first implementation increment | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Proposed |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
-| P-004 | MVP project model instead of a universal IR | Proposed |
-| P-005 | Phase separation and recomputed plans | Proposed |
+| P-004 | MVP project model instead of a universal IR | Accepted |
+| P-005 | Phase separation and recomputed plans | Accepted |
 | P-006 | Fixed kind-based weights (`weights-v1`) | Accepted |
 | P-007 | Conversion ladder for components | Proposed |
 | P-008 | `preact/compat` as the default island strategy | Accepted |
 | P-009 | `client:load` as the default hydration directive | Accepted |
 | P-010 | Lockfile carry-over instead of lockfile generation | Accepted |
 | P-011 | Output metadata and support file locations | Accepted |
-| P-012 | Exit code scheme | Proposed |
+| P-012 | Exit code scheme | Accepted |
 | P-013 | Verification levels | Proposed |
 | P-014 | Release workflow structure | Accepted |
 | P-015 | Artifact naming and platform tiers | Accepted |
-| P-016 | Finding codes and identifier schemes | Proposed |
+| P-016 | Finding codes and identifier schemes | Accepted |
 | P-017 | Minimal relocation policy for output layout | Superseded by D-024 |
 | DF-001 to DF-012 | Deferred decisions | Deferred or resolved (see table) |
 | Q-001 to Q-012 | Open questions | Open or resolved (see table) |
@@ -118,7 +119,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 ### D-011: Release management with Release Please
 
 - **Status:** Accepted (2026-10-11).
-- **Decision:** Release Please derives versions and changelogs from Conventional Commits and maintains a release pull request. Merging it creates the tag and the GitHub Release. Packaging attaches binaries to that release. Version numbers are never edited by hand. The detailed workflow structure is proposed in P-014.
+- **Decision:** Release Please derives versions and changelogs from Conventional Commits and maintains a release pull request. Merging it creates the tag and the GitHub Release. Packaging attaches binaries to that release. Version numbers are never edited by hand. The detailed workflow structure is accepted in P-014.
 
 ### D-012: Private repository phase
 
@@ -234,6 +235,16 @@ Statuses change only through an edit to this file in a pull request. A changed d
 - **Status:** Accepted (2026-10-11). Partly resolves DF-011.
 - **Decision:** The preferred second migration path for V2 is Next.js to Astro with React islands (milestone M18). The second source framework (M19) is still open.
 
+### D-032: M0 tooling and first implementation increment
+
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
+- **Decision:** Begin with a minimal Cargo workspace for M0 and tested source positions and a deterministic span edit core. Pin Rust 1.98.0, including rustfmt and Clippy. Use only the Rust standard library initially. The workspace uses edition 2024, forbids unsafe code, and denies wildcard arms over closed enums through Clippy.
+- **Milestone boundary:** M0 needs buildable tooling to run E1 and E2. This tooling is permitted before M1. CI, releases, the product CLI, and migration commands remain M1 or later work. Neither M0 nor M1 is complete after this increment.
+- **Experiment gates:** P-002 and P-003 remain Proposed until their experiment criteria are met. The edit core alone does not validate AST-based rewriting or Astro output. E1 uses at least 30 MB/s per core and at most 20 times the source size with full tree retention throughout the documentation.
+- **Tool evaluation:** Cargo, rustc, rustfmt, and Clippy come from the pinned Rust toolchain. They are maintained with Rust, support the planned platforms, require no runtime dependency, and provide standard build, formatting, and lint contracts. Exact pinning avoids tool drift. A deliberate build commit can replace the pin.
+- **Versioning:** Unpublished M0 crates omit the optional Cargo package version, which defaults to 0.0.0. This is not a release. Release Please will establish the managed version in M1; versions must not subsequently be changed by hand.
+- **Rationale:** Validate reusable, framework-independent primitives before adding parser or migration behavior. Keep the experiment gates honest and the first change independently reviewable.
+
 ## Proposed decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
@@ -259,14 +270,14 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 ### P-004: MVP project model instead of a universal IR
 
-- **Status:** Proposed (2026-10-11).
-- **Proposal:** V1 uses a project model sized for one migration path, with neutral naming and framework facets. V2 extracts a common core plus facets once a second source or target exists. See section 10 of [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
+- **Decision:** V1 uses a project model sized for one migration path, with neutral naming and framework facets. V2 extracts a common core plus facets once a second source or target exists. See section 10 of [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Rationale:** YAGNI, and the impossibility of faithfully representing all execution models in one IR.
 
 ### P-005: Phase separation and recomputed plans
 
-- **Status:** Proposed (2026-10-11).
-- **Proposal:** Analysis is read-only, planning is pure, execution writes only to staging, and verification runs external tools only when authorized. `migrate --plan` recomputes the plan and requires an identical hash. The plan file is an approval artifact and is never executed.
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
+- **Decision:** Analysis is read-only, planning is pure, execution writes only to staging, and verification runs external tools only when authorized. `migrate --plan` recomputes the plan and requires an identical hash. The plan file is an approval artifact and is never executed.
 - **Rationale:** Inspectable plans, trivial dry-runs, no plan tampering, and determinism.
 
 ### P-006: Fixed kind-based weights (`weights-v1`)
@@ -307,8 +318,8 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 ### P-012: Exit code scheme
 
-- **Status:** Proposed (2026-10-11).
-- **Proposal:** 0 success, 1 condition failed, 2 usage, 3 input, 4 output refused, 5 completed with failures, 6 environment, 70 internal error, 130 interrupted, with defined precedence. See section 7 of [CLI.md](CLI.md).
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
+- **Decision:** 0 success, 1 condition failed, 2 usage, 3 input, 4 output refused, 5 completed with failures, 6 environment, 70 internal error, 130 interrupted, with defined precedence. See section 7 of [CLI.md](CLI.md).
 
 ### P-013: Verification levels
 
@@ -327,8 +338,8 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 ### P-016: Finding codes and identifier schemes
 
-- **Status:** Proposed (2026-10-11).
-- **Proposal:** Finding codes `FS` followed by four digits, grouped by area. Rule IDs `<migration-path-id>/<area>.<name>`. Feature IDs `<ecosystem>.<category>.<name>`. Unit IDs `<kind>:<path or URL pattern>[#<export>]`. See [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md) and section 8 of [ENGINEERING.md](ENGINEERING.md).
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
+- **Decision:** Finding codes `FS` followed by four digits, grouped by area. Rule IDs `<migration-path-id>/<area>.<name>`. Feature IDs `<ecosystem>.<category>.<name>`. Unit IDs `<kind>:<path or URL pattern>[#<export>]`. See [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md) and section 8 of [ENGINEERING.md](ENGINEERING.md).
 
 ### P-017: Minimal relocation policy for output layout
 

@@ -1,8 +1,8 @@
 # Frameshift
 
-Frameshift is a planned framework migration engine with a command-line interface. It will analyze existing software projects and migrate them from one framework to another, preserve their intended behavior, and report what it migrated, what it could not migrate, and why.
+Frameshift is a framework migration engine in early development with a command-line interface. It will analyze existing software projects and migrate them from one framework to another, preserve their intended behavior, and report what it migrated, what it could not migrate, and why.
 
-> **Status: planning stage.** Frameshift has not been implemented. This repository currently contains only documentation: architecture, roadmap, specifications, and engineering conventions. The commands shown below illustrate the planned interface. None of them work yet.
+> **Status: initial M0 implementation.** The repository now contains a buildable Rust workspace with tested immutable source-text primitives and a deterministic span edit core with provenance. The parser and rewriting experiments remain open. There is no CLI or working migration command yet. See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for existing code, contracts, limits, and development commands. The product commands below remain planned.
 
 ## The problem
 
@@ -68,6 +68,7 @@ See [docs/CLI.md](docs/CLI.md) for the full specification.
 | Document | Contents |
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Binding instructions for all agents working on this repository |
+| [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | Existing code, text contracts, limits, and development commands |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, subsystems, project model, rule engine, planning, safe execution, verification, limits |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Stages, milestones, dependencies, acceptance criteria, risks, non-goals |
 | [docs/MIGRATION_SPEC.md](docs/MIGRATION_SPEC.md) | Next.js to Astro + Preact: strategies, compatibility matrix, examples |
@@ -82,6 +83,6 @@ See [docs/CLI.md](docs/CLI.md) for the full specification.
 
 ## Project status
 
-- **Implementation:** not started. Rust is the primary implementation language. Other languages may be used for specific, important tasks where they offer a demonstrable quality advantage (see [docs/DECISIONS.md](docs/DECISIONS.md)).
+- **Implementation:** started with the M0 foundation. No product command exists yet. Rust is the primary implementation language. Other languages may be used for specific, important tasks where they offer a demonstrable quality advantage (see [docs/DECISIONS.md](docs/DECISIONS.md)).
 - **Repository:** private (`eiserv/frameshift` on GitHub). No license has been chosen yet, so no rights are granted beyond those of the copyright holder.
 - **Contributions:** not open during the private phase.
