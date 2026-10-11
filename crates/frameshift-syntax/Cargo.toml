@@ -1,0 +1,11 @@
+[package]
+name = "frameshift-syntax"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+frameshift-core = { path = "../frameshift-core" }
+
+[lints]
+workspace = true

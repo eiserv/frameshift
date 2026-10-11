@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: planned architecture with an initial M0 foundation.** Immutable source text, byte spans, derived positions, and pure span rewriting with text provenance are implemented. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the existing modules and exact contracts. The pipeline and all remaining subsystems below are design intent. Identifiers such as `D-006` or `P-003` refer to entries in [DECISIONS.md](DECISIONS.md): "Accepted" entries are binding, "Proposed" entries are recommendations that still need confirmation.
+**Status: planned architecture with M0 in progress.** Immutable source text, byte spans, derived positions, parser-directed JavaScript trivia and string scanners, and pure span rewriting with text provenance are implemented. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the existing modules and exact contracts. There is no complete lexer or parser. The pipeline and all remaining subsystems below are design intent. Identifiers such as `D-006` or `P-003` refer to entries in [DECISIONS.md](DECISIONS.md): "Accepted" entries are binding, "Proposed" entries are recommendations that still need confirmation.
 
 Related documents:
 
