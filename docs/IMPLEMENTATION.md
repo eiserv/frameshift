@@ -7,10 +7,13 @@
 - `rust-toolchain.toml` pins Rust 1.98.0, rustfmt, and Clippy (`D-032`).
 - The root `Cargo.toml` defines an edition 2024 workspace. Packages are unpublished and use Cargo's default version 0.0.0. `Cargo.lock` is committed. No external crates are used.
 - `crates/frameshift-core` is the framework-independent foundation. It currently provides immutable UTF-8 source text, byte spans, derived positions, explicit size limits, and typed text errors.
-- `crates/frameshift-core/tests/text.rs` tests source preservation, positions, and rejected inputs.
+- `crates/frameshift-transform` implements pure span rewriting and byte-region provenance. It depends only on the foundation.
+- `crates/frameshift-engine` is the public facade for these implemented text APIs. Future CLI code will consume it rather than lower layers. It does not yet expose the project pipeline.
+- `crates/frameshift-core/tests/text.rs` tests source preservation, positions, and rejected inputs. `crates/frameshift-engine/tests/rewriting.rs` tests rewriting through the public facade.
+- `.gitattributes` fixes LF checkout endings for workspace Rust, Markdown, and TOML files and Cargo.lock. It does not normalize the analyzed text held by the library. Fixture-specific Git attributes will be specified when on-disk fixtures are added.
 - There is no binary or CLI yet. No parser, project discovery, migration rule, filesystem executor, CI workflow, or release configuration exists.
 
-The workspace forbids unsafe code, requires public API documentation, and denies Clippy's `wildcard_enum_match_arm` lint. No core function accesses the filesystem, environment, clock, network, or external processes.
+The workspace forbids unsafe code, requires public API documentation, and denies Clippy's `wildcard_enum_match_arm` lint. None of the implemented library functions access the filesystem, environment, clock, network, or external processes.
 
 ## 2. Source text and positions
 
@@ -24,7 +27,21 @@ The default source limit is 16 MiB. Callers pass limits explicitly and may lower
 
 Index construction is linear in source bytes. Line starts and checkpoints every 128 scalars support position lookup with two binary searches and a scan of at most 128 scalars, including EOF. This prevents repeated position queries on a long line from becoming quadratic.
 
-## 3. Local validation
+## 3. Span rewriting
+
+`apply_edits` takes an immutable `SourceText`, a borrowed set of edits, and explicit `EditLimits`. It returns rewritten text, a partition of its bytes into provenance regions, and a record of every applied edit. It never selects transformations or parses source. Callers must eventually obtain edits from parsed structure and verified rules, not text search.
+
+Each edit has a half-open original-source span, UTF-8 replacement text, and an `EditOrder` pair (operation order, then edit order). Empty spans insert; empty replacements delete. All ordering pairs in one invocation must be unique, including at different offsets. The caller derives these pairs deterministically, never from worker completion order.
+
+Edits are ordered by source offset, with insertions before nonempty replacements at the same start offset. Insertions sharing an offset are ordered by `EditOrder`. At adjacent replacement boundaries, insertions follow the preceding replacement and precede the following replacement. Insertions strictly inside a replaced range are conflicts. Overlapping nonempty ranges, including identical replacements, are conflicts. Invalid bounds, partial UTF-8 scalars, duplicate ordering pairs, and conflicts return typed errors with no partial result.
+
+Validation is deterministic: edit count first, duplicate ordering pairs in pair order, then span validity and conflicts in source order, and final output size. All validation precedes output allocation and emission. Original text stays unchanged on success and failure. Bytes outside edited spans are copied exactly; replacements are emitted exactly as supplied. There is no newline, indentation, or escaping policy in this low-level edit core. Those belong to future rule and printer code.
+
+The default limits are 100,000 edits and 64 MiB of output per invocation. Callers pass limits explicitly. Output size means final size after deletions and replacements. Byte arithmetic is checked for overflow. Storage is reserved fallibly before emission, including edit indexes and provenance. The algorithm sorts edits and scans the source once for emission, with O(source bytes + replacement bytes + edits * log(edits)) time.
+
+Nonempty provenance regions cover every output byte exactly once. Copied regions refer to their exact source spans; replacement regions refer to the responsible ordering pair and consumed source span. Replacement provenance does not imply equivalence. Deletions emit no region but remain in the applied-edit list, with an empty output span. This is per-text provenance only: rule IDs, file identities, and manifest integration remain future work.
+
+## 4. Local validation
 
 From the repository root, with the pinned toolchain installed:
 
@@ -41,4 +58,4 @@ These commands operate on Frameshift's own code. They do not run any analyzed pr
 rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
 ```
 
-Tests have been run locally on Windows x86_64. Cross-platform validation and the E1/E2 throughput, memory, fuzzing, provenance, and Astro build gates remain outstanding. Tests of primitives do not demonstrate migration correctness.
+The suite contains 16 contract tests, run locally on Windows x86_64. It includes all 24 permutations of a four-edit example and all 225 pairs of half-open spans in a four-byte source, checking conflicts, stable output, complete source accounting, and output provenance. None of these tests execute source projects. Cross-platform validation and the complete E1/E2 parser, printer, throughput, memory, fuzzing, end-to-end provenance, and Astro build gates remain outstanding. No automated crate-boundary check exists yet; it is planned with M1 CI. Tests of primitives do not demonstrate migration correctness.

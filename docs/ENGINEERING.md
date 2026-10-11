@@ -1,6 +1,6 @@
 # Engineering
 
-**Status: guidance and decisions with an initial M0 workspace.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text and position primitives exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
+**Status: guidance and decisions with an initial M0 workspace.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text, position primitives, and the span edit core exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
 
 ## 1. Engineering principles
 
@@ -330,7 +330,7 @@ Benchmarks run on synthetic projects of fixed sizes (generated deterministically
 
 ### 7.1 Boundaries
 
-The layering in section 6 of [ARCHITECTURE.md](ARCHITECTURE.md) is enforced by the package structure and by an automated import-boundary check. The CLI depends only on the engine's public interface. Packages are small and cohesive. "utils" or "common" packages are not allowed to become dumping grounds.
+The existing M0 crates follow the layering in section 6 of [ARCHITECTURE.md](ARCHITECTURE.md). An automated import-boundary check is planned with M1 CI. Later implementation must preserve downward-only dependencies. The CLI depends only on the engine's public interface. Packages are small and cohesive. "utils" or "common" packages are not allowed to become dumping grounds.
 
 ### 7.2 Error handling
 

@@ -154,3 +154,28 @@ fn indexed_positions_match_a_scalar_reference_on_long_mixed_lines() {
         }
     );
 }
+
+#[test]
+fn columns_count_combining_marks_and_unicode_line_separators() {
+    let text = "e\u{301}\t🦀\u{2028}x\u{2029}z";
+    let source = source(text);
+    let x = text.find('x').unwrap();
+    assert_eq!(source.position(3).unwrap().column, 3);
+    assert_eq!(source.position(8).unwrap().column, 5);
+    assert_eq!(
+        source.position(x).unwrap(),
+        Position {
+            offset: x,
+            line: 2,
+            column: 1
+        }
+    );
+    assert_eq!(
+        source.position(text.len()).unwrap(),
+        Position {
+            offset: text.len(),
+            line: 3,
+            column: 2
+        }
+    );
+}

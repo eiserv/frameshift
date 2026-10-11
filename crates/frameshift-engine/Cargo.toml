@@ -1,0 +1,12 @@
+[package]
+name = "frameshift-engine"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+frameshift-core = { path = "../frameshift-core" }
+frameshift-transform = { path = "../frameshift-transform" }
+
+[lints]
+workspace = true

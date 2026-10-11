@@ -6,4 +6,3 @@ publish.workspace = true
 
 [lints]
 workspace = true
-

@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/frameshift-core"]
+members = [
+    "crates/frameshift-core",
+    "crates/frameshift-transform",
+    "crates/frameshift-engine",
+]
 resolver = "3"
 
 [workspace.package]
@@ -16,4 +20,3 @@ wildcard_enum_match_arm = "deny"
 
 [profile.release]
 panic = "unwind"
-

@@ -1,6 +1,6 @@
 # Security
 
-**Status: initial threat model and planned controls.** The M0 text primitives have no I/O and reject invalid UTF-8, invalid spans, and oversized text with typed errors. Unsafe Rust is forbidden. Their scope and limits are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md). Source discovery, filesystem safety, execution authorization, and the remaining product controls below are not implemented. This document defines the security direction for the migration engine, the privacy requirements, the restrictions of the private repository phase, and the preparation needed before any public release. Once Frameshift is public, it will also serve as the basis for the project's security policy.
+**Status: initial threat model and planned controls.** The M0 text and rewriting primitives have no I/O. They reject invalid UTF-8, invalid spans, overlapping edits, ambiguous ordering, and source, output, or edit-count limits with typed errors and no partial output. Unsafe Rust is forbidden. Their scope and limits are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md). Source discovery, filesystem safety, execution authorization, and the remaining product controls below are not implemented. This document defines the security direction for the migration engine, the privacy requirements, the restrictions of the private repository phase, and the preparation needed before any public release. Once Frameshift is public, it will also serve as the basis for the project's security policy.
 
 ## 1. Scope
 
