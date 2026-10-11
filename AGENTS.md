@@ -64,4 +64,4 @@ These instructions are binding for every agent working on Frameshift, whatever t
 - **Releases and CI/CD.** Versions change only through Release Please. Never edit version numbers by hand, and never create tags or releases manually. The workflows in `docs/RELEASES.md` are planned. None exist yet.
 - **Private repository.** Do not publish the repository, change its visibility, create mirrors, upload its contents or analyzed code to external services, add telemetry, or assume a license. Release artifacts stay private (`D-012`, `docs/SECURITY.md` section 10).
 - **Maintaining these instructions.** Keep this file compact. When real code exists, add entries for actual modules, invariants, and verified commands, and remove statements that become false. Do not add speculative paths or implementation details.
-- **Code Comments.** Refrain from extensive comments in the code. Comments should NEVER be longer than the code it explains. Also if you comment on code, please explain *why* not *what*. 
+- **Code Comments.** Keep implementation comments concise and explain why, not what. Public API documentation must still describe its contract.
