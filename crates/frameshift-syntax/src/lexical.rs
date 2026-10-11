@@ -82,12 +82,11 @@ pub enum LexicalErrorKind {
     MissingNumericDigit,
     /// A numeric separator was not between two digits of the same part and radix.
     InvalidNumericSeparator,
-    /// An identifier start, extra decimal digit, or invalid BigInt suffix follows a number.
+    /// An identifier start, backslash, extra decimal digit, or invalid BigInt
+    /// suffix follows a number.
     InvalidNumericContinuation,
     /// A leading-zero integer is outside the supported strict-mode subset.
     LegacyLeadingZero,
-    /// A non-ASCII suffix requires the future Unicode identifier classifier.
-    UnclassifiedNumericBoundary,
     /// The numeric scan would consume more than the allowed number of bytes.
     NumberLimit,
     /// A template scan did not start at the delimiter selected by its context.
@@ -132,9 +131,6 @@ impl fmt::Display for LexicalError {
             LexicalErrorKind::InvalidNumericSeparator => "invalid numeric separator",
             LexicalErrorKind::InvalidNumericContinuation => "invalid numeric continuation",
             LexicalErrorKind::LegacyLeadingZero => "legacy leading-zero number is unsupported",
-            LexicalErrorKind::UnclassifiedNumericBoundary => {
-                "Unicode numeric boundary is unsupported"
-            }
             LexicalErrorKind::NumberLimit => "number size exceeds lexical limit",
             LexicalErrorKind::ExpectedTemplateDelimiter => "expected a template delimiter",
             LexicalErrorKind::UnterminatedTemplate => "unterminated template segment",
@@ -168,7 +164,6 @@ impl std::error::Error for LexicalError {
             | LexicalErrorKind::InvalidNumericSeparator
             | LexicalErrorKind::InvalidNumericContinuation
             | LexicalErrorKind::LegacyLeadingZero
-            | LexicalErrorKind::UnclassifiedNumericBoundary
             | LexicalErrorKind::NumberLimit
             | LexicalErrorKind::ExpectedTemplateDelimiter
             | LexicalErrorKind::UnterminatedTemplate

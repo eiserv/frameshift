@@ -201,7 +201,7 @@ Each archive contains one top-level directory, `frameshift-<version>-<os>-<arch>
 - the binary (`frameshift` or `frameshift.exe`);
 - `README.md`;
 - `LICENSE`, once a license has been chosen (`DF-003`);
-- `THIRD_PARTY_NOTICES.md`, if any third-party code is shipped.
+- `THIRD_PARTY_NOTICES.md`, if any third-party code or data is shipped. The Unicode-derived identifier tables (`D-036`) already require it.
 
 ### 8.3 Checksums
 

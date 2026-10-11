@@ -28,3 +28,7 @@ version = "0.0.0"
 dependencies = [
  "frameshift-core",
 ]
+
+[[package]]
+name = "frameshift-unicode-gen"
+version = "0.0.0"

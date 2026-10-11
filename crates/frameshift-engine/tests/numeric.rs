@@ -134,14 +134,23 @@ fn strict_mode_rejects_legacy_leading_zero_forms() {
 }
 
 #[test]
-fn numeric_boundaries_do_not_guess_unicode_identifier_properties() {
-    for suffix in [
-        "é", "🦀", "\u{301}", "\u{85}", "\u{200b}", "\u{200c}", "\u{180e}",
-    ] {
+fn numeric_boundaries_use_pinned_unicode_identifier_starts() {
+    for suffix in ["é", "中", "\u{2118}", "\u{309b}", "\u{3d000}"] {
         assert_eq!(
             scan_js_number(&source(&format!("1{suffix}")), 0, LexicalLimits::default()),
-            Err(error(1, LexicalErrorKind::UnclassifiedNumericBoundary))
+            Err(error(1, LexicalErrorKind::InvalidNumericContinuation)),
+            "{suffix}"
         );
+    }
+    // Continue-only, format, and symbol scalars end the literal; whatever token
+    // follows is the parser's concern.
+    for suffix in [
+        "🦀", "\u{301}", "\u{660}", "\u{b7}", "\u{85}", "\u{200b}", "\u{200c}", "\u{200d}",
+        "\u{180e}", "\u{2e2f}", "€",
+    ] {
+        let input = source(&format!("0x1n{suffix}"));
+        let result = scan_js_number(&input, 0, LexicalLimits::default()).unwrap();
+        assert_eq!(result.span, Span::new(0, 4).unwrap(), "{suffix}");
     }
     for suffix in [
         " ",

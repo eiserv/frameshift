@@ -1,9 +1,7 @@
 use frameshift_core::{SourceText, Span};
 
-use crate::lexical::{
-    LexicalError, LexicalErrorKind, LexicalLimits, error, is_line_terminator, is_whitespace, span,
-    validate,
-};
+use crate::lexical::{LexicalError, LexicalErrorKind, LexicalLimits, error, span, validate};
+use crate::unicode::is_js_identifier_start;
 
 /// The spelling base of a numeric literal, without evaluating its value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,10 +50,9 @@ pub struct NumericLiteral {
 /// Scans one strict-mode ECMAScript numeric literal at a parser-selected offset.
 /// Supports decimal fractions and exponents, binary/octal/hexadecimal integers,
 /// separators, and BigInt suffixes. Leading signs belong to separate operators.
-/// Legacy leading-zero integers are explicitly unsupported. Adjacent ASCII
-/// identifier starts, backslashes, and extra decimal digits are rejected.
-/// Non-ASCII boundaries other than ECMAScript whitespace/line terminators return
-/// an unsupported error until a Unicode identifier classifier exists.
+/// Legacy leading-zero integers are explicitly unsupported. A directly following
+/// `IdentifierStartChar` (pinned Unicode `ID_Start`, `$`, or `_`), backslash, or
+/// extra decimal digit is rejected; any other scalar ends the literal.
 /// The caller must select JavaScript context, never JSX text or literal bodies.
 /// This does not validate the surrounding expression or file. Scanning is
 /// iterative, allocation-free, and linear in consumed bytes.
@@ -143,20 +140,15 @@ pub fn scan_js_number(
     } else {
         NumericKind::Number
     };
-    if let Some(ch) = source.as_str()[scan.cursor..].chars().next() {
-        if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$' | '\\') {
-            return Err(error(
-                scan.cursor,
-                LexicalErrorKind::InvalidNumericContinuation,
-            ));
-        }
-        // Rust's alphabetic property is not ECMAScript's Unicode ID_Start.
-        if !ch.is_ascii() && !is_whitespace(ch) && !is_line_terminator(ch) {
-            return Err(error(
-                scan.cursor,
-                LexicalErrorKind::UnclassifiedNumericBoundary,
-            ));
-        }
+    // A backslash after a number could only begin an escaped identifier start,
+    // which ECMAScript forbids there just like an unescaped one.
+    if let Some(ch) = source.as_str()[scan.cursor..].chars().next()
+        && (ch.is_ascii_digit() || ch == '\\' || is_js_identifier_start(ch))
+    {
+        return Err(error(
+            scan.cursor,
+            LexicalErrorKind::InvalidNumericContinuation,
+        ));
     }
     Ok(NumericLiteral {
         span: span(offset, scan.cursor)?,
