@@ -204,7 +204,7 @@ Every verdict line cites the findings it rests on.
 | `severity` | `error`, `blocker`, `unknown`, `review`, or `info` |
 | `unit` | Affected unit ID |
 | `feature` | Feature ID, where applicable |
-| `location` | File (root-relative), start and end. Offsets are zero-based byte offsets, and the end is exclusive. Lines and columns are one-based. |
+| `location` | File (root-relative), start and end. Offsets are zero-based byte offsets and canonical, and the end is exclusive. Lines and columns are one-based, and columns count Unicode scalar values (`D-029`). |
 | `message` | One-line summary |
 | `explanation` | Why this matters, in plain language |
 | `remediation` | Concrete options for the user |
@@ -246,7 +246,7 @@ A full report contains the following sections. Each one is a projection of the s
 ## 10. Formats
 
 - **Human-readable CLI output:** summary-first, compact, ASCII by default. Colors only on terminals that support them, honoring `NO_COLOR`. See [CLI.md](CLI.md).
-- **Markdown:** `FRAMESHIFT.md` in the output project, plus `frameshift report --format markdown` for sharing.
+- **Markdown:** `.frameshift/SUMMARY.md` in the output project, plus `frameshift report --format markdown` for sharing.
 - **JSON:** versioned documents with `kind` (`frameshift.analysis`, `frameshift.plan`, `frameshift.report`, `frameshift.manifest`) and an integer `schemaVersion`. Adding fields does not change the schema version. Removing or changing the meaning of a field increments it and counts as a breaking change (see [RELEASES.md](RELEASES.md)). A formal JSON Schema for each document kind is planned alongside the first implementation.
 
 ### 10.1 Determinism and privacy
@@ -373,7 +373,7 @@ Execution (86 units, total weight 412)
 
 Awaiting review   21.8%   90/412   18 units
 Verification      structural passed for 344/412 (83.4%); build and static-output not run
-Manual tasks      7, listed in ../lumen-site-astro/FRAMESHIFT.md
+Manual tasks      7, listed in ../lumen-site-astro/.frameshift/SUMMARY.md
 
 Output committed to ../lumen-site-astro
 ```
@@ -517,7 +517,7 @@ Routes (12, including dependencies)
    uncertain             0
 ```
 
-### 11.7 `FRAMESHIFT.md` excerpt
+### 11.7 `.frameshift/SUMMARY.md` excerpt
 
 ```markdown
 # Migration summary
@@ -557,5 +557,4 @@ Review the items below before deploying.
 ## 13. Open questions
 
 - Final weight values (`Q-002`).
-- Column encoding in locations: Unicode scalar values or UTF-16 code units (`Q-001`).
 - Static output comparison normalization and thresholds (`Q-005`).

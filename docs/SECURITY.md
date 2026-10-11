@@ -107,6 +107,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 - Configuration files are parsed and evaluated statically. The evaluator understands literals, object and array literals, template literals with known parts, `const` bindings, and constant imports from local files. Everything else becomes `Unknown(reason)`.
 - The evaluator has no access to the filesystem, environment, network, or clock, so it can never perform side effects.
 - Build-time code (server components, `generateStaticParams`) is moved into the output, never run by Frameshift.
+- A `frameshift.jsonc` inside the source project is untrusted like every other file. It cannot enable code execution, change overwrite policies, choose the output location, or reference paths outside the source root (section 5.1 of [CLI.md](CLI.md)).
 
 ### 7.4 External tool execution (verification only)
 
@@ -178,7 +179,7 @@ Deferred. If it is ever added, it is opt-in, sends minimal redacted context, nev
 - **Minimal dependencies** under the policy in section 3 of [ENGINEERING.md](ENGINEERING.md). Each runtime dependency has a decision record.
 - **Pinned toolchains and tools.** The compiler version is pinned. GitHub Actions are pinned to full commit SHAs.
 - **Least-privilege CI.** Default read-only workflow permissions. Write permissions only for release jobs that need them. Secrets available only to the jobs that use them (see [RELEASES.md](RELEASES.md)).
-- **Vulnerability scanning** of dependencies in CI (for example `govulncheck` if Go is accepted).
+- **Vulnerability scanning and dependency audits** in CI (for example cargo-audit and cargo-deny, after evaluation).
 - **Release integrity.** SHA-256 checksums for every artifact from the first release. Reproducibility checks. Signing and provenance attestations evaluated for the public phase (`DF-004`).
 - **Branch protection.** Pull requests required for `main`, with status checks required before merging.
 - **Secret scanning** of the repository and its history before going public.

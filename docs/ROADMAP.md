@@ -44,14 +44,14 @@ Each milestone ends with a capability that is demonstrable and tested.
 
 | Milestone | Capability | Main contents | Depends on |
 | --- | --- | --- | --- |
-| **M0** Foundation decisions | Language and core techniques validated | Experiments E1 (parser feasibility) and E2 (edit-based rewriting and Astro printing). `P-001`, `P-002`, and `P-003` accepted or replaced. Toolchain version chosen. Private GitHub repository and branch protection set up, with the user's authorization. | None |
+| **M0** Foundation decisions | Core techniques validated in Rust | Experiments E1 (parser and tree design) and E2 (edit-based rewriting and Astro printing). `P-002` and `P-003` accepted or replaced. Rust toolchain version chosen. Private GitHub repository and branch protection set up, with the user's authorization. | None |
 | **M1** Bootstrap and engine skeleton | A buildable, tested, releasable shell | Package layout following the architecture's layers. Foundation layer: findings, identifiers, path model, deterministic collections, limits. `frameshift version` and `help`. Golden and determinism test harnesses. CI with formatting, linting, tests on three operating systems, cross-builds for all targets, and Conventional Commit checks. Release Please and basic packaging with checksums. | M0 |
 | **M2** Discovery and inspection | `frameshift inspect` | Safe filesystem walker (symbolic link policy, limits, ignore rules including `.gitignore`). Snapshot store with hashing. JSON and JSONC parsers. Package manifest model. Lockfile parsers (npm, pnpm YAML subset, Yarn classic and Berry, Bun text). Workspace detection. Framework, version, and router detection. Adversarial fixtures. | M1 |
 | **M3** Parsing | Production parsers | JS, TS, JSX, and TSX parser evolved from E1. CSS and SCSS tokenizer and structural parser. Position tables, comment lists, resource limits. Conformance suites. Continuous fuzzing. | M1 (and E1) |
 | **M4** Semantic analysis and project model | Facts about any App Router project | Module resolution including `tsconfig` paths. Scopes and bindings. Module and component graphs. Route tree. Render contexts. Environment classification. Static evaluator (with experiment E3 measuring evaluation coverage). Next.js fact extraction. Golden snapshots of the project model. | M2, M3 |
 | **M5** Assessment and analysis report | `frameshift analyze`: **first user value** | Feature catalog for the V1 matrix. Assessment rules. Unit classification and route readiness. Knowledge base v1. Metrics with `weights-v1` validated against real projects (`Q-002`). Report schema v1. Text rendering, `report`, `explain`, and verdicts. | M4 |
-| **M6** Planning | `frameshift plan` | Output path mapping with the relocation policy and collision detection. Rule registry with exclusivity checks. Operation generation. Plan document, hashing, and binding. Manual tasks. `migrate --dry-run` file listing. | M5 |
-| **M7** Execution and static sites | `frameshift migrate` for sites without client components | Executor: staging, atomic commit, overwrite policies, manifest, staging cleanup. Edit engine and Astro printer from E2. Structural verification. Rules: static routes, segments, groups, private folders, layout chain, static metadata and metadata files, Astro and static Preact components, `next/link`, global CSS, CSS Modules, Sass, public and imported assets, configuration generation, preservation of unmigrated files, `FRAMESHIFT.md`. | M6 (and E2) |
+| **M6** Planning | `frameshift plan` | Configuration file `frameshift.jsonc` with its JSON Schema. Output path mapping for the conventional Astro layout, with collision detection. Rule registry with exclusivity checks. Operation generation. Plan document, hashing, and binding. Manual tasks. `migrate --dry-run` file listing. | M5 |
+| **M7** Execution and static sites | `frameshift migrate` for sites without client components | Executor: staging, atomic commit, overwrite policies, manifest, staging cleanup. Edit engine and Astro printer from E2. Structural verification. Rules: static routes, segments, groups, private folders, layout chain, static metadata and metadata files, Astro and static Preact components, `next/link`, global CSS, CSS Modules, Sass, public and imported assets, configuration generation, preservation of unmigrated files, `.frameshift/SUMMARY.md`. | M6 (and E2) |
 | **M8** Dynamic routes, assets, styling | Common content sites | Dynamic routes with static parameters (including composition), catch-all routes, root not-found, special files, static GET route handlers, generated metadata routes, `next/image` (both strategies), `next/font`, `next/script`, Tailwind CSS v3 and v4, PostCSS, environment variable rewriting (`Q-003` resolved), metadata helper for non-literal metadata. | M7 |
 | **M9** Client components and islands | Interactive sites | Island selection, `client:load`, `client:only` for `ssr: false`, the compat strategy with package aliases and overrides for every supported package manager, boundary prop analysis and named slots, navigation helper, context scope classification, hook coverage, knowledge base entries for curated React libraries backed by fixtures. | M7 |
 | **M10** Verification | `frameshift verify` | External tool runner (authorization, temporary copies, environment scrubbing, timeouts, log capture). Build level. Static output level with HTML normalization and per-route comparison (experiment E4 decides the HTML parser, `Q-005`). Per-unit verification evidence. | M7. Full value after M8 and M9. |
@@ -136,7 +136,7 @@ V1 is complete when all of the following hold:
 | Platform differences (paths, line endings, case) | Nondeterministic output | Determinism rules in code, cross-platform CI from M1 |
 | Verification executes untrusted code | Compromise of the user's machine | Explicit authorization, temporary copies, scrubbed environments, clear documentation recommending disposable environments |
 | Scope creep (Pages Router, MDX, SSR in V1) | Diluted quality | Explicit non-goals. Additions require a roadmap change. |
-| Missing variant cases without sum types (if Go is accepted) | Unhandled kinds | Exhaustiveness checks (`Q-010`), fail-closed defaults |
+| Graph-shaped data and long compile times in Rust | Slower iteration, awkward designs | Arena and index designs validated in E1, a deliberate crate structure |
 
 ### Non-goals for V1
 
@@ -152,7 +152,7 @@ V1 is complete when all of the following hold:
 1. V1 acceptance criteria are met and 1.0.0 is released privately.
 2. The real-world evaluation shows practical value, and there are no open defects causing false `auto` classifications or data loss.
 3. A documented analysis identifies which parts of the project model are specific to Next.js or Astro and need generalization, based on evidence from V1.
-4. The candidate second migration path or paths are selected (`DF-011`), using demand, structural distance, and testability as criteria.
+4. The second source framework is selected (`DF-011`), using demand, structural distance, and testability as criteria. The second target, Astro with React islands, is already decided (`D-031`).
 5. A plan exists for any breaking changes to JSON documents that V2 requires.
 
 ## Stage V2: Extensible migration engine
@@ -187,7 +187,7 @@ Generalize the V1 engine into a platform that supports several migration paths o
 | **M15** Advanced analysis | Complete re-export and barrel resolution, symbol-level usage, prop data flow (functions versus data), and reading of declared types without inference | M12 |
 | **M16** Composition and conflict detection | Multiple rules per construct with explicit ordering and priorities, detection of overlapping edits, conflict reports | M14 |
 | **M17** Pages Router | `getStaticProps`, `getStaticPaths`, `_app`, `_document`, `next/head`, and `next/router` handled for static Pages Router projects | M13 |
-| **M18** Second target | Candidate: Astro with React islands, a small domain change that isolates the target adapter abstraction | M13 |
+| **M18** Second target | Astro with React islands (`D-031`), a small domain change that isolates the target adapter abstraction | M13 |
 | **M19** Second source | Candidate: Gatsby or a Vite-based React single-page application (decision `DF-011`) | M13 |
 | **M20** High-demand V1 gaps | Context shared across islands (shared store transformation), `styled-jsx`, MDX pages, optional Astro client router | M13 |
 | **M21** Incremental and resumable execution | Opt-in analysis cache keyed by content hash and engine version. Execution journal and resume. Outputs identical to uninterrupted runs. | M13 |
@@ -231,7 +231,7 @@ flowchart LR
 | The recipe format grows into a programming language | Recipes cover mapping-type rules only. Complex logic stays in reviewed code. |
 | Abstraction costs performance | Benchmarks against V1 budgets in CI |
 | Plugin security and compatibility surface | Plugins only if justified. Out-of-process execution with no ambient authority. |
-| Several target profiles to maintain | Profile support policy (`Q-007`). Deprecate old profiles explicitly. |
+| Several target profiles to maintain | One profile per target for the current major version (`D-028`). Old profiles are retired explicitly. |
 
 ### Non-goals for V2
 

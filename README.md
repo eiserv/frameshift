@@ -82,6 +82,6 @@ See [docs/CLI.md](docs/CLI.md) for the full specification.
 
 ## Project status
 
-- **Implementation:** not started. The implementation language is not decided yet. Go is the recommended direction, pending two experiments, and Rust is the main alternative (see [docs/DECISIONS.md](docs/DECISIONS.md)).
-- **Repository:** private. No license has been chosen yet, so no rights are granted beyond those of the copyright holder.
+- **Implementation:** not started. Rust is the primary implementation language. Other languages may be used for specific, important tasks where they offer a demonstrable quality advantage (see [docs/DECISIONS.md](docs/DECISIONS.md)).
+- **Repository:** private (`eiserv/frameshift` on GitHub). No license has been chosen yet, so no rights are granted beyond those of the copyright holder.
 - **Contributions:** not open during the private phase.

@@ -26,10 +26,10 @@ Non-goals for this path in V1:
 | Aspect | V1 scope |
 | --- | --- |
 | Framework | Next.js with the App Router. Pages Router projects are detected and analyzed, but their transformation is deferred to V2 (`DF-007`). |
-| Versions | Next.js 14.x to 16.x are the validated range for V1 (`Q-012` covers the support floor). Projects outside this range are analyzed with a warning, and version-dependent rules behave conservatively. |
+| Versions | Next.js 14.x to 16.x are the validated range for V1 (`D-023`). Projects outside this range are analyzed with a warning, and version-dependent rules behave conservatively. |
 | Language | TypeScript and JavaScript, with JSX or TSX. |
 | React | React 18 and 19 source code. React 19-only APIs are classified individually (section 9.6). |
-| Structure | Single-package projects. A package inside a monorepo can be selected; sibling workspace packages are treated as external dependencies (`Q-008`). |
+| Structure | Single-package projects. A package inside a monorepo can be selected; sibling workspace packages are treated as external dependencies (`D-022`). |
 | Rendering | Statically renderable content. Request-time features are detected and classified `unsupported`. |
 
 At the time of writing, Next.js 16 is the current major version (16.3 was released in August 2026). Relevant facts for this path:
@@ -46,7 +46,7 @@ At the time of writing, Next.js 16 is the current major version (16.3 was releas
 | Framework | Astro with the `@astrojs/preact` integration. |
 | Output | Static (`output: 'static'`). No server adapter. |
 | Islands | Preact components hydrated with Astro client directives. |
-| Target profile | `astro7-preact10` (proposed). It pins tested versions of Astro 7.x, `@astrojs/preact`, Preact 10.x, and `@preact/compat`. Preact 11 is pre-release at the time of writing and is excluded until it is stable and validated (`Q-007`). |
+| Target profile | `astro7-preact10`. It pins tested versions of Astro 7.x, `@astrojs/preact`, Preact 10.x, and `@preact/compat`. Each release supports one profile for the current Astro major. Preact 11 is pre-release at the time of writing and is adopted only once it is stable, officially supported by `@astrojs/preact`, and passes every island fixture (`D-028`). |
 
 Astro 7 (2026) uses a Rust-based `.astro` compiler built on oxc and Lightning CSS, runs on Vite 8 with Rolldown, applies JSX whitespace rules in templates, and turns unclosed tags into errors instead of repairing them. Frameshift's printer must therefore emit strictly well-formed templates. The JSX-style whitespace handling is helpful here, because it makes React and Astro template semantics closer.
 
@@ -68,7 +68,7 @@ Anything not listed in the compatibility matrix (section 17) is `unknown` by def
 1. **Equivalence first, optimization explicit.** Every default mapping aims to preserve behavior. Mappings that knowingly change observable behavior to improve the result (later hydration, image re-encoding, removing hydration from components that look static) are optimizations. They are opt-in and reported separately (see section 21 of [ARCHITECTURE.md](ARCHITECTURE.md)).
 2. **Build-time code stays build-time code.** Server components in a static Next.js build run during `next build`. Astro frontmatter runs during `astro build`. Code moves from one to the other with the same execution timing.
 3. **Mirror the source's boundaries.** Next.js server and client boundaries map to Astro's static and island boundaries. Server components render to static HTML, client components hydrate. Constraints that already apply at the Next.js boundary (serializable props, server children passed into client components) map onto equivalent Astro constraints.
-4. **Minimal relocation.** Only files whose role demands it move (section 16).
+4. **Idiomatic structure.** Code moves into the conventional Astro layout under `src/`. Data read at build time stays where its filesystem paths expect it (section 16).
 5. **Never execute project code.** Configuration files and data are evaluated statically or moved unchanged into build-time code. They are never run during migration.
 
 ## 5. Project analysis
@@ -110,7 +110,7 @@ A project is classified as Next.js when `next` is a declared dependency and at l
 - Next.js-specific entries are removed: the `next` plugin, `incremental`, `next-env.d.ts`, and `.next/types`.
 - `include` becomes `[".astro/types.d.ts", "**/*"]`. `exclude` contains `dist` and `.frameshift`, so preserved unmigrated sources are not type-checked.
 
-Path aliases keep their keys. Their targets are updated only when a file they point to moves. Status: `auto`, with informational findings for dropped options.
+Path aliases keep their keys and are retargeted to the moved code (section 16.1). Status: `auto`, with informational findings for dropped options.
 
 ### 5.4 Package manager, dependencies, and lockfiles
 
@@ -132,7 +132,7 @@ Environment files are never read and never copied (see [SECURITY.md](SECURITY.md
 | `process.env.NODE_ENV` | Unchanged; behavior confirmed at build-level verification | `review` |
 | Computed access, such as `process.env[name]` | | `unknown` |
 
-Naming strategy for public variables (`Q-003`, open): either rename to Astro's `PUBLIC_` prefix (`import.meta.env.PUBLIC_X`) with a manual task to rename variables in `.env` files and hosting settings, or keep the names by adding `NEXT_PUBLIC_` to Vite's `envPrefix`. The second option avoids deployment changes, but must be validated against the pinned Astro version before it can be chosen.
+Naming of public variables (`D-021`): by default, `process.env.NEXT_PUBLIC_X` becomes `import.meta.env.PUBLIC_X`, and the report lists every variable that must be renamed in `.env` files and hosting settings. With `--env-names keep` (or `envNames: "keep"` in `frameshift.jsonc`), the names stay unchanged (`import.meta.env.NEXT_PUBLIC_X`) and `NEXT_PUBLIC_` is added to Vite's `envPrefix`, which avoids deployment changes. That option is validated against each target profile in M8, and rejected with a clear error if a profile cannot support it.
 
 ## 6. Routing
 
@@ -234,7 +234,7 @@ Astro components cannot be rendered by Preact components. Conversion to Astro is
 All of the following must hold:
 
 1. A function component (declaration or arrow function), not a class.
-2. The file exports exactly one component and no other values. A file that exports several components or helper values uses step 2 (`Q-004`).
+2. Components are decided individually, even when several share a file (`D-025`). Each converted component becomes its own `.astro` file next to the original module, named after the component. Remaining components and non-component exports stay in the original module, because Astro components cannot export values. Module-local helpers used by converted components move into a sibling helper module that both sides import. All consumers' imports are rewritten.
 3. Props are a destructuring pattern or a single props identifier. Rest elements are allowed.
 4. The body consists of statements followed by a single final `return` of JSX. No early returns.
 5. The body does not use React element APIs (`Children`, `cloneElement`, `isValidElement`, `createElement`).
@@ -394,20 +394,29 @@ A project whose routes mostly depend on these features receives a project-level 
 
 ## 16. Output project structure
 
-### 16.1 Relocation policy (`P-017`, proposed)
+### 16.1 Output layout (`D-024`)
+
+The output follows the conventional Astro project structure, so it reads like a hand-written Astro project.
 
 | Source | Output |
 | --- | --- |
 | Route files (`app/**/page.*`) | `src/pages/**` per section 6 |
 | Layouts (`app/**/layout.*`) | `src/layouts/<Name>.astro` |
 | Route handlers | `src/pages/**` endpoints |
-| Stylesheets colocated in `app/` | `src/styles/<relative path>` |
-| Assets colocated in `app/` | `src/assets/<relative path>` |
-| Code modules in a private folder inside `app/` | Same relative path under `src/pages/`. Astro excludes `_`-prefixed directories from routing. |
-| Other code modules colocated in `app/` | A `_shared/` directory at the same relative position under `src/pages/` (`Q-009`) |
-| Everything outside `app/` (`components/`, `lib/`, `content/`, `public/`, configuration) | Same relative path |
+| Components colocated in `app/` (including private folders) | `src/components/<route directory>/`, for example `app/blog/_components/PostCard.tsx` becomes `src/components/blog/PostCard.astro` or `.tsx` |
+| Non-component modules colocated in `app/` | `src/lib/<route directory>/` |
+| Stylesheets colocated in `app/` | `src/styles/<route directory>/` |
+| Assets imported by code and colocated in `app/` | `src/assets/<route directory>/` |
+| Root-level code directories (`components/`, `lib/`, `hooks/`, `utils/`, `styles/`, and others containing code) | `src/<same name>/` |
+| An existing `src/` directory (besides `src/app/`) | Unchanged |
+| Non-code data directories read at build time (for example `content/`, `posts/`, `data/`) | Same relative path at the root, so paths relative to `process.cwd()` stay valid. Static imports of such files are rewritten. |
+| `public/` and configuration files | Root |
 
-A component converted to an Astro component changes its extension, for example `Button.tsx` to `Button.astro`. Imports of it are rewritten to include the `.astro` extension, which Astro requires. Path aliases are preserved.
+Rules:
+
+- Every import that refers to a moved file is rewritten deterministically. A component converted to an Astro component changes its extension (for example `Button.tsx` to `Button.astro`), and imports of it include the `.astro` extension, which Astro requires.
+- Path aliases keep their keys. If all targets of an alias move together, the alias is retargeted (for example `@/*` from `./*` to `./src/*`). Otherwise, affected imports become relative imports.
+- Collisions with existing files, including collisions that differ only in case, are detected at planning time (`FS4002`).
 
 ### 16.2 Generated and support files
 
@@ -421,9 +430,9 @@ A component converted to an Astro component changes its extension, for example `
 | `.frameshift/manifest.json` | Provenance (see [ARCHITECTURE.md](ARCHITECTURE.md)) |
 | `.frameshift/report.json` | Full machine-readable report |
 | `.frameshift/unmigrated/` | Verbatim copies of unmigrated source files under their original relative paths |
-| `FRAMESHIFT.md` | Human-readable summary of the migration and remaining manual tasks |
+| `.frameshift/SUMMARY.md` | Human-readable summary of the migration and remaining manual tasks. The CLI points to it after every migration. |
 
-Removed relative to the source: `next.config.*`, `next-env.d.ts`, and the `app/` route files (they now live in `src/pages/` and `src/layouts/`). Generated source files carry no header comments, so the result reads as a normal Astro project. Provenance lives in the manifest.
+Removed relative to the source: `next.config.*`, `next-env.d.ts`, and the `app/` directory, whose contents now live under `src/`. Generated source files carry no header comments, so the result reads as a normal Astro project. Provenance lives in the manifest.
 
 ## 17. Compatibility matrix
 
@@ -441,7 +450,7 @@ Legend: **A** `auto`, **R** `review`, **U** `unsupported` in V1. "Later" names t
 | Package manifest and scripts | `npm.manifest` | A or R | Section 5.4 |
 | Lockfiles (npm, pnpm, Yarn, Bun text) | `npm.lockfile` | A | Copied. Install is a manual task. |
 | Bun binary lockfile | `npm.lockfile.bun-binary` | R | Not parsed. Declared ranges used instead. |
-| Monorepo workspace package | `npm.workspace` | R | `Q-008` |
+| Monorepo workspace package | `npm.workspace` | R | `D-022` |
 | Environment variable references | `env.reference` | A or R | Section 5.5 |
 | Deployment configuration (`vercel.json`, `netlify.toml`, CI workflows) | `deploy.config` | U | Manual tasks (build command, output directory `out/` to `dist/`) |
 | Test setup (Jest, Vitest, Playwright) | `test.setup` | Out of scope | Reported separately, not migrated in V1 |
@@ -729,7 +738,7 @@ export default function Counter({ initial = 0 }: { initial?: number }) {
 }
 ```
 
-Output `components/Counter.tsx` (same path; only the directive is removed):
+Output `src/components/Counter.tsx` (moved into the Astro layout; only the directive is removed):
 
 ```tsx
 import { useState } from 'react';
@@ -859,7 +868,7 @@ blocker  FS3120  Server Action cannot run in static output
          The route /contact was not migrated. Sources preserved in .frameshift/unmigrated/app/contact/.
 ```
 
-The `/contact` route and `actions.ts` are classified `unsupported`, preserved, and listed as manual tasks in `FRAMESHIFT.md`.
+The `/contact` route and `actions.ts` are classified `unsupported`, preserved, and listed as manual tasks in `.frameshift/SUMMARY.md`.
 
 ## 19. V1 rule set
 
@@ -877,4 +886,4 @@ The minimum rule set for V1 and its milestone order are defined in [ROADMAP.md](
 
 ## 21. Open questions for this path
 
-Tracked in [DECISIONS.md](DECISIONS.md): public environment variable naming (`Q-003`), multiple components per file (`Q-004`), Preact 11 and concurrent Astro majors (`Q-007`), monorepo scope (`Q-008`), placement of colocated non-route modules (`Q-009`), and the Next.js version support floor (`Q-012`).
+The questions raised by this path so far are resolved in [DECISIONS.md](DECISIONS.md) (`D-021` to `D-025`, `D-028`). New questions are added there.
