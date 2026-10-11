@@ -43,9 +43,9 @@ These instructions are binding for every agent working on Frameshift, whatever t
   - No marketing language or vague claims. Explain important decisions and their tradeoffs.
   - Distinguish confirmed facts from proposals, and label unresolved decisions.
   - Keep documents useful rather than long.
-- **KISS and YAGNI.** Solve the concrete requirement of the current stage with the simplest understandable structure. No speculative abstractions, options, or extension points.
+- **Forward-looking architecture (`D-033`).** Design for the documented V1 to V3 evolution. Anticipate subsystem boundaries, extensibility, and compatibility in every implementation step, and record the rationale. Keep structures understandable (KISS), distinguish future contracts from implemented behavior, and preserve milestone experiment gates.
 - **Deterministic correctness.** Follow the determinism rules (`docs/ENGINEERING.md`, section 6) and the fail-closed rules (section 7.3). Unexpected input must surface as a finding or an internal error, never as silent success.
-- **Dependencies.** Minimize them. Every runtime dependency, and every tool that affects build output, needs an accepted entry in `docs/DECISIONS.md` that is evaluated against `docs/ENGINEERING.md` (section 3). Prefer purpose-built code when a library does not fit, within KISS and YAGNI.
+- **Dependencies.** Minimize them. Every runtime dependency, and every tool that affects build output, needs an accepted entry in `docs/DECISIONS.md` that is evaluated against `docs/ENGINEERING.md` (section 3). Prefer purpose-built code when a library does not fit, with understandable structures and documented architectural rationale.
 - **Performance.** Respect the budgets in `docs/ENGINEERING.md` (section 4). Avoid quadratic algorithms over files or nodes. Measure before optimizing.
 - **Repository safety.** Never run code from analyzed projects in tools or tests. Commit only fictional fixtures, never third-party project code.
 - **No UI work.** Frameshift is CLI-only (`D-004`). Do not build GUI, web, desktop, or terminal UI frontends unless the decision register changes.

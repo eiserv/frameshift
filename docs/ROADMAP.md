@@ -26,7 +26,7 @@ The migration path `nextjs-to-astro-preact` as specified in [MIGRATION_SPEC.md](
 - Basic dependency and build configuration migration.
 - Rule-based compatibility analysis, with feasibility reporting, progress percentages, and human-readable diagnostics as defined in [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md).
 - Safe output generation that never touches the source project.
-- Verification at the structural, build, and static output levels.
+- Verification at the structural, build, static output, and runtime levels (`P-013`).
 - Real value even when a project cannot be migrated completely: accurate analysis, partial migration of everything that can move, and precise manual tasks for the rest.
 
 ### Deliverables
@@ -54,7 +54,7 @@ Each milestone ends with a capability that is demonstrable and tested.
 | **M7** Execution and static sites | `frameshift migrate` for sites without client components | Executor: staging, atomic commit, overwrite policies, manifest, staging cleanup. Edit engine and Astro printer from E2. Structural verification. Rules: static routes, segments, groups, private folders, layout chain, static metadata and metadata files, Astro and static Preact components, `next/link`, global CSS, CSS Modules, Sass, public and imported assets, configuration generation, preservation of unmigrated files, `.frameshift/SUMMARY.md`. | M6 (and E2) |
 | **M8** Dynamic routes, assets, styling | Common content sites | Dynamic routes with static parameters (including composition), catch-all routes, root not-found, special files, static GET route handlers, generated metadata routes, `next/image` (both strategies), `next/font`, `next/script`, Tailwind CSS v3 and v4, PostCSS, environment variable rewriting (`Q-003` resolved), metadata helper for non-literal metadata. | M7 |
 | **M9** Client components and islands | Interactive sites | Island selection, `client:load`, `client:only` for `ssr: false`, the compat strategy with package aliases and overrides for every supported package manager, boundary prop analysis and named slots, navigation helper, context scope classification, hook coverage, knowledge base entries for curated React libraries backed by fixtures. | M7 |
-| **M10** Verification | `frameshift verify` | External tool runner (authorization, temporary copies, environment scrubbing, timeouts, log capture). Build level. Static output level with HTML normalization and per-route comparison (experiment E4 decides the HTML parser, `Q-005`). Per-unit verification evidence. | M7. Full value after M8 and M9. |
+| **M10** Verification | `frameshift verify`, including runtime | External tool runner (authorization, temporary copies, environment scrubbing, timeouts, log capture). Build level. Static output level with HTML normalization and per-route comparison (experiment E4 decides the HTML parser, `Q-005`). Runtime hydration, declared interaction, and selected accessibility checks using a user-installed browser. Decide browser tooling and the versioned check protocol here. Per-unit verification evidence. | M7. Full value after M8 and M9. |
 | **M11** Hardening and 1.0 | Release readiness | Cross-platform determinism suite. Benchmarks against budgets. Security review of every threat model control. Private real-world evaluation report. Complete user documentation. Release pipeline hardening (reproducibility check, platform smoke tests, experiment E5 on draft and immutable releases). Release 1.0.0 (private). | M8, M9, M10 |
 
 ```mermaid
@@ -113,7 +113,7 @@ V1 is complete when all of the following hold:
 1. **Fixtures.** At least 40 single-feature fixtures (covering every `A` and `R` matrix entry and every `U` entry) and at least 5 composite fictional sites pass golden tests on Linux, Windows, and macOS.
 2. **Determinism.** Plans, output trees, manifests, and reports (excluding `run` metadata) are byte-identical across two runs with different degrees of parallelism, and across the three operating systems.
 3. **Supported composites.** Every composite fixture designated as fully supported reaches 100% `auto` or `review` assessment, builds with the pinned target profile, and passes static output comparison for every route: identical route set, identical normalized text, identical link targets, identical supported head metadata, and identical image references and alternative texts.
-4. **JavaScript reduction.** Static-only fixtures produce zero client-side JavaScript. Island fixtures ship JavaScript only for islands, and each island hydrates and responds to a scripted interaction in Frameshift's CI harness.
+4. **JavaScript reduction and runtime verification.** Static-only fixtures produce zero client-side JavaScript. Island fixtures ship JavaScript only for islands. The V1 runtime level verifies hydration, declared scripted interactions, and selected accessibility checks on every supported island fixture. Authorization refusal and missing browser prerequisites have end-to-end tests. Untested behavior remains explicitly unverified.
 5. **Honesty.** On labeled fixtures, no unit is classified `auto` when its expected label is anything else (zero false `auto`). Every unsupported construct in negative fixtures produces the correct finding code and location.
 6. **No silent loss.** The file accounting invariant holds for every fixture and real-world project. Output never contains residual `next/*` imports or `'use client'` directives unless they are reported.
 7. **Real-world evaluation.** At least 10 real-world Next.js App Router projects, chosen to be static-leaning and with licenses that permit the use, are analyzed and migrated without internal errors. A human review of a sample of `auto` units finds no false `auto` classification. Results are documented in a private evaluation report.
@@ -166,7 +166,7 @@ Generalize the V1 engine into a platform that supports several migration paths o
 - Adding a migration path requires an adapter and recipes, not changes to the core.
 - Framework-specific concepts are preserved as facets, and pair-specific recipes coexist with generic ones (section 10 of [ARCHITECTURE.md](ARCHITECTURE.md)). No pretense of a perfect universal representation.
 - V1 behavior is preserved exactly through the refactoring.
-- Verification extends to runtime behavior for selected checks.
+- Runtime verification from V1 extends across adapters and targets, with additional checks.
 
 ### Deliverables
 
@@ -192,7 +192,7 @@ Generalize the V1 engine into a platform that supports several migration paths o
 | **M20** High-demand V1 gaps | Context shared across islands (shared store transformation), `styled-jsx`, MDX pages, optional Astro client router | M13 |
 | **M21** Incremental and resumable execution | Opt-in analysis cache keyed by content hash and engine version. Execution journal and resume. Outputs identical to uninterrupted runs. | M13 |
 | **M22** Review ledger and CI mode | Recorded review acknowledgments, review state in reports, CI gating on review state, NDJSON event stream | M12 |
-| **M23** Runtime verification | Opt-in headless browser checks (hydration, scripted interactions, accessibility tree comparison) using a user-installed browser under explicit authorization | M13 |
+| **M23** Extended runtime verification | Extend M10's opt-in headless browser checks across adapters and targets, with expanded hydration, interaction, and accessibility coverage | M13, M10 |
 | **M24** Plugin decision | Evaluation of third-party rule development needs. Implement an out-of-process protocol only if justified, otherwise record the rejection (`DF-002`). | M14 |
 
 ```mermaid
@@ -207,7 +207,7 @@ flowchart LR
   M13 --> M19[M19 Second source]
   M13 --> M20[M20 V1 gaps]
   M13 --> M21[M21 Incremental]
-  M13 --> M23[M23 Runtime verification]
+  M13 --> M23[M23 Extended runtime verification]
   M14 --> M16[M16 Composition]
   M14 --> M24[M24 Plugin decision]
 ```

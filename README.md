@@ -45,7 +45,8 @@ Milestones are defined by capabilities, not dates. See [docs/ROADMAP.md](docs/RO
 - **Deterministic and offline.** The same input produces the same output. No network access and no AI service in normal operation.
 - **Safe by design.** Source repositories are treated as untrusted. They are never modified, and their code is never executed without explicit authorization.
 - **Explainable.** Every decision traces back to a rule, a source location, and a documented reason.
-- **Minimal dependencies.** Purpose-built components where external libraries do not fit, within KISS and YAGNI.
+- **Minimal dependencies.** Purpose-built components where external libraries do not fit, with understandable structures and documented tradeoffs.
+- **Forward-looking architecture.** Every increment anticipates the documented V1 to V3 evolution, including subsystem boundaries, extensibility, and compatibility (`D-033`).
 - **CLI-first, engine-centered.** The migration engine is independent of the CLI, so future interfaces can reuse it.
 - **Performance-aware.** Analysis of typical projects should be near-instantaneous.
 

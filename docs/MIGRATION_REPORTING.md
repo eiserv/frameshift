@@ -77,7 +77,7 @@ Every unit has exactly one execution outcome after `migrate`:
 
 ### 3.3 Verification
 
-Verification status is recorded per unit and per level (`structural`, `build`, `static-output`, and later `runtime`) as `passed`, `failed`, `not-run`, or `not-applicable`. Levels are defined in section 16 of [ARCHITECTURE.md](ARCHITECTURE.md). A unit is verified at a level only if every check at that level covering the unit ran and passed:
+Verification status is recorded per unit and per level (`structural`, `build`, `static-output`, and `runtime`, all in V1 scope) as `passed`, `failed`, `not-run`, or `not-applicable`. Levels are defined in section 16 of [ARCHITECTURE.md](ARCHITECTURE.md). A unit is verified at a level only if every check at that level covering the unit ran and passed:
 
 - `structural`: per-unit checks such as re-parsing, import resolution, residue scans, and route parity.
 - `build`: the project build covers every emitted unit.
