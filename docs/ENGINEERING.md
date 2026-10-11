@@ -4,9 +4,9 @@
 
 ## 1. Engineering principles
 
-- **Quality over effort (`D-020`).** Effort, time investment, and other economic considerations are never, on their own, reasons to choose a lower-quality solution. Choices are judged on correctness, safety, maintainability, performance, and professionalism. KISS and YAGNI still apply, because speculative complexity is itself a quality problem.
+- **Quality over effort (`D-020`).** Effort, time investment, and other economic considerations are never, on their own, reasons to choose a lower-quality solution. Choices are judged on correctness, safety, maintainability, performance, and professionalism. Structures must remain understandable, and architectural preparation must have a documented rationale (`D-033`).
 - **Correctness and safety before speed of delivery.** There are no deadlines. Work that improves long-term correctness is worth its cost.
-- **KISS and YAGNI.** Solve the current stage's concrete requirements with the simplest structure. No speculative abstractions, configuration options, or extension points.
+- **Forward-looking architecture (`D-033`).** Every increment must account for the documented V1 to V3 evolution. Anticipate subsystem boundaries, extension needs, and compatibility. Record what future requirements a design supports and what remains unresolved. Keep structures understandable (KISS), preserve experiment gates, and label future contracts as planned until implemented.
 - **Determinism is a code property, not a test property.** Code must be written so that nondeterminism cannot arise (section 6), not just tested for it.
 - **Fail closed.** Code paths that meet something unexpected report it. They never fall through to a default that looks like success.
 - **Minimal dependencies, deliberately chosen.** See section 3.
@@ -266,7 +266,7 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | Formatting and linting | Development | rustfmt and Clippy (part of the toolchain) | Lints are configured, not just defaults |
 | Dependency audits and vulnerability scanning | Development | Evaluate cargo-audit and cargo-deny | Also checks licenses and duplicate dependencies |
 | Release automation | CI | Release Please action, GitHub CLI | Pinned (see [RELEASES.md](RELEASES.md)) |
-| Headless browser for validating Frameshift's own fixtures | CI only | External tool, never shipped. Decided in M10. | |
+| Headless browser for runtime verification and fixture checks | External verification tool and development | User-installed external tool, never bundled. Tool and check protocol decided in M10. | Explicit execution authorization is required for product verification. |
 
 ### 3.6 Process
 

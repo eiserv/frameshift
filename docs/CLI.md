@@ -165,20 +165,20 @@ preserve   .frameshift/unmigrated/app/contact/page.tsx   preserve.unmigrated    
 ### 4.5 `verify`
 
 ```text
-frameshift verify <output-dir> [--level structural|build|static-output] [--source <dir>]
+frameshift verify <output-dir> [--level structural|build|static-output|runtime] [--source <dir>]
                   [--allow-exec] [--allow-install-scripts] [--timeout <duration>] [--keep-temp]
 ```
 
 | Option | Meaning |
 | --- | --- |
 | `--level` | Highest level to run. Levels are cumulative. Default `structural`. |
-| `--source <dir>` | Required for `static-output`. The source snapshot must match the hash recorded in the output manifest; otherwise the command exits with 3. |
-| `--allow-exec` | Required for `build` and `static-output`. Authorizes running the package manager and framework build tools on temporary copies. These tools execute third-party code from the projects' dependencies and configuration files. |
+| `--source <dir>` | Required for `static-output` and `runtime`. The source snapshot must match the hash recorded in the output manifest; otherwise the command exits with 3. |
+| `--allow-exec` | Required for `build`, `static-output`, and `runtime`. Authorizes running the package manager, framework build tools, and, for runtime checks, a user-installed browser on temporary copies. These tools execute third-party code from the projects' dependencies and configuration files. |
 | `--allow-install-scripts` | Allow package lifecycle scripts during installation. By default, installation disables them where the package manager supports it. |
 | `--timeout <duration>` | Limit for each external command, for example `15m`. A timeout fails the corresponding check. |
 | `--keep-temp` | Keep temporary copies for debugging. They are removed by default. |
 
-Without `--allow-exec`, requesting `build` or `static-output` is a usage error (exit code 2). Installation needs network access to the package registry. Frameshift prints a notice before any external tool runs. The full security model is in [SECURITY.md](SECURITY.md).
+Without `--allow-exec`, requesting `build`, `static-output`, or `runtime` is a usage error (exit code 2). Installation needs network access to the package registry. Frameshift prints a notice before any external tool runs. Runtime is required V1 scope in M10, covering hydration, declared interactions, and selected accessibility checks. Browser configuration and the check protocol remain open until M10. The full security model is in [SECURITY.md](SECURITY.md).
 
 ### 4.6 `report`
 

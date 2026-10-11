@@ -40,19 +40,20 @@ Statuses change only through an edit to this file in a pull request. A changed d
 | D-030 | Selection of the real-world evaluation corpus | Accepted |
 | D-031 | Second migration path | Accepted |
 | D-032 | M0 tooling and first implementation increment | Accepted |
+| D-033 | Mandatory forward-looking architecture | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Proposed |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
 | P-004 | MVP project model instead of a universal IR | Accepted |
 | P-005 | Phase separation and recomputed plans | Accepted |
 | P-006 | Fixed kind-based weights (`weights-v1`) | Accepted |
-| P-007 | Conversion ladder for components | Proposed |
+| P-007 | Conversion ladder for components | Accepted |
 | P-008 | `preact/compat` as the default island strategy | Accepted |
 | P-009 | `client:load` as the default hydration directive | Accepted |
 | P-010 | Lockfile carry-over instead of lockfile generation | Accepted |
 | P-011 | Output metadata and support file locations | Accepted |
 | P-012 | Exit code scheme | Accepted |
-| P-013 | Verification levels | Proposed |
+| P-013 | Verification levels | Accepted |
 | P-014 | Release workflow structure | Accepted |
 | P-015 | Artifact naming and platform tiers | Accepted |
 | P-016 | Finding codes and identifier schemes | Accepted |
@@ -129,7 +130,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 ### D-013: Minimal external dependencies with build-versus-adopt criteria
 
 - **Status:** Accepted (2026-10-11).
-- **Decision:** External libraries are adopted only when they are demonstrably suitable under the criteria in section 3 of [ENGINEERING.md](ENGINEERING.md). Otherwise, purpose-built internal implementations are preferred, within KISS and YAGNI. Runtime dependencies need individual decision records.
+- **Decision:** External libraries are adopted only when they are demonstrably suitable under the criteria in section 3 of [ENGINEERING.md](ENGINEERING.md). Otherwise, purpose-built internal implementations are preferred, with understandable structures and documented architectural rationale (`D-033`). Runtime dependencies need individual decision records.
 - **Tradeoff:** More internal engineering effort in exchange for control, a smaller attack surface, and freedom from external constraints.
 
 ### D-014: Capability-based milestones without deadlines
@@ -175,7 +176,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 ### D-020: Quality over effort
 
 - **Status:** Accepted (2026-10-11).
-- **Decision:** Effort, time investment, and other economic considerations are never, on their own, reasons to choose a lower-quality solution. Decisions are judged on correctness, safety, maintainability, performance, and professionalism. KISS and YAGNI still apply, because speculative complexity is itself a quality problem.
+- **Decision:** Effort, time investment, and other economic considerations are never, on their own, reasons to choose a lower-quality solution. Decisions are judged on correctness, safety, maintainability, performance, and professionalism. Structures must remain understandable, and architectural preparation must have a documented rationale (`D-033`).
 
 ### D-021: Naming of public environment variables
 
@@ -245,7 +246,14 @@ Statuses change only through an edit to this file in a pull request. A changed d
 - **Versioning:** Unpublished M0 crates omit the optional Cargo package version, which defaults to 0.0.0. This is not a release. Release Please will establish the managed version in M1; versions must not subsequently be changed by hand.
 - **Rationale:** Validate reusable, framework-independent primitives before adding parser or migration behavior. Keep the experiment gates honest and the first change independently reviewable.
 
-## Proposed decisions
+### D-033: Mandatory forward-looking architecture
+
+- **Status:** Accepted (2026-10-12), explicitly requested by the project owner through the Codex App question interface.
+- **Decision:** Every implementation step must consider the documented V1 to V3 evolution, subsystem boundaries, extensibility, and compatibility. Architectural preparation is mandatory. Record the future requirements supported by a design, its tradeoffs, and unresolved assumptions. The previous restriction to current-stage needs is removed. Keep structures understandable (KISS) and do not describe future contracts as implemented behavior.
+- **Boundaries:** Existing decisions about the V1 project model, deferred product surfaces, dependency evaluation, and E1/E2 experiment gates remain binding. Change those decisions explicitly when new evidence or requirements demand it.
+- **Rationale:** Frameshift is a multi-phase transformation platform. Early design must account for its long-term scope without hiding uncertainty or making unverified correctness claims.
+
+## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
 
@@ -272,7 +280,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 - **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
 - **Decision:** V1 uses a project model sized for one migration path, with neutral naming and framework facets. V2 extracts a common core plus facets once a second source or target exists. See section 10 of [ARCHITECTURE.md](ARCHITECTURE.md).
-- **Rationale:** YAGNI, and the impossibility of faithfully representing all execution models in one IR.
+- **Rationale:** Neutral concepts and explicit facets prepare extension while preserving execution-model details. A universal IR needs semantic evidence from further frameworks (`D-033`).
 
 ### P-005: Phase separation and recomputed plans
 
@@ -288,8 +296,8 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 ### P-007: Conversion ladder for components
 
-- **Status:** Proposed (2026-10-11).
-- **Proposal:** Astro component, then static Preact component, then Preact island, then preserve. Astro conversion is computed as a fixed point over render contexts. See section 9 of [MIGRATION_SPEC.md](MIGRATION_SPEC.md).
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
+- **Decision:** Astro component, then static Preact component, then Preact island, then preserve. Astro conversion is computed as a fixed point over render contexts. See section 9 of [MIGRATION_SPEC.md](MIGRATION_SPEC.md).
 - **Rationale:** Keeps V1's Astro conversion subset narrow without breaking behavior.
 
 ### P-008: `preact/compat` as the default island strategy
@@ -323,8 +331,9 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 ### P-013: Verification levels
 
-- **Status:** Proposed (2026-10-11).
-- **Proposal:** `structural`, `build`, and `static-output` in V1, and `runtime` from V2. Each level states what it demonstrates and what it does not. See section 16 of [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface with runtime moved into V1.
+- **Decision:** `structural`, `build`, `static-output`, and `runtime` are cumulative V1 levels. Runtime checks cover hydration, declared scripted interactions, and selected accessibility-tree comparisons, under explicit execution authorization with a user-installed browser. Each level states what it demonstrates and what it does not. See section 16 of [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Sequencing:** Implement runtime in M10 after migration and executable fixtures exist, as confirmed in the follow-up interview. Browser tooling and the interaction-check protocol are decided in M10. M23 extends runtime across V2 adapters and targets rather than introducing it for the first time.
 
 ### P-014: Release workflow structure
 

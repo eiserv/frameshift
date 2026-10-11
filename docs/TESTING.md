@@ -100,8 +100,8 @@ Frameshift's CI installs dependencies for fixture outputs and runs the target's 
   - Remove framework-specific markers: Astro island wrapper elements and attributes (comparing their contents), Next.js runtime payload scripts, and `data-nimg` attributes and default image styles.
   - Normalize whitespace according to HTML rendering rules, and normalize attribute order.
   - Compare the route set, title and meta tags, heading outline, landmarks, visible text, links, images (resolved source file, `alt`, dimensions), and form structure.
-- **Browser-based island checks (Frameshift CI only):** for island fixtures, a headless browser loads both builds, performs scripted interactions defined in the fixture (for example "click the button, expect the text `Clicked 1 times`"), and compares the resulting DOM text. This is development tooling in Frameshift's own CI, never part of the shipped binary. Tool choice is decided in M10.
-- **Known blind spots:** CSS cascade, visual layout, animation, timing, and focus management are not compared automatically in V1. They are listed in every verification report.
+- **Runtime and browser-based island checks:** for island fixtures, a headless browser loads both builds, checks hydration, performs declared scripted interactions (for example "click the button, expect the text `Clicked 1 times`"), and compares resulting DOM text and selected accessibility-tree observations. M10 introduces the V1 product runtime level and exercises it on Frameshift's own fixtures. Product verification requires explicit execution authorization and a user-installed browser; the browser is never bundled. Browser tooling and the versioned check protocol are decided in M10.
+- **Known blind spots:** CSS cascade, visual layout, animation, untested interactions, and general timing behavior are not proved by V1 verification. Focus or accessibility behavior counts as checked only where a declared runtime check exercises it. Every report lists remaining limits.
 
 ### 3.13 Safety and security tests
 
@@ -191,5 +191,5 @@ The planned workflows are described in [RELEASES.md](RELEASES.md). None exist ye
 ## 8. Open questions
 
 - Normalization rules and thresholds for static output comparison, and the HTML parser to use (`Q-005`).
-- Browser tool for Frameshift's CI island checks (decided in M10).
+- Browser tool and versioned interaction-check protocol for V1 runtime verification and fixture checks (decided in M10).
 - Concrete project list for the real-world corpus, proposed by agents and approved by the project owner in M5 (`D-030`).

@@ -111,12 +111,13 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 
 ### 7.4 External tool execution (verification only)
 
-- Requires `--allow-exec` on every invocation. There is no persistent setting that enables it.
+- Requires `--allow-exec` on every invocation, including V1 runtime browser checks (`P-013`). There is no persistent setting that enables it.
 - Before running anything, Frameshift prints a notice naming the tools and stating that dependencies and configuration will execute code.
 - Tools run on temporary copies of the output (and of the source, for static output comparison), never on the user's directories.
 - The environment is scrubbed: only variables required for the tools to work are passed (such as `PATH`, the temporary home and cache directories, and the locale). Tokens and credentials (`NPM_TOKEN`, `GITHUB_TOKEN`, cloud credentials) are not passed.
 - Package lifecycle scripts are disabled by default where the package manager supports it. `--allow-install-scripts` re-enables them explicitly.
 - Each command has a timeout. Captured output is size-limited and treated as untrusted text.
+- Runtime verification uses a user-installed browser on temporary builds. Browser tooling, local serving, interaction inputs, and isolation controls must be specified and reviewed in M10 before implementation. Browser observations do not authorize executing additional project code or widening filesystem access.
 - Frameshift provides no operating system sandbox in V1 (section 13). Documentation recommends running build-level verification in containers, virtual machines, or ephemeral CI runners.
 
 ### 7.5 Output safety

@@ -23,7 +23,7 @@ When these drivers conflict, the earlier one wins.
 2. **Correctness and honesty.** The engine never presents an incomplete, unverified, or unknown result as successful. Anything that is not handled by a rule is reported as unknown or unsupported ("fail closed", `D-009`).
 3. **Determinism.** The same input snapshot, options, engine version, and ruleset version produce byte-identical plans, output files, and reports. The only exception is a clearly separated run-metadata section (timestamps, durations).
 4. **Explainability.** Every classification, operation, and generated output region can be traced to a rule, a source location, and a documented reason.
-5. **Maintainability.** KISS and YAGNI: the simplest structure that meets the current stage's requirements. No speculative abstraction.
+5. **Maintainability and architectural preparation.** Understandable structures (KISS), with mandatory consideration of the documented V1 to V3 evolution, extensibility, and compatibility (`D-033`). Record design rationale and distinguish future contracts from implemented behavior.
 6. **Performance.** Analysis of typical projects should feel instantaneous, and large repositories must stay tractable. External verification (installing packages, running builds) will dominate end-to-end time. The engine's own work must not.
 7. **Extensibility.** New source frameworks, target frameworks, and rules must be addable without rewriting the core. Abstractions are introduced only when a second concrete use exists.
 
@@ -43,7 +43,7 @@ flowchart LR
 
 - The CLI is a thin adapter. All migration logic lives in the engine (`D-005`).
 - The engine does not access the network during inspection, analysis, planning, or migration (`D-006`).
-- External tools run only for build-level verification, only with explicit authorization, and only on a temporary copy of the output (see [SECURITY.md](SECURITY.md)).
+- External tools run only for build, static-output, and runtime verification, only with explicit authorization, and only on temporary copies (see [SECURITY.md](SECURITY.md)).
 
 ## 4. Pipeline
 
@@ -93,7 +93,7 @@ flowchart TB
 | Analyze | Source path, target | Project model, assessment, findings | Reads source files | `frameshift analyze` |
 | Plan | Analysis, target profile, ruleset | Plan with ordered operations | None | `frameshift plan` |
 | Execute | Plan, output location | Output project, manifest | Writes to staging, then commits | `frameshift migrate` |
-| Verify | Output project, optional source | Verification evidence | Structural: none. Build and static output: runs external tools on a temporary copy, only when authorized | `frameshift verify` |
+| Verify | Output project, optional source | Verification evidence | Structural: none. Build, static output, and runtime: runs external tools on temporary copies, only when authorized | `frameshift verify` |
 | Report | Ledger or stored report | Human-readable or JSON reports | None | `frameshift report` |
 
 ## 5. Core concepts
@@ -237,7 +237,7 @@ Model entities name concepts in framework-neutral terms where the concept is gen
 
 ### 10.2 Why not a universal IR first
 
-- A universal IR designed before a second source or target exists would encode guesses about frameworks Frameshift does not support yet. YAGNI applies.
+- The V1 model uses neutral concepts and namespaced framework facets, with documented extension boundaries for V2. A universal IR requires evidence that its semantics preserve the execution models of additional frameworks (`P-004`, `D-033`).
 - Frameworks differ in execution model: React re-rendering, Astro build-time rendering, Svelte compile-time reactivity, Vue templates. No finite IR can represent all of them faithfully. A representation that pretends to would quietly lose information.
 - The migration value is concentrated in architectural structure (routes, boundaries, rendering modes, assets, configuration). Arbitrary program semantics stay in syntax trees and are transformed by code-level rules.
 
@@ -394,9 +394,11 @@ Verification produces evidence, never proof. Levels are cumulative:
 | `structural` | Generated files re-parse. Imports resolve within the output. No residual source-framework APIs (such as `next/*` imports or `'use client'` directives) remain unless flagged. Every source route maps to an output route or a finding. Manifest hashes match. | Nothing external | The output is syntactically valid and internally consistent | That it builds, runs, or behaves the same |
 | `build` | Install dependencies and run the target's type check and production build | `--allow-exec`; network access for installation | The output compiles with the pinned toolchain | Behavioral equivalence |
 | `static-output` | Build source and output and compare the generated HTML per route: route set, normalized text content, links, headings, landmarks, metadata, image references | `--allow-exec`; a statically exportable source | That build-time rendered content matches on the compared dimensions | Runtime interactivity, visual layout, CSS cascade, timing |
-| `runtime` (V2 or later) | Headless browser checks of hydration, interactions, and accessibility trees | External browser; explicit authorization | Selected runtime behaviors | Full behavioral equivalence |
+| `runtime` (V1, M10) | Headless browser checks of hydration, declared scripted interactions, and selected accessibility-tree comparisons | User-installed external browser; `--allow-exec`; a buildable, statically exportable source | Selected runtime behaviors on the routes and checks exercised | Full behavioral equivalence, untested interactions, visual layout, or all timing behavior |
 
 Rules declare which levels can verify their outputs. Evidence is recorded per unit: a unit counts as verified at a level only if every check covering it ran and passed. The external tool runner works on a temporary copy of the output with a scrubbed environment, enforces timeouts, limits captured output, and treats tool output as untrusted data (see [SECURITY.md](SECURITY.md) and [TESTING.md](TESTING.md)).
+
+Runtime verification is required V1 scope (`P-013`), with implementation in M10 after executable migration fixtures exist. Browser selection, the versioned interaction-check protocol, and handling of dynamic browser observations must be decided in M10 before implementation. Missing checks or browser prerequisites cannot count as passed. V2 M23 extends this mechanism across adapters and targets.
 
 ## 17. Reporting
 
