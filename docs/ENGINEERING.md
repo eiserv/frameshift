@@ -1,6 +1,6 @@
 # Engineering
 
-**Status: guidance and decisions.** No toolchain is initialized and no code exists. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
+**Status: guidance and decisions with an initial M0 workspace.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text and position primitives exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
 
 ## 1. Engineering principles
 
@@ -372,7 +372,7 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | Product name | Frameshift, with exactly this capitalization. Never "FrameShift", "Frame Shift", or "frame-shift". |
 | Executable and command | `frameshift` (`frameshift.exe` on Windows) |
 | Repository | `eiserv/frameshift`, private (`D-026`) |
-| Rust crates | A Cargo workspace. Crates are named `frameshift-<subsystem>` (for example `frameshift-engine`, `frameshift-cli`). The binary is `frameshift`. Modules inside crates use short, lowercase names. The concrete crate layout is decided in M1. |
+| Rust crates | A Cargo workspace. Crates are named `frameshift-<subsystem>` (for example `frameshift-engine`, `frameshift-cli`). The binary is `frameshift`. Modules inside crates use short, lowercase names. The existing M0 crate layout is recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md); it expands as concrete M1 requirements arise. |
 | JSON document kinds | `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, `frameshift.manifest`, `frameshift.error` |
 | Output metadata | `.frameshift/` directory (with `SUMMARY.md`, `manifest.json`, `report.json`, `unmigrated/`), `src/frameshift-compat/` helpers |
 | Configuration file | `frameshift.jsonc` (`D-027`) |

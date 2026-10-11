@@ -11,10 +11,11 @@ These instructions are binding for every agent working on Frameshift, whatever t
 
 - **Identity.** The project is named Frameshift, with exactly this capitalization. The CLI executable and command is `frameshift`. Do not introduce other names, temporary branding, or package identities. Naming conventions are in `docs/ENGINEERING.md` (section 8).
 - **Purpose.** A deterministic, rule-based engine that analyzes software projects and migrates them between frameworks while preserving behavior, with transparent reporting. The first migration path is Next.js (App Router) to Astro with Preact islands, as static output (`docs/MIGRATION_SPEC.md`). The product is a CLI. The engine is independent of it.
-- **Current state: planning, documentation only.** There is no source code, toolchain, package manifest, build system, test suite, CI workflow, release configuration, or working command. Everything the documentation says about commands, modules, files, workflows, and behavior is a specification or proposal. The remote `origin` is the private repository `eiserv/frameshift` (`D-026`), default branch `main`. Work on branches and integrate through pull requests.
-- **Implementation language.** Rust is the primary language for engine and CLI (`D-018`). Other languages are allowed only for specific, important tasks with a demonstrable quality advantage, a decision record, and the requirements in `docs/ENGINEERING.md` section 2.7 (`D-019`). Effort and time are not arguments against quality (`D-020`). No toolchain is initialized yet: do not initialize one, create package manifests, or write implementation code unless the task explicitly asks for it.
+- **Current state: initial M0 implementation.** A Cargo workspace and immutable source-text primitives with tests exist. Rust 1.98.0 is pinned. There is no CLI, parser, migration engine pipeline, CI workflow, or release configuration. M0 and M1 are incomplete. See `docs/IMPLEMENTATION.md` for actual code and contracts; the other documents still specify the remaining product. The remote `origin` is the private repository `eiserv/frameshift` (`D-026`), default branch `main`. Work on branches and integrate through pull requests.
+- **Implementation language.** Rust is the primary language for engine and CLI (`D-018`). Other languages are allowed only for specific, important tasks with a demonstrable quality advantage, a decision record, and the requirements in `docs/ENGINEERING.md` section 2.7 (`D-019`). Effort and time are not arguments against quality (`D-020`). The M0 workspace uses the Rust standard library only (`D-032`). Do not add dependencies or bypass the E1/E2 experiment gates without the required decisions.
 - **Documentation map.**
   - `README.md`: overview and status.
+  - `docs/IMPLEMENTATION.md`: existing modules, text contracts, limits, and local validation.
   - `docs/ARCHITECTURE.md`: pipeline, subsystem layers, project model, rule engine, planning, safe execution, verification levels, limits.
   - `docs/ROADMAP.md`: stages V1 to V3, milestones M0 to M24 and V3 tracks, acceptance criteria.
   - `docs/MIGRATION_SPEC.md`: the Next.js to Astro + Preact path and its compatibility matrix.
@@ -30,7 +31,8 @@ These instructions are binding for every agent working on Frameshift, whatever t
   - Fail closed. Anything not positively handled by a rule is `unknown` or `unsupported`, never reported as migrated. No percentage claims behavioral equivalence.
   - Determinism. The same input, options, and versions produce byte-identical plans, output, and reports, except for the report's `run` section.
   - No network access and no LLM in normal operation.
-- **Commands.** None exist yet. Add verified build, test, lint, and run commands here once they exist.
+- **Actual modules.** `crates/frameshift-core` provides immutable UTF-8 text, half-open spans, one-based Unicode-scalar positions, and explicit text limits. It has no I/O or framework knowledge. Workspace lints forbid unsafe code and wildcard arms over closed enums, and require public API docs.
+- **Verified commands (repository root).** `cargo build --workspace --offline --locked`, `cargo test --workspace --offline --locked`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --offline --locked -- -D warnings`. No `frameshift` command exists yet.
 
 ## Working Practices
 

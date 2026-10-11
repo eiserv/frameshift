@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: planned.** This document describes the intended architecture of Frameshift. None of it is implemented. It describes design intent, not existing code. Identifiers such as `D-006` or `P-003` refer to entries in [DECISIONS.md](DECISIONS.md): "Accepted" entries are binding, "Proposed" entries are recommendations that still need confirmation.
+**Status: planned architecture with an initial M0 foundation.** Immutable source text, byte spans, and derived positions are implemented. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the existing modules and exact contracts. The pipeline and all remaining subsystems below are design intent. Identifiers such as `D-006` or `P-003` refer to entries in [DECISIONS.md](DECISIONS.md): "Accepted" entries are binding, "Proposed" entries are recommendations that still need confirmation.
 
 Related documents:
 
@@ -186,7 +186,7 @@ The implementation strategy for these parsers (purpose-built or adopted) is cove
 
 ### 8.3 Syntax tree requirements
 
-- **Precise spans.** Every node records the byte offsets of its start and end in the original text. Line and column positions come from a per-file line table. Reports use byte offsets as the canonical location, with derived line and column for humans (columns count Unicode scalar values, `D-029`).
+- **Precise spans.** The M0 foundation already provides validated source spans and indexed positions (see [IMPLEMENTATION.md](IMPLEMENTATION.md)). Future syntax nodes record the byte offsets of its start and end in the original text. Line and column positions come from a per-file line table. Reports use byte offsets as the canonical location, with derived line and column for humans (columns count Unicode scalar values, `D-029`).
 - **Comments and trivia.** Comments are kept with their spans in a per-file list. Attaching comments to nodes is a separate, deterministic step. Whitespace is not stored in the tree: the original text is always available, and unchanged regions are copied byte for byte.
 - **AST, not CST, initially.** A span-precise abstract syntax tree combined with the original text supports edit-based rewriting (section 14) without a full concrete syntax tree. Experiment E2 tests this assumption. If it fails, a lossless concrete syntax tree is the fallback (`P-003`).
 - **Error policy.** A file with syntax errors becomes `unknown` and is never transformed. The parser may recover far enough to report several errors in one pass. It never guesses a repair.
