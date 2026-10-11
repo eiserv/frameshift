@@ -43,6 +43,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-033 | Mandatory forward-looking architecture | Accepted |
 | D-034 | Bounded parser error recovery | Accepted |
 | D-035 | Template lexical components as the next M0 increment | Accepted |
+| D-036 | Pinned Unicode identifiers and regular-expression literals as the next M0 increments | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Proposed |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
@@ -120,6 +121,7 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Decision:** Short-lived feature branches. Small, self-contained commits. Conventional Commits in English for commit messages and pull request titles. Pull-request-based integration into `main`. Squash merges only. Unrelated changes in separate branches and pull requests. See [RELEASES.md](RELEASES.md).
 - **Repository configuration (2026-10-12):** At the project owner's request, enabled only squash merging on `eiserv/frameshift`, disabled merge commits and rebase merging, and selected the PR title and body as the squash commit defaults. Read-back confirmed these settings and private visibility. Branch protection remains a separate setup item.
 - **One-run exception (2026-10-12):** The project owner explicitly authorized committing the verified template-scanner increment directly on `main`, then explicitly authorized pushing it to `origin/main` in a follow-up instruction. This overrides the pull-request and direct-push restrictions for this increment and its documentation updates only. It does not change the default workflow or establish branch protection.
+- **Second one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-036` increments and their documentation, once the agent considers the work complete. This exception has the same limits as the first one.
 
 ### D-011: Release management with Release Please
 
@@ -272,6 +274,17 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Implemented contract:** `scan_js_template` requires explicit start/continuation and tagged/untagged context, returns delimiter-inclusive and content spans, and stops at an unescaped backtick or `${`. Invalid escapes fail in untagged mode; tagged mode records the first invalid escape and thus an undefined cooked value. It never decodes values or parses substitutions. Each segment has an explicit byte limit, default 1 MiB.
 - **Architectural rationale (`D-033`):** Segment boundaries leave expression grammar, nested templates, and lexical-goal changes with the future parser. Exact source spelling supports provenance-preserving edits and future V1 to V3 static evaluation without imposing a value representation. Raw/cooked value decoding, aggregate token and nesting budgets, and grammar-aware recovery remain unimplemented.
 - **Tradeoffs:** A local scan cannot validate a whole template or its expressions. Separate segment limits do not bound a whole template; the future parser must enforce aggregate limits and choose contexts correctly. Tagged invalid-escape evidence must not be confused with an error or a decoded string.
+
+### D-036: Pinned Unicode identifiers and regular-expression literals as the next M0 increments
+
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Claude Code question interface.
+- **Decision:** Implement two separate E1 foundation increments, in this order: ECMAScript identifier names with full Unicode classification, then regular-expression literal scanning. Continue with the standard library only, and preserve the E1/E2 gates.
+- **Unicode data:** Pin Unicode 18.0.0, the latest version on 2026-10-12. A standard-library-only development tool generates sorted `ID_Start` and `ID_Continue` range tables from the Unicode Character Database file `DerivedCoreProperties.txt`. Only the generated tables are committed, together with the source version, file date, byte size, code point totals, and Unicode's copyright and terms notice. The source file is downloaded deliberately for each regeneration and is not committed. The file used on 2026-10-12 had 1,159,889 bytes and the SHA-256 hash `09c928886a178fcafd93c29e4bd59073a058e5a100b716d425cb563ab50f68c9`. Changing the Unicode version changes this decision.
+- **Identifier scope:** `IdentifierName` and `PrivateIdentifier`, including Unicode escapes. Reserved-word classification covers ECMAScript's `ReservedWord` list and the strict-mode reserved words. It compares the StringValue, including escaped spellings, without allocation, and reports whether escapes occurred. Contextual keywords (`async`, `of`, `get`, and others) and TypeScript keywords remain direct parser comparisons of unescaped spellings.
+- **Regular-expression scope (agent default within the confirmed increment, not separately confirmed):** The lexical grammar of ECMAScript section 12.9.5 at a parser-selected offset in a regular-expression goal, plus the flag early errors. Validation of the pattern grammar (section 22.2.1) is a separate future increment.
+- **Architectural rationale (`D-033`):** One identifier classifier serves the numeric literal boundary, identifier names, regular-expression flags, future JSX names, and the planned check of generated identifiers in printers (section 14.3 of [ARCHITECTURE.md](ARCHITECTURE.md)). Pinned tables keep results deterministic and independent of the Rust toolchain's internal Unicode version. Reserved words are lexical facts. Whether a name is permitted depends on strict mode, the module goal, and async or generator context, which only the parser knows.
+- **Tradeoffs:** ECMAScript requires the latest Unicode version, so every new Unicode release needs a deliberate regeneration to remain conformant. The tables add about 12 KB to the binary. The derived data carries Unicode's notice obligations into `THIRD_PARTY_NOTICES.md` before any distribution.
+- **Revisit if:** a new Unicode version is published, or the parser needs further Unicode properties. In that case, extend the generator rather than adding a dependency.
 
 ## Technique proposals and related accepted decisions
 
