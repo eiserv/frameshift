@@ -2,7 +2,7 @@
 
 This register records Frameshift's architectural and project decisions. Only entries with the status **Accepted** are binding. **Proposed** entries are recommendations that still need confirmation, usually through an experiment or an explicit decision by the project owner. Entries keep their ID when their status changes, so some `P-` entries are now Accepted. **Deferred** entries are intentionally postponed. **Open questions** have no recommendation yet, or only a tentative one.
 
-Statuses change only through an edit to this file in a pull request. A changed decision keeps its ID. The entry records the new status, the date, and the reason, and older reasoning remains visible in the Git history.
+Statuses change through an edit to this file under the integration workflow in D-010, including any explicitly authorized exception. A changed decision keeps its ID. The entry records the new status, the date, and the reason, and older reasoning remains visible in the Git history.
 
 ## Index
 
@@ -42,6 +42,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 | D-032 | M0 tooling and first implementation increment | Accepted |
 | D-033 | Mandatory forward-looking architecture | Accepted |
 | D-034 | Bounded parser error recovery | Accepted |
+| D-035 | Template lexical components as the next M0 increment | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Proposed |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
@@ -118,6 +119,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 - **Status:** Accepted (2026-10-11).
 - **Decision:** Short-lived feature branches. Small, self-contained commits. Conventional Commits in English for commit messages and pull request titles. Pull-request-based integration into `main`. Squash merges only. Unrelated changes in separate branches and pull requests. See [RELEASES.md](RELEASES.md).
 - **Repository configuration (2026-10-12):** At the project owner's request, enabled only squash merging on `eiserv/frameshift`, disabled merge commits and rebase merging, and selected the PR title and body as the squash commit defaults. Read-back confirmed these settings and private visibility. Branch protection remains a separate setup item.
+- **One-run exception (2026-10-12):** The project owner explicitly authorized committing the verified template-scanner increment directly on local `main`. This overrides the pull-request requirement for this increment only. It does not change the default workflow, authorize a direct remote push, or establish branch protection.
 
 ### D-011: Release management with Release Please
 
@@ -262,6 +264,14 @@ Statuses change only through an edit to this file in a pull request. A changed d
 - **Safety contract:** Explicit per-file diagnostic and recovery-work limits, guaranteed forward progress, and no recovery across a boundary whose lexical context is unknown. If safe recovery is unavailable or a limit is reached, stop parsing that file and report why. Local scanners continue to return one typed error without partial results; they do not implement recovery.
 - **Rationale:** Multiple diagnostics reduce repeated analysis runs while preserving fail-closed classification. Parser-owned synchronization respects JSX, template, and regular-expression contexts.
 - **Remaining implementation choices:** Concrete synchronization points and default diagnostic/recovery budgets are chosen and tested with the grammar in M3. No parser or recovery mechanism exists yet.
+
+### D-035: Template lexical components as the next M0 increment
+
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
+- **Decision:** Prioritize parser-directed ECMAScript template lexical components as the next E1 foundation increment. Full Unicode identifier support and regular-expression scanning remain subsequent work. Continue with the standard library only, preserving the E1/E2 gates.
+- **Implemented contract:** `scan_js_template` requires explicit start/continuation and tagged/untagged context, returns delimiter-inclusive and content spans, and stops at an unescaped backtick or `${`. Invalid escapes fail in untagged mode; tagged mode records the first invalid escape and thus an undefined cooked value. It never decodes values or parses substitutions. Each segment has an explicit byte limit, default 1 MiB.
+- **Architectural rationale (`D-033`):** Segment boundaries leave expression grammar, nested templates, and lexical-goal changes with the future parser. Exact source spelling supports provenance-preserving edits and future V1 to V3 static evaluation without imposing a value representation. Raw/cooked value decoding, aggregate token and nesting budgets, and grammar-aware recovery remain unimplemented.
+- **Tradeoffs:** A local scan cannot validate a whole template or its expressions. Separate segment limits do not bound a whole template; the future parser must enforce aggregate limits and choose contexts correctly. Tagged invalid-escape evidence must not be confused with an error or a decoded string.
 
 ## Technique proposals and related accepted decisions
 
@@ -412,7 +422,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 Detailed success criteria for E1 and E2 are in section 2.8 of [ENGINEERING.md](ENGINEERING.md). Experiment results are recorded here together with the decisions they inform.
 
-**E1 progress (2026-10-12):** Parser-directed JavaScript trivia, strict-string, numeric, and punctuation scanners are implemented in the framework-independent syntax crate, exposed through the engine facade, and tested with fictional inputs. Exact spans, comment ordering, newline evidence, typed errors, and explicit local limits are covered. This prepares parser-controlled lexical goals without guessing JSX, regular-expression, or template contexts. No complete token stream, AST arena, parser, corpus pass rate, throughput/memory result, or coverage-guided fuzzing result exists yet. P-002 remains Proposed, and E1 has not passed. Contracts and validation are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md).
+**E1 progress (2026-10-12):** Parser-directed JavaScript trivia, strict-string, numeric, punctuation, and template scanners are implemented in the framework-independent syntax crate, exposed through the engine facade, and tested with fictional inputs. Exact spans, comment ordering, newline evidence, typed errors, tagged invalid-escape evidence, and explicit local limits are covered. This prepares parser-controlled lexical goals without guessing JSX, regular-expression, or template contexts. The template increment was selected through the question interface (`D-035`). No complete token stream, AST arena, parser, corpus pass rate, throughput/memory result, or coverage-guided fuzzing result exists yet. P-002 remains Proposed, and E1 has not passed. Contracts and validation are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ## Template for new entries
 

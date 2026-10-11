@@ -11,6 +11,8 @@ pub struct LexicalLimits {
     pub max_string_bytes: usize,
     /// Maximum bytes in one numeric literal, including separators and suffix, default 1 MiB.
     pub max_number_bytes: usize,
+    /// Maximum bytes in one template segment, including delimiters, default 1 MiB.
+    pub max_template_bytes: usize,
 }
 
 impl Default for LexicalLimits {
@@ -19,6 +21,7 @@ impl Default for LexicalLimits {
             max_comments: 100_000,
             max_string_bytes: 1024 * 1024,
             max_number_bytes: 1024 * 1024,
+            max_template_bytes: 1024 * 1024,
         }
     }
 }
@@ -87,6 +90,14 @@ pub enum LexicalErrorKind {
     UnclassifiedNumericBoundary,
     /// The numeric scan would consume more than the allowed number of bytes.
     NumberLimit,
+    /// A template scan did not start at the delimiter selected by its context.
+    ExpectedTemplateDelimiter,
+    /// A template segment reached EOF before a backtick or `${` terminator.
+    UnterminatedTemplate,
+    /// An untagged template contains an escape with an undefined cooked value.
+    InvalidTemplateEscape,
+    /// The template scan would consume more than the allowed number of bytes.
+    TemplateLimit,
     /// Comment storage could not be reserved.
     AllocationFailed,
     /// A scanner produced an invalid range, indicating an internal defect.
@@ -125,6 +136,10 @@ impl fmt::Display for LexicalError {
                 "Unicode numeric boundary is unsupported"
             }
             LexicalErrorKind::NumberLimit => "number size exceeds lexical limit",
+            LexicalErrorKind::ExpectedTemplateDelimiter => "expected a template delimiter",
+            LexicalErrorKind::UnterminatedTemplate => "unterminated template segment",
+            LexicalErrorKind::InvalidTemplateEscape => "invalid untagged template escape",
+            LexicalErrorKind::TemplateLimit => "template segment size exceeds lexical limit",
             LexicalErrorKind::AllocationFailed => "could not allocate comment storage",
             LexicalErrorKind::InternalInvariant(error) => {
                 return write!(f, "internal lexical error at {}: {error}", self.offset);
@@ -155,6 +170,10 @@ impl std::error::Error for LexicalError {
             | LexicalErrorKind::LegacyLeadingZero
             | LexicalErrorKind::UnclassifiedNumericBoundary
             | LexicalErrorKind::NumberLimit
+            | LexicalErrorKind::ExpectedTemplateDelimiter
+            | LexicalErrorKind::UnterminatedTemplate
+            | LexicalErrorKind::InvalidTemplateEscape
+            | LexicalErrorKind::TemplateLimit
             | LexicalErrorKind::AllocationFailed => None,
         }
     }
