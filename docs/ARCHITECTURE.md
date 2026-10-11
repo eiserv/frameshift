@@ -186,7 +186,7 @@ The implementation strategy for these parsers (purpose-built or adopted) is cove
 
 ### 8.3 Syntax tree requirements
 
-- **Precise spans.** Every node records the byte offsets of its start and end in the original text. Line and column positions come from a per-file line table. Reports use byte offsets as the canonical location, with derived line and column for humans (`Q-001` covers the column encoding).
+- **Precise spans.** Every node records the byte offsets of its start and end in the original text. Line and column positions come from a per-file line table. Reports use byte offsets as the canonical location, with derived line and column for humans (columns count Unicode scalar values, `D-029`).
 - **Comments and trivia.** Comments are kept with their spans in a per-file list. Attaching comments to nodes is a separate, deterministic step. Whitespace is not stored in the tree: the original text is always available, and unchanged regions are copied byte for byte.
 - **AST, not CST, initially.** A span-precise abstract syntax tree combined with the original text supports edit-based rewriting (section 14) without a full concrete syntax tree. Experiment E2 tests this assumption. If it fails, a lossless concrete syntax tree is the fallback (`P-003`).
 - **Error policy.** A file with syntax errors becomes `unknown` and is never transformed. The parser may recover far enough to report several errors in one pass. It never guesses a repair.
@@ -366,10 +366,10 @@ Printer rules:
 
 ### 14.4 Output layout and generated support files
 
-- **Relocation.** Only files whose role requires a new location move: routes go to `src/pages/`, and layouts to `src/layouts/`. Other files keep their relative paths where possible (`P-017`). Details are in [MIGRATION_SPEC.md](MIGRATION_SPEC.md).
+- **Layout.** The output follows the conventional target structure, for Astro with all code under `src/`. Data read at build time stays where its filesystem paths expect it (`D-024`). Details are in [MIGRATION_SPEC.md](MIGRATION_SPEC.md).
 - **Compatibility helpers.** When a rule needs runtime support code (for example, a small navigation shim), the code is generated into `src/frameshift-compat/`. Each helper is listed in the report with its purpose and removal guidance.
 - **Unmigrated sources.** Files that cannot be migrated are copied into `.frameshift/unmigrated/` under their original relative paths. Nothing is dropped silently. Every source file is transformed, copied, preserved, or reported as out of scope or ignored.
-- **Manifest and report.** `.frameshift/manifest.json` and `.frameshift/report.json` record provenance and results. `FRAMESHIFT.md` at the output root summarizes remaining manual tasks for humans (`P-011`).
+- **Manifest and report.** `.frameshift/manifest.json` and `.frameshift/report.json` record provenance and results. `.frameshift/SUMMARY.md` summarizes remaining manual tasks for humans, and the CLI points to it after every migration (`P-011`).
 
 ## 15. Safe execution
 
@@ -437,7 +437,7 @@ The evidence ledger holds four entry types: findings, decisions (which rule was 
 6. **How are silent regressions prevented?** Fail-closed classification, rule postconditions, residue scans, route parity checks, golden and regression tests in Frameshift's own CI, verification levels with explicit scope, and reports that never claim more than the checks that ran (sections 11, 12, and 16).
 7. **What is the smallest useful capability?** An accurate analysis-only report for a Next.js App Router project, which tells users how migratable their project is and why. After that comes the migration of static routes, layouts, links, global styles, and public assets, verified structurally and by build (see [ROADMAP.md](ROADMAP.md)).
 8. **How do we avoid third-party libraries without unmaintainable code?** Build only bounded, well-specified components: parsers for documented formats, a specified semver grammar, gitignore matching. Write the specification first, test against public conformance suites, fuzz, and document limitations. Never build a type checker, bundler, or network package resolver (see [ENGINEERING.md](ENGINEERING.md)).
-9. **Which language?** The recommended direction is Go, as a single language with CGO disabled. Rust is the main alternative. The decision depends on experiments E1 and E2 and is recorded as Proposed (`P-001`). Full reasoning is in [ENGINEERING.md](ENGINEERING.md).
+9. **Which language?** Rust is the primary language for all stages (`D-018`). Other languages may be used for specific, important tasks behind clear boundaries when they offer a demonstrable quality advantage (`D-019`). Full reasoning is in [ENGINEERING.md](ENGINEERING.md).
 10. **How are new framework adapters added without rewriting the core?** The layering of section 6 places framework knowledge only in adapters, rule packs, and knowledge base data. The core works on neutral concepts and opaque facets. V2 proves this by adding a second source and a second target without core changes that are specific to a migration path.
 11. **Where would optional model assistance connect?** At a single post-planning seam, limited to choosing among implemented deterministic strategies or routing to review (section 19, [LLM_POLICY.md](LLM_POLICY.md)).
 12. **How does Frameshift stay CLI-first but reusable?** The engine API and versioned JSON documents are the contract. The CLI is one adapter with no migration logic (section 18).
@@ -457,4 +457,4 @@ These limits are fundamental, not temporary gaps:
 
 ## 23. Open architectural questions
 
-Open questions are tracked in [DECISIONS.md](DECISIONS.md), notably the column encoding in locations (`Q-001`), weight values (`Q-002`), static output comparison thresholds and HTML parsing (`Q-005`), parser error recovery depth (`Q-011`), and placement of colocated non-route modules (`Q-009`).
+Open questions are tracked in [DECISIONS.md](DECISIONS.md), notably weight values (`Q-002`), static output comparison thresholds and HTML parsing (`Q-005`), and parser error recovery depth (`Q-011`).
