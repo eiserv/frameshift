@@ -153,7 +153,7 @@ Invariants that must always hold are tested with generated inputs:
 
 ## 5. Real-world corpus
 
-- A private list of real-world Next.js projects (repository URL, pinned commit, license) is maintained for evaluation.
+- A private list of real-world Next.js projects (repository URL, pinned commit, license) is maintained for evaluation. Agents propose projects with a reason for each, and the project owner approves the list (`D-030`).
 - Projects are fetched on demand into a cache outside the repository and are never committed.
 - Only projects whose licenses permit this use are included. During the private phase, no results containing third-party code leave the development environment or CI, consistent with [SECURITY.md](SECURITY.md).
 - Evaluation runs `inspect`, `analyze`, `migrate`, and `verify` up to the highest feasible level. Results are aggregated into a private evaluation report for each release.
@@ -192,4 +192,4 @@ The planned workflows are described in [RELEASES.md](RELEASES.md). None exist ye
 
 - Normalization rules and thresholds for static output comparison, and the HTML parser to use (`Q-005`).
 - Browser tool for Frameshift's CI island checks (decided in M10).
-- Selection and licensing of the real-world corpus (`Q-006`).
+- Concrete project list for the real-world corpus, proposed by agents and approved by the project owner in M5 (`D-030`).
