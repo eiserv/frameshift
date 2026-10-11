@@ -44,6 +44,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-034 | Bounded parser error recovery | Accepted |
 | D-035 | Template lexical components as the next M0 increment | Accepted |
 | D-036 | Pinned Unicode identifiers and regular-expression literals as the next M0 increments | Accepted |
+| D-037 | Complete regular-expression validation with Annex B, then the syntax tree arena | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Proposed |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
@@ -122,6 +123,7 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Repository configuration (2026-10-12):** At the project owner's request, enabled only squash merging on `eiserv/frameshift`, disabled merge commits and rebase merging, and selected the PR title and body as the squash commit defaults. Read-back confirmed these settings and private visibility. Branch protection remains a separate setup item.
 - **One-run exception (2026-10-12):** The project owner explicitly authorized committing the verified template-scanner increment directly on `main`, then explicitly authorized pushing it to `origin/main` in a follow-up instruction. This overrides the pull-request and direct-push restrictions for this increment and its documentation updates only. It does not change the default workflow or establish branch protection.
 - **Second one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-036` increments and their documentation, once the agent considers the work complete. This exception has the same limits as the first one.
+- **Third one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-037` regular-expression increment and its documentation, once the agent is satisfied with the work. This exception has the same limits as the first one.
 
 ### D-011: Release management with Release Please
 
@@ -282,10 +284,23 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Unicode data:** Pin Unicode 18.0.0, the latest version on 2026-10-12. A standard-library-only development tool generates sorted `ID_Start` and `ID_Continue` range tables from the Unicode Character Database file `DerivedCoreProperties.txt`. Only the generated tables are committed, together with the source version, file date, byte size, code point totals, and Unicode's copyright and terms notice. The source file is downloaded deliberately for each regeneration and is not committed. The file used on 2026-10-12 had 1,159,889 bytes and the SHA-256 hash `09c928886a178fcafd93c29e4bd59073a058e5a100b716d425cb563ab50f68c9`. Changing the Unicode version changes this decision.
 - **Identifier scope:** `IdentifierName` and `PrivateIdentifier`, including Unicode escapes. Reserved-word classification covers ECMAScript's `ReservedWord` list and the strict-mode reserved words. It compares the StringValue, including escaped spellings, without allocation, and reports whether escapes occurred. Contextual keywords (`async`, `of`, `get`, and others) and TypeScript keywords remain direct parser comparisons of unescaped spellings.
 - **Implemented identifier contract:** `scan_js_identifier` returns the kind, exact and name spans, `has_escape`, and the reserved word matching the decoded StringValue, or `None` for private names. Escapes must denote code points permitted at their position. Details are in section 4.6 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
-- **Regular-expression scope (agent default within the confirmed increment, not separately confirmed):** The lexical grammar of ECMAScript section 12.9.5 at a parser-selected offset in a regular-expression goal, plus the flag early errors. Validation of the pattern grammar (section 22.2.1) is a separate future increment.
+- **Regular-expression scope:** Superseded by `D-037`, which the project owner confirmed on 2026-10-12. The earlier agent default (lexical grammar and flags only, pattern validation later) no longer applies.
 - **Architectural rationale (`D-033`):** One identifier classifier serves the numeric literal boundary, identifier names, regular-expression flags, future JSX names, and the planned check of generated identifiers in printers (section 14.3 of [ARCHITECTURE.md](ARCHITECTURE.md)). Pinned tables keep results deterministic and independent of the Rust toolchain's internal Unicode version. Reserved words are lexical facts. Whether a name is permitted depends on strict mode, the module goal, and async or generator context, which only the parser knows.
 - **Tradeoffs:** ECMAScript requires the latest Unicode version, so every new Unicode release needs a deliberate regeneration to remain conformant. The tables add about 12 KB to the binary. The derived data carries Unicode's notice obligations into `THIRD_PARTY_NOTICES.md` before any distribution.
 - **Revisit if:** a new Unicode version is published, or the parser needs further Unicode properties. In that case, extend the generator rather than adding a dependency.
+
+### D-037: Complete regular-expression validation with Annex B, then the syntax tree arena
+
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Claude Code question interface. Replaces the regular-expression scope that `D-036` listed as an unconfirmed agent default.
+- **Context:** `D-036` fixed the order of the identifier and regular-expression increments. The scope of the regular-expression increment, the treatment of web-compatible pattern syntax, and the increment after it were still open.
+- **Decision:**
+  - The regular-expression increment covers the complete validity check of a literal, not only its lexical extent: the lexical grammar of ECMAScript section 12.9.5, the flag rules of `IsValidRegularExpressionLiteral` (section 13.2.7.2), and the pattern grammar of section 22.2.1 with its early errors. This includes the `u` and `v` modes, named groups (including duplicate names in different alternatives), modifiers, and Unicode property escapes.
+  - Without the `u` or `v` flag, the web-compatible pattern grammar of Annex B.1.2 applies, as in browsers and Node.js. With either flag, the strict grammar applies.
+  - Property names and values in `\p{...}` and `\P{...}` are checked against the pinned Unicode 18.0.0 data (`D-036`). The development generator is extended to read `PropertyValueAliases.txt` for General_Category and Script values. The property name tables of the ECMAScript specification (tables 65 to 67) are written by hand and cite their source.
+  - The increment after this one is the arena-based syntax tree and the start of the expression parser (E1). A token driver and throughput measurement are not prioritized ahead of it.
+- **Rationale:** A file with an invalid regular expression has a syntax error and must become `unknown` (`D-034`), so lexical scanning alone would let such files pass as valid. Real Next.js code runs in browsers and Node.js, which accept Annex B patterns; rejecting them would wrongly mark ordinary files as `unknown`. Building the tree next tests the central E1 design question early.
+- **Tradeoffs:** The increment is larger than the previous scanners. Annex B adds a second grammar with different handling of braces, octal escapes, control escapes, and UTF-16 code units. Property validation adds a second pinned data file with a recorded hash. Throughput evidence for E1 arrives later than with a token driver first.
+- **Revisit if:** the ECMAScript specification adds flags or pattern syntax, the Unicode version changes, or evidence shows that Annex B acceptance hides real defects in analyzed projects.
 
 ## Technique proposals and related accepted decisions
 
