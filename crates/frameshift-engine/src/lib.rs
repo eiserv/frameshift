@@ -7,11 +7,12 @@
 
 pub use frameshift_core::{Position, SourceText, Span, TextError, TextLimits};
 pub use frameshift_syntax::{
-    Comment, CommentKind, GreaterThanMode, JsLexicalGoal, LexicalError, LexicalErrorKind,
-    LexicalLimits, NumericBase, NumericKind, NumericLiteral, Punctuator, PunctuatorContext,
-    PunctuatorToken, TemplateContext, TemplateKind, TemplateMode, TemplatePosition, TemplateToken,
-    Trivia, UNICODE_VERSION, is_js_identifier_part, is_js_identifier_start, scan_js_number,
-    scan_js_punctuator, scan_js_string, scan_js_template, scan_js_trivia,
+    Comment, CommentKind, GreaterThanMode, IdentifierKind, IdentifierToken, JsLexicalGoal,
+    LexicalError, LexicalErrorKind, LexicalLimits, NumericBase, NumericKind, NumericLiteral,
+    Punctuator, PunctuatorContext, PunctuatorToken, ReservedWord, ReservedWordClass,
+    TemplateContext, TemplateKind, TemplateMode, TemplatePosition, TemplateToken, Trivia,
+    UNICODE_VERSION, is_js_identifier_part, is_js_identifier_start, scan_js_identifier,
+    scan_js_number, scan_js_punctuator, scan_js_string, scan_js_template, scan_js_trivia,
 };
 pub use frameshift_transform::{
     AppliedEdit, Edit, EditLimits, EditOrder, Origin, ProvenanceRegion, RewriteError,

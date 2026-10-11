@@ -13,6 +13,8 @@ pub struct LexicalLimits {
     pub max_number_bytes: usize,
     /// Maximum bytes in one template segment, including delimiters, default 1 MiB.
     pub max_template_bytes: usize,
+    /// Maximum bytes in one identifier, including `#` and escapes, default 1 MiB.
+    pub max_identifier_bytes: usize,
 }
 
 impl Default for LexicalLimits {
@@ -22,6 +24,7 @@ impl Default for LexicalLimits {
             max_string_bytes: 1024 * 1024,
             max_number_bytes: 1024 * 1024,
             max_template_bytes: 1024 * 1024,
+            max_identifier_bytes: 1024 * 1024,
         }
     }
 }
@@ -97,6 +100,13 @@ pub enum LexicalErrorKind {
     InvalidTemplateEscape,
     /// The template scan would consume more than the allowed number of bytes.
     TemplateLimit,
+    /// An identifier scan did not start at an identifier start or a private name.
+    ExpectedIdentifier,
+    /// A backslash in or after a name is not a `\u` escape of a code point
+    /// permitted at that position.
+    InvalidIdentifierEscape,
+    /// The identifier scan would consume more than the allowed number of bytes.
+    IdentifierLimit,
     /// Comment storage could not be reserved.
     AllocationFailed,
     /// A scanner produced an invalid range, indicating an internal defect.
@@ -136,6 +146,9 @@ impl fmt::Display for LexicalError {
             LexicalErrorKind::UnterminatedTemplate => "unterminated template segment",
             LexicalErrorKind::InvalidTemplateEscape => "invalid untagged template escape",
             LexicalErrorKind::TemplateLimit => "template segment size exceeds lexical limit",
+            LexicalErrorKind::ExpectedIdentifier => "expected an identifier",
+            LexicalErrorKind::InvalidIdentifierEscape => "invalid identifier escape",
+            LexicalErrorKind::IdentifierLimit => "identifier size exceeds lexical limit",
             LexicalErrorKind::AllocationFailed => "could not allocate comment storage",
             LexicalErrorKind::InternalInvariant(error) => {
                 return write!(f, "internal lexical error at {}: {error}", self.offset);
@@ -169,6 +182,9 @@ impl std::error::Error for LexicalError {
             | LexicalErrorKind::UnterminatedTemplate
             | LexicalErrorKind::InvalidTemplateEscape
             | LexicalErrorKind::TemplateLimit
+            | LexicalErrorKind::ExpectedIdentifier
+            | LexicalErrorKind::InvalidIdentifierEscape
+            | LexicalErrorKind::IdentifierLimit
             | LexicalErrorKind::AllocationFailed => None,
         }
     }

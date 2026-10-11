@@ -2,7 +2,7 @@
 
 Frameshift is a framework migration engine in early development with a command-line interface. It will analyze existing software projects and migrate them from one framework to another, preserve their intended behavior, and report what it migrated, what it could not migrate, and why.
 
-> **Status: M0 in progress.** The repository contains a buildable Rust workspace with tested immutable source-text primitives, parser-directed JavaScript trivia, string, numeric, punctuation, and template scanners, ECMAScript identifier classification from pinned Unicode 18.0.0 tables, and a deterministic span edit core with provenance. The scanners do not constitute a complete lexer or parser. The parser and rewriting experiments remain open. There is no CLI or working migration command yet. See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for existing code, contracts, limits, and development commands. The product commands below remain planned.
+> **Status: M0 in progress.** The repository contains a buildable Rust workspace with tested immutable source-text primitives, parser-directed JavaScript trivia, string, numeric, punctuation, template, and identifier scanners with reserved-word classification, ECMAScript identifier character classification from pinned Unicode 18.0.0 tables, and a deterministic span edit core with provenance. The scanners do not constitute a complete lexer or parser. The parser and rewriting experiments remain open. There is no CLI or working migration command yet. See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for existing code, contracts, limits, and development commands. The product commands below remain planned.
 
 ## The problem
 
