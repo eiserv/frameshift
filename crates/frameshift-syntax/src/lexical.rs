@@ -9,6 +9,8 @@ pub struct LexicalLimits {
     pub max_comments: usize,
     /// Maximum bytes in one string, including quotes, default 1 MiB.
     pub max_string_bytes: usize,
+    /// Maximum bytes in one numeric literal, including separators and suffix, default 1 MiB.
+    pub max_number_bytes: usize,
 }
 
 impl Default for LexicalLimits {
@@ -16,6 +18,7 @@ impl Default for LexicalLimits {
         Self {
             max_comments: 100_000,
             max_string_bytes: 1024 * 1024,
+            max_number_bytes: 1024 * 1024,
         }
     }
 }
@@ -70,6 +73,20 @@ pub enum LexicalErrorKind {
     CommentLimit,
     /// The string scan would consume more than the allowed number of bytes.
     StringLimit,
+    /// A numeric scan did not start at a digit or a dot followed by a digit.
+    ExpectedNumber,
+    /// A radix prefix or exponent was not followed by a required digit.
+    MissingNumericDigit,
+    /// A numeric separator was not between two digits of the same part and radix.
+    InvalidNumericSeparator,
+    /// An identifier start, extra decimal digit, or invalid BigInt suffix follows a number.
+    InvalidNumericContinuation,
+    /// A leading-zero integer is outside the supported strict-mode subset.
+    LegacyLeadingZero,
+    /// A non-ASCII suffix requires the future Unicode identifier classifier.
+    UnclassifiedNumericBoundary,
+    /// The numeric scan would consume more than the allowed number of bytes.
+    NumberLimit,
     /// Comment storage could not be reserved.
     AllocationFailed,
     /// A scanner produced an invalid range, indicating an internal defect.
@@ -99,6 +116,15 @@ impl fmt::Display for LexicalError {
             LexicalErrorKind::UnterminatedComment => "unterminated block comment",
             LexicalErrorKind::CommentLimit => "comment count exceeds lexical limit",
             LexicalErrorKind::StringLimit => "string size exceeds lexical limit",
+            LexicalErrorKind::ExpectedNumber => "expected a numeric literal",
+            LexicalErrorKind::MissingNumericDigit => "expected a numeric digit",
+            LexicalErrorKind::InvalidNumericSeparator => "invalid numeric separator",
+            LexicalErrorKind::InvalidNumericContinuation => "invalid numeric continuation",
+            LexicalErrorKind::LegacyLeadingZero => "legacy leading-zero number is unsupported",
+            LexicalErrorKind::UnclassifiedNumericBoundary => {
+                "Unicode numeric boundary is unsupported"
+            }
+            LexicalErrorKind::NumberLimit => "number size exceeds lexical limit",
             LexicalErrorKind::AllocationFailed => "could not allocate comment storage",
             LexicalErrorKind::InternalInvariant(error) => {
                 return write!(f, "internal lexical error at {}: {error}", self.offset);
@@ -122,6 +148,13 @@ impl std::error::Error for LexicalError {
             | LexicalErrorKind::UnterminatedComment
             | LexicalErrorKind::CommentLimit
             | LexicalErrorKind::StringLimit
+            | LexicalErrorKind::ExpectedNumber
+            | LexicalErrorKind::MissingNumericDigit
+            | LexicalErrorKind::InvalidNumericSeparator
+            | LexicalErrorKind::InvalidNumericContinuation
+            | LexicalErrorKind::LegacyLeadingZero
+            | LexicalErrorKind::UnclassifiedNumericBoundary
+            | LexicalErrorKind::NumberLimit
             | LexicalErrorKind::AllocationFailed => None,
         }
     }
@@ -309,7 +342,7 @@ fn advance(
     Ok(())
 }
 
-fn is_whitespace(ch: char) -> bool {
+pub(crate) fn is_whitespace(ch: char) -> bool {
     matches!(
         ch,
         '\t' | '\u{000b}' | '\u{000c}' | ' ' | '\u{00a0}' | '\u{1680}' | '\u{2000}'
@@ -317,20 +350,20 @@ fn is_whitespace(ch: char) -> bool {
     )
 }
 
-fn is_line_terminator(ch: char) -> bool {
+pub(crate) fn is_line_terminator(ch: char) -> bool {
     matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}')
 }
 
-fn validate(source: &SourceText, offset: usize) -> Result<(), LexicalError> {
+pub(crate) fn validate(source: &SourceText, offset: usize) -> Result<(), LexicalError> {
     source
         .validate_offset(offset)
         .map_err(|cause| error(offset, LexicalErrorKind::InvalidOffset(cause)))
 }
 
-fn span(start: usize, end: usize) -> Result<Span, LexicalError> {
+pub(crate) fn span(start: usize, end: usize) -> Result<Span, LexicalError> {
     Span::new(start, end).map_err(|cause| error(start, LexicalErrorKind::InternalInvariant(cause)))
 }
 
-fn error(offset: usize, kind: LexicalErrorKind) -> LexicalError {
+pub(crate) fn error(offset: usize, kind: LexicalErrorKind) -> LexicalError {
     LexicalError { offset, kind }
 }

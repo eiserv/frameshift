@@ -6,8 +6,9 @@
 
 pub use frameshift_core::{Position, SourceText, Span, TextError, TextLimits};
 pub use frameshift_syntax::{
-    Comment, CommentKind, LexicalError, LexicalErrorKind, LexicalLimits, Trivia, scan_js_string,
-    scan_js_trivia,
+    Comment, CommentKind, GreaterThanMode, JsLexicalGoal, LexicalError, LexicalErrorKind,
+    LexicalLimits, NumericBase, NumericKind, NumericLiteral, Punctuator, PunctuatorContext,
+    PunctuatorToken, Trivia, scan_js_number, scan_js_punctuator, scan_js_string, scan_js_trivia,
 };
 pub use frameshift_transform::{
     AppliedEdit, Edit, EditLimits, EditOrder, Origin, ProvenanceRegion, RewriteError,

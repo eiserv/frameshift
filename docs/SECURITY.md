@@ -1,6 +1,6 @@
 # Security
 
-**Status: initial threat model and planned controls.** The M0 text, lexical, and rewriting primitives have no I/O. They reject invalid UTF-8, invalid spans, malformed strict-string escapes, unclosed lexical constructs, overlapping edits, ambiguous ordering, and resource limits with typed errors and no partial result. Lexical scans are iterative, strings allocate no storage, and comment retention is bounded. Unsafe Rust is forbidden. Their scope and limits are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md). Source discovery, filesystem safety, execution authorization, and the remaining product controls below are not implemented. This document defines the security direction for the migration engine, the privacy requirements, the restrictions of the private repository phase, and the preparation needed before any public release. Once Frameshift is public, it will also serve as the basis for the project's security policy.
+**Status: initial threat model and planned controls.** The M0 text, lexical, and rewriting primitives have no I/O. They reject invalid UTF-8, invalid spans, malformed strict-string escapes or numeric literals, unclosed lexical constructs, overlapping edits, ambiguous ordering, and resource limits with typed errors and no partial result. Lexical scans are iterative, strings, numbers, and punctuation allocate no storage, and comment retention is bounded. Punctuation requires explicit caller-selected lexical context and never guesses regular-expression or template boundaries. Unsafe Rust is forbidden. Their scope and limits are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md). Source discovery, filesystem safety, execution authorization, and the remaining product controls below are not implemented. This document defines the security direction for the migration engine, the privacy requirements, the restrictions of the private repository phase, and the preparation needed before any public release. Once Frameshift is public, it will also serve as the basis for the project's security policy.
 
 ## 1. Scope
 
@@ -100,6 +100,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 
 - Deterministic limits on maximum file size for parsing, total files, total bytes, directory depth, syntax nesting depth, and token counts per file. Defaults are documented, and a limit that is reached produces a finding.
 - Parsers either avoid recursion where input controls the depth, or enforce an explicit depth bound well below the stack limit.
+- Future parser recovery has explicit per-file diagnostic and recovery-work limits, guarantees forward progress, and stops if lexical context cannot be synchronized safely (`D-034`). Recovery never makes an erroneous file eligible for transformation.
 - Limits are based on size and counts, not time, so results stay deterministic. External tools in verification have timeouts, because their behavior is outside Frameshift's control.
 
 ### 7.3 No execution of project code

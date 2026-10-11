@@ -353,6 +353,7 @@ fn generated_short_inputs_have_deterministic_errors_and_valid_spans() {
                 let limits = LexicalLimits {
                     max_comments: 2,
                     max_string_bytes: 8,
+                    ..LexicalLimits::default()
                 };
                 let trivia = scan_js_trivia(&source, offset, limits);
                 assert_eq!(trivia, scan_js_trivia(&source, offset, limits));

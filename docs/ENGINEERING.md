@@ -1,6 +1,6 @@
 # Engineering
 
-**Status: guidance and decisions with M0 in progress.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text, position primitives, parser-directed JavaScript trivia and string scanners, and the span edit core exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
+**Status: guidance and decisions with M0 in progress.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text, position primitives, parser-directed JavaScript trivia, string, numeric, and punctuation scanners, and the span edit core exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
 
 ## 1. Engineering principles
 
@@ -400,5 +400,5 @@ Conventional Commit scopes follow the subsystems. Recommended scopes: `cli`, `co
 
 ## 10. Open questions
 
-- Parser error recovery depth (`Q-011`).
+- Concrete parser recovery synchronization points and default diagnostic/recovery budgets (M3, under accepted `D-034`).
 - HTML parser for static output comparison: build or adopt (`Q-005`).

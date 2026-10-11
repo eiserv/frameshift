@@ -41,6 +41,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 | D-031 | Second migration path | Accepted |
 | D-032 | M0 tooling and first implementation increment | Accepted |
 | D-033 | Mandatory forward-looking architecture | Accepted |
+| D-034 | Bounded parser error recovery | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Proposed |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
@@ -116,6 +117,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 - **Status:** Accepted (2026-10-11).
 - **Decision:** Short-lived feature branches. Small, self-contained commits. Conventional Commits in English for commit messages and pull request titles. Pull-request-based integration into `main`. Squash merges only. Unrelated changes in separate branches and pull requests. See [RELEASES.md](RELEASES.md).
+- **Repository configuration (2026-10-12):** At the project owner's request, enabled only squash merging on `eiserv/frameshift`, disabled merge commits and rebase merging, and selected the PR title and body as the squash commit defaults. Read-back confirmed these settings and private visibility. Branch protection remains a separate setup item.
 
 ### D-011: Release management with Release Please
 
@@ -253,6 +255,14 @@ Statuses change only through an edit to this file in a pull request. A changed d
 - **Boundaries:** Existing decisions about the V1 project model, deferred product surfaces, dependency evaluation, and E1/E2 experiment gates remain binding. Change those decisions explicitly when new evidence or requirements demand it.
 - **Rationale:** Frameshift is a multi-phase transformation platform. Early design must account for its long-term scope without hiding uncertainty or making unverified correctness claims.
 
+### D-034: Bounded parser error recovery
+
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface. Resolves the policy part of Q-011.
+- **Decision:** The future parser should report multiple syntax errors in one pass using bounded recovery at safe grammar boundaries. Recovery must not guess repairs or make erroneous files eligible for transformation. Any syntax error makes the entire file `unknown`, even if part of its tree was recovered.
+- **Safety contract:** Explicit per-file diagnostic and recovery-work limits, guaranteed forward progress, and no recovery across a boundary whose lexical context is unknown. If safe recovery is unavailable or a limit is reached, stop parsing that file and report why. Local scanners continue to return one typed error without partial results; they do not implement recovery.
+- **Rationale:** Multiple diagnostics reduce repeated analysis runs while preserving fail-closed classification. Parser-owned synchronization respects JSX, template, and regular-expression contexts.
+- **Remaining implementation choices:** Concrete synchronization points and default diagnostic/recovery budgets are chosen and tested with the grammar in M3. No parser or recovery mechanism exists yet.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
@@ -387,7 +397,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 | Q-008 | Monorepo scope in V1 | Resolved by D-022 | Resolved |
 | Q-009 | Placement of modules colocated in `app/` | Resolved by D-024 | Resolved |
 | Q-010 | Exhaustiveness checks for closed kinds | Resolved by D-018: compiler-enforced exhaustive matches without wildcard arms (section 2.5 of [ENGINEERING.md](ENGINEERING.md)) | Resolved |
-| Q-011 | Parser error recovery depth | Enough recovery to report several errors. Never transform files with errors. | M3 |
+| Q-011 | Parser error recovery depth | Policy resolved by D-034: bounded recovery at safe grammar boundaries; erroneous files remain ineligible for transformation. Concrete synchronization points and default budgets remain M3 work. | Policy resolved; implementation in M3 |
 | Q-012 | Lowest supported Next.js version | Resolved by D-023 | Resolved |
 
 ## Experiments
@@ -402,7 +412,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 
 Detailed success criteria for E1 and E2 are in section 2.8 of [ENGINEERING.md](ENGINEERING.md). Experiment results are recorded here together with the decisions they inform.
 
-**E1 progress (2026-10-12):** Parser-directed JavaScript trivia and strict-string scanners are implemented in the framework-independent syntax crate, exposed through the engine facade, and tested with fictional inputs. Exact spans, comment ordering, newline evidence, typed errors, and explicit local limits are covered. This prepares parser-controlled lexical goals without guessing JSX, regular-expression, or template contexts. No complete token stream, AST arena, parser, corpus pass rate, throughput/memory result, or coverage-guided fuzzing result exists yet. P-002 remains Proposed, and E1 has not passed. Contracts and validation are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md).
+**E1 progress (2026-10-12):** Parser-directed JavaScript trivia, strict-string, numeric, and punctuation scanners are implemented in the framework-independent syntax crate, exposed through the engine facade, and tested with fictional inputs. Exact spans, comment ordering, newline evidence, typed errors, and explicit local limits are covered. This prepares parser-controlled lexical goals without guessing JSX, regular-expression, or template contexts. No complete token stream, AST arena, parser, corpus pass rate, throughput/memory result, or coverage-guided fuzzing result exists yet. P-002 remains Proposed, and E1 has not passed. Contracts and validation are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ## Template for new entries
 

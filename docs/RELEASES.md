@@ -31,7 +31,7 @@ sequenceDiagram
 - **Branches.** Short-lived feature branches off `main`. One topic per branch. Unrelated changes go into separate branches and pull requests.
 - **Commits.** Small, self-contained, and understandable on their own. Each commit should pass the relevant checks. Do not collect a large body of work into one commit.
 - **Pull requests.** All changes reach `main` through pull requests. Direct pushes to `main` are prohibited. Branch protection settings still require authorized setup and verification in M0.
-- **Squash merges only.** The repository allows only squash merging. GitHub uses the pull request title as the commit subject, so pull request titles must follow Conventional Commits. Merge commits are avoided, because Release Please would read both the branch commits and the merge commit and list changes twice.
+- **Squash merges only.** Configured and verified on `eiserv/frameshift` on 2026-10-12: squash merging is enabled; merge commits and rebase merging are disabled. GitHub defaults to the pull request title as the commit subject and the pull request body as the commit body. Pull request titles must follow Conventional Commits. Only the squash commit reaches `main`, so Release Please does not read the individual branch commits as additional changes. This setting does not establish branch protection or validate commit messages automatically.
 - **Documentation and verification.** Each meaningful change includes the documentation updates and tests it needs (see [TESTING.md](TESTING.md)).
 - **Versions.** Never change version numbers by hand. Release Please manages them.
 
