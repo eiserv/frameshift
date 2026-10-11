@@ -109,7 +109,7 @@ Go was treated as a first-class candidate (`D-015`) and was the initial recommen
   - *Compile times:* a deliberate crate structure, and incremental builds in development.
   - *Ownership and graph-shaped data:* arenas and indices, the established design in Rust compilers and in oxc.
   - *Learning curve:* documented conventions and reviews.
-- **Existing parsers.** oxc is fast and conformant, but its crates remain pre-1.0 (around version 0.14x in 2026) and its releases regularly contain breaking AST changes. It is therefore not used as the foundation. Frameshift builds its own parser (`P-002`). oxc may serve as a development-time test oracle, or behind a Frameshift-owned facade if a decision record justifies it.
+- **Existing parsers.** oxc is fast and conformant, but its crates remain pre-1.0 (around version 0.14x in 2026) and its releases regularly contain breaking AST changes. It is therefore not an accepted foundation dependency. Purpose-built parsing remains a proposal (`P-002`), pending E1. oxc may serve as a development-time test oracle, or behind a Frameshift-owned facade if a decision record justifies it.
 - **Rust-specific rules for Frameshift crates:**
   - `unsafe` code is forbidden unless a decision record justifies a specific use.
   - Matches over closed enumerations in core code use no wildcard arms, so adding a variant forces every match to be revisited (enforced by a lint).
@@ -286,7 +286,7 @@ Reference machine: an 8-core x86_64 or ARM64 laptop from 2023 or later, with an 
 | `analyze` on a project with 1,000 modules (about 8 MB of source) | under 2 s | under 500 MB |
 | `analyze` on 10,000 modules (about 80 MB of source; V2 target) | under 15 s | under 3 GB |
 | `migrate` without external verification | under 2 times the `analyze` time | comparable to `analyze` |
-| Parser throughput (E1) | at least 20 MB/s per core | at most 30 times the source size with full retention |
+| Parser throughput (E1) | at least 30 MB/s per core | at most 20 times the source size with full retention |
 
 ### 4.2 Practices
 
@@ -341,7 +341,7 @@ The layering in section 6 of [ARCHITECTURE.md](ARCHITECTURE.md) is enforced by t
 
 ### 7.3 Fail-closed code
 
-- Every switch over a closed set of kinds (syntax node kinds, unit kinds, feature IDs, statuses) has an explicit default branch that reports an internal error or classifies the input as `unknown`. A silent default is never allowed.
+- Matches over closed kinds enumerate every variant explicitly. Unexpected values at open input boundaries report an internal error or classify the input as `unknown`; they never produce silent success.
 - Exhaustiveness is enforced by the compiler: matches over closed enumerations in core code have no wildcard arms, so a new variant breaks the build until every match handles it (section 2.5).
 - Rules return explicit results: an operation, a classification with a reason, or "not applicable". There is no implicit success.
 

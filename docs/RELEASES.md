@@ -30,7 +30,7 @@ sequenceDiagram
 
 - **Branches.** Short-lived feature branches off `main`. One topic per branch. Unrelated changes go into separate branches and pull requests.
 - **Commits.** Small, self-contained, and understandable on their own. Each commit should pass the relevant checks. Do not collect a large body of work into one commit.
-- **Pull requests.** All changes reach `main` through pull requests. Direct pushes to `main` are blocked by branch protection once the repository exists.
+- **Pull requests.** All changes reach `main` through pull requests. Direct pushes to `main` are prohibited. Branch protection settings still require authorized setup and verification in M0.
 - **Squash merges only.** The repository allows only squash merging. GitHub uses the pull request title as the commit subject, so pull request titles must follow Conventional Commits. Merge commits are avoided, because Release Please would read both the branch commits and the merge commit and list changes twice.
 - **Documentation and verification.** Each meaningful change includes the documentation updates and tests it needs (see [TESTING.md](TESTING.md)).
 - **Versions.** Never change version numbers by hand. Release Please manages them.
