@@ -1,13 +1,18 @@
 # Agent Guidance
 
-These instructions are binding for every agent working on Frameshift, whatever the tool or vendor. Keep this file compact and accurate. At the end of every run, check whether your changes made any statement here outdated, or whether information important for future work is missing, and update `AGENTS.md` in the same run if necessary. Record only what is true for the repository as it is. Never describe planned code, files, or commands as if they already exist.
+These instructions are binding for every agent working on Frameshift, whatever the tool or vendor.
+
+- **Before starting any work,** read this file completely, then work through the documentation in `docs/` and look for everything relevant to your task: specifications, decisions, conventions, limits, and open questions. Do not start from assumptions when the documentation answers the question. If documents contradict each other or the code, report it and resolve it rather than picking one silently.
+- **Keep the documentation and this file current at all times.** Whenever a change affects anything described in `docs/`, `README.md`, or `AGENTS.md` (behavior, commands, architecture, conventions, decisions, limits, file locations), update the affected documents in the same change. Outdated documentation counts as a defect.
+- **At the end of every run,** check whether your changes made any statement here or in `docs/` outdated, or whether information important for future work is missing, and fix it in the same run.
+- Record only what is true for the repository as it is. Never describe planned code, files, or commands as if they already exist. Keep this file compact.
 
 ## Orientation
 
 - **Identity.** The project is named Frameshift, with exactly this capitalization. The CLI executable and command is `frameshift`. Do not introduce other names, temporary branding, or package identities. Naming conventions are in `docs/ENGINEERING.md` (section 8).
 - **Purpose.** A deterministic, rule-based engine that analyzes software projects and migrates them between frameworks while preserving behavior, with transparent reporting. The first migration path is Next.js (App Router) to Astro with Preact islands, as static output (`docs/MIGRATION_SPEC.md`). The product is a CLI. The engine is independent of it.
-- **Current state: planning, documentation only.** There is no source code, toolchain, package manifest, build system, test suite, CI workflow, release configuration, or working command. Everything the documentation says about commands, modules, files, workflows, and behavior is a specification or proposal. No Git remote is configured yet. Check before assuming that a repository, branch, or remote exists.
-- **Implementation language: not decided.** Go is the recommended direction (`P-001`, Proposed), and Rust is the main alternative. Experiments E1 and E2 decide (`docs/ENGINEERING.md`, section 2). Do not initialize a toolchain, create package manifests, or write implementation code unless the task explicitly asks for it.
+- **Current state: planning, documentation only.** There is no source code, toolchain, package manifest, build system, test suite, CI workflow, release configuration, or working command. Everything the documentation says about commands, modules, files, workflows, and behavior is a specification or proposal. The remote `origin` is the private repository `eiserv/frameshift` (`D-026`), default branch `main`. Work on branches and integrate through pull requests.
+- **Implementation language.** Rust is the primary language for engine and CLI (`D-018`). Other languages are allowed only for specific, important tasks with a demonstrable quality advantage, a decision record, and the requirements in `docs/ENGINEERING.md` section 2.7 (`D-019`). Effort and time are not arguments against quality (`D-020`). No toolchain is initialized yet: do not initialize one, create package manifests, or write implementation code unless the task explicitly asks for it.
 - **Documentation map.**
   - `README.md`: overview and status.
   - `docs/ARCHITECTURE.md`: pipeline, subsystem layers, project model, rule engine, planning, safe execution, verification levels, limits.
@@ -42,7 +47,7 @@ These instructions are binding for every agent working on Frameshift, whatever t
 - **Performance.** Respect the budgets in `docs/ENGINEERING.md` (section 4). Avoid quadratic algorithms over files or nodes. Measure before optimizing.
 - **Repository safety.** Never run code from analyzed projects in tools or tests. Commit only fictional fixtures, never third-party project code.
 - **No UI work.** Frameshift is CLI-only (`D-004`). Do not build GUI, web, desktop, or terminal UI frontends unless the decision register changes.
-- **Documentation synchronization.** Update every affected document in the same change. When implementing something specified, change the specification to describe actual behavior, and keep marking everything else as planned. Record decisions in `docs/DECISIONS.md`.
+- **Documentation synchronization.** Mandatory, see the rules at the top of this file. When implementing something specified, change the specification to describe actual behavior, and keep marking everything else as planned. Record decisions in `docs/DECISIONS.md`.
 - **Conventional Commits.** Commit messages and pull request titles follow `<type>(<optional scope>): <description>`, for example `feat(analyzer): detect static route dependencies`.
   - Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `style`, `chore`, `revert`.
   - Mark breaking changes with `!` after the type or scope, or with a `BREAKING CHANGE:` footer.
