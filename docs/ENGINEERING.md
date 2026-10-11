@@ -1,9 +1,10 @@
 # Engineering
 
-**Status: guidance and proposals.** No toolchain is initialized and no code exists. This document evaluates implementation languages, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted. Go is an accepted *eligible* language (`D-015`). It is not a selected language.
+**Status: guidance and decisions.** No toolchain is initialized and no code exists. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
 
 ## 1. Engineering principles
 
+- **Quality over effort (`D-020`).** Effort, time investment, and other economic considerations are never, on their own, reasons to choose a lower-quality solution. Choices are judged on correctness, safety, maintainability, performance, and professionalism. KISS and YAGNI still apply, because speculative complexity is itself a quality problem.
 - **Correctness and safety before speed of delivery.** There are no deadlines. Work that improves long-term correctness is worth its cost.
 - **KISS and YAGNI.** Solve the current stage's concrete requirements with the simplest structure. No speculative abstractions, configuration options, or extension points.
 - **Determinism is a code property, not a test property.** Code must be written so that nondeterminism cannot arise (section 6), not just tested for it.
@@ -58,89 +59,113 @@ Evidence considered (state as of October 2026):
 - **Go 1.26** made the "Green Tea" garbage collector the default. Its release notes estimate 10 to 40 percent less garbage collection overhead for programs that use the collector heavily.
 - **Zig 0.16** (April 2026) is pre-1.0. Breaking changes continue, and there is no committed date for a stable language.
 
-### 2.3 Go, evaluated in detail
+### 2.3 Decision: Rust as the primary language
 
-Go is treated as a first-class candidate. A garbage collector and a higher-level development experience are not disqualifying for this workload.
+**Accepted (`D-018`): Rust is Frameshift's primary implementation language for the engine and the CLI.** The decision covers all stages, V1 to V3. No later change of language or rewrite is planned. Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`).
+
+Reasoning, judged against the full lifetime of the project rather than V1 alone:
+
+1. **Frameshift is a multi-language program transformation system.** Across its stages it needs many parsers, syntax trees with hundreds of node kinds, semantic analysis, rules, and printers. Algebraic data types with exhaustive pattern matching make the compiler report every variant that is not handled, which directly supports fail-closed design (section 7.3). This advantage grows with every supported language and node kind.
+2. **Precedent.** Tools that search and transform code structurally across many languages are predominantly written in Rust (ast-grep, GritQL, difftastic) or OCaml. The flagship Go tools in this area, esbuild and the TypeScript 7 compiler, each handle a single language.
+3. **Ecosystem.** tree-sitter, should it be adopted for long-tail languages later, integrates natively. The Rust JavaScript tooling ecosystem (oxc, Lightning CSS, Biome) is available as test oracles or, after a decision record, behind facades. Astro itself moved its compiler to Rust in 2026.
+4. **Performance and memory.** No garbage collector and full control over data layout. This matters for large monorepos in V2 and V3.
+5. **Safety.** Memory safety and data-race freedom without a garbage collector. `unsafe` code can be forbidden in all Frameshift crates.
+6. **Embedding.** A C ABI and WebAssembly support keep future frontends and integrations open without a second implementation.
+7. **Stability.** Stable Rust guarantees backward compatibility, and editions allow the language to evolve without breaking existing code.
+
+Accepted costs (all of them quality-neutral or addressed by conventions):
+
+- The standard library lacks JSON, argument parsing, and cryptographic hashing. These are built or adopted deliberately (section 3.5).
+- Building for every platform needs native CI runners per operating system (see [RELEASES.md](RELEASES.md)).
+- Longer compile times and a steeper learning curve.
+- Graph-shaped data requires arena and index designs instead of pointer graphs.
+
+**Relation to the earlier recommendation.** The first version of this document recommended Go (former `P-001`): for its standard library, single-host cross-compilation, simplicity, and proven performance for single-language compilers. A re-evaluation against the complete V1 to V3 scope gave more weight to type-system support for many variant kinds and to the multi-language ecosystem. Go remains the documented alternative, and its evaluation is kept in section 2.4.
+
+### 2.4 Go, evaluated in detail
+
+Go was treated as a first-class candidate (`D-015`) and was the initial recommendation. This evaluation is kept as part of the record behind `D-018`.
 
 | Question | Assessment |
 | --- | --- |
-| Fast development of reliable cross-platform CLIs | Strong. Small language, consistent formatting (`gofmt`), fast compilation, a standard library that covers file handling, processes, JSON, and text. The standard `flag` package is basic, but subcommand dispatch is easy to build on top of it. |
+| Fast development of reliable cross-platform CLIs | Strong. Small language, consistent formatting (`gofmt`), fast compilation, a standard library that covers file handling, processes, JSON, and text. |
 | Cross-compilation | Strong. With CGO disabled, one toolchain on one host produces binaries for every planned target by setting `GOOS` and `GOARCH`, including `windows/arm64` and both macOS architectures. |
-| Self-contained binaries | Strong. With CGO disabled, Linux binaries are fully static. On macOS and Windows, Go links only against system libraries, as the platforms require. Binaries are larger than equivalent Rust binaries, but stripping symbols keeps them moderate. |
-| Goroutines and concurrency | Strong fit for parallel per-file parsing: bounded worker pools, channels, and cancellation through contexts. Determinism requires storing results by index rather than by completion order, as in any language. |
-| Runtime performance and memory | Good. Compiled native code. Typically more memory than Rust because of collector headroom. Tunable with `GOGC` and `GOMEMLIMIT`, and reducible by allocation discipline (slices of structs, indices instead of pointers, string interning). |
-| Garbage collection overhead compared with Rust, Zig, C, and C++ | Real but acceptable. Those languages give deterministic memory use and lower peak memory. For a batch tool whose end-to-end time is dominated by external builds, collector overhead is a small fraction of total time. Pause latency is irrelevant. |
-| Parsing, transformation, compiler-like workloads | Proven by the TypeScript native compiler and esbuild. The main weakness is the lack of sum types and exhaustive pattern matching, which makes tree code more verbose and lets a missing case compile. Mitigations are in section 7.3 and `Q-010`. |
-| JavaScript, TypeScript, JSX, and TSX parsing infrastructure | Weak as reusable libraries. No first-party public Go parser exists: esbuild's and the TypeScript compiler's parsers are internal packages. Community forks expose them, but forking means owning code designed for other purposes. tree-sitter bindings require CGO. In practice, Go means building Frameshift's own parser (`P-002`), which matches the dependency philosophy but is the largest single work item. |
-| Foreign-function interoperability | Adequate. cgo works, and Go 1.26 reduced its call overhead by about 30 percent. It still adds a C toolchain to the build. |
-| CGO implications | Significant. CGO requires a C toolchain for every target, breaks single-host cross-compilation (unless a cross C compiler such as `zig cc` is configured), complicates fully static Linux builds, and complicates reproducibility. Proposal: CGO disabled as a hard rule. Any need for foreign code is handled across a process boundary instead. |
-| Long-term maintainability and toolchain simplicity | Strong. The Go 1 compatibility promise keeps old code compiling. One toolchain provides building, testing, benchmarking, fuzzing, race detection, profiling, and vulnerability scanning (`govulncheck`). The language is easy for reviewers to read. |
+| Self-contained binaries | Strong. With CGO disabled, Linux binaries are fully static. On macOS and Windows, Go links only against system libraries, as the platforms require. |
+| Goroutines and concurrency | Strong fit for parallel per-file parsing: bounded worker pools, channels, and cancellation through contexts. |
+| Runtime performance and memory | Good. Compiled native code. Typically more memory than Rust because of collector headroom. Go 1.26 made the Green Tea collector the default, which reduces collector overhead. |
+| Garbage collection overhead compared with Rust, Zig, C, and C++ | Real but acceptable for a batch tool. Those languages give deterministic memory use and lower peak memory. |
+| Parsing, transformation, compiler-like workloads | Proven by the TypeScript native compiler and esbuild. The main weakness is the lack of sum types and exhaustive pattern matching, which makes tree code more verbose and lets a missing case compile. This weakness grows with the number of supported languages. |
+| JavaScript, TypeScript, JSX, and TSX parsing infrastructure | Weak as reusable libraries. esbuild's and the TypeScript compiler's parsers are internal packages. Community forks exist. |
+| Multi-language parsing | tree-sitter bindings require CGO. A pure-Go tree-sitter runtime (gotreesitter) exists, but it is young, pre-1.0, and apparently maintained by a single person. |
+| Foreign-function interoperability and CGO | cgo adds a C toolchain for every target, breaks single-host cross-compilation, and complicates reproducible builds. |
+| Long-term maintainability and toolchain simplicity | Strong. The Go 1 compatibility promise and one toolchain for building, testing, fuzzing, profiling, and vulnerability scanning. |
 
-### 2.4 Rust, evaluated in detail
+### 2.5 Rust, evaluated in detail
 
-- **Strengths:** top-tier performance and memory efficiency without a garbage collector. Memory safety with data-race freedom. Algebraic data types with exhaustive pattern matching, which suit syntax trees, IR variants, and rule results especially well. A strong WebAssembly story. The richest ecosystem of JavaScript tooling components (oxc, swc, Biome, Lightning CSS).
-- **Weaknesses for Frameshift:** the standard library lacks JSON, argument parsing, and benchmarking and fuzzing harnesses. Under a strict dependency policy, Frameshift would have to build more basics itself, or adopt more crates. Cross-compiling, especially to macOS, needs target-specific linkers and SDKs, so native CI runners per platform are the practical route. Compile times are longer. Ownership rules add friction to graph-shaped data, usually solved with arenas and indices. The learning curve is steeper for contributors.
-- **Adoption option:** with oxc behind a Frameshift-owned facade, Rust would reach a working parser fastest. The cost is a large, fast-moving dependency in the most critical component, against the build-versus-adopt criterion "control over critical behavior" (section 3.2).
+- **Strengths:** top-tier performance and memory efficiency without a garbage collector. Memory safety with data-race freedom. Algebraic data types with exhaustive pattern matching, which suit syntax trees, IR variants, and rule results especially well. Strong WebAssembly and C ABI support. The richest ecosystem of JavaScript tooling and multi-language parsing components.
+- **Weaknesses and how Frameshift addresses them:**
+  - *Standard library gaps* (JSON, argument parsing, hashing, benchmarking and fuzzing harnesses): handled per component in section 3.5.
+  - *Cross-compilation:* native CI runners for every platform. GitHub provides them for all planned targets, including ARM64 in private repositories.
+  - *Compile times:* a deliberate crate structure, and incremental builds in development.
+  - *Ownership and graph-shaped data:* arenas and indices, the established design in Rust compilers and in oxc.
+  - *Learning curve:* documented conventions and reviews.
+- **Existing parsers.** oxc is fast and conformant, but its crates remain pre-1.0 (around version 0.14x in 2026) and its releases regularly contain breaking AST changes. It is therefore not used as the foundation. Frameshift builds its own parser (`P-002`). oxc may serve as a development-time test oracle, or behind a Frameshift-owned facade if a decision record justifies it.
+- **Rust-specific rules for Frameshift crates:**
+  - `unsafe` code is forbidden unless a decision record justifies a specific use.
+  - Matches over closed enumerations in core code use no wildcard arms, so adding a variant forces every match to be revisited (enforced by a lint).
+  - Collections whose iteration order can affect output are ordered collections, or hash maps with a fixed, deterministic hasher.
+  - Panics never cross the engine API (section 7.2).
+  - Formatting and linting with the toolchain's standard tools are mandatory in CI.
 
-### 2.5 Other candidates
+### 2.6 Other candidates
 
-- **Zig.** Excellent control, performance, and cross-compilation. However, it is pre-1.0 with ongoing breaking changes, it is not memory-safe (safety checks catch some errors in checked build modes), and it has no reusable JS/TS parser. Too risky as a foundation for a long-lived project today. Possible future role: `zig cc` as a cross C toolchain, if a C dependency ever becomes unavoidable. That would be a build tool, not a language mix.
-- **C.** Maximum portability and performance, but memory-unsafe parsing of untrusted input is a severe liability. tree-sitter provides concrete syntax trees, not the semantic analysis Frameshift needs. Rejected.
-- **C++.** Same memory-safety concerns as C, plus complex build systems and toolchains. Rejected.
-- **Assembly.** Only justified for a measured, specialized hotspot (for example, vectorized byte scanning in a lexer) after profiling shows that high-level code cannot meet a budget. Both Go and Rust allow targeted assembly or intrinsics if that ever happens. No such need is expected.
-- **Haskell.** Strong for language processing: algebraic data types, parser combinators, pure transformations. The costs are garbage collection with laziness-related space leaks, friction with static distribution (especially on macOS), weak JS/TS tooling, a smaller contributor pool, and interoperability costs if combined with another language. Not selected. It could serve for offline research, for example prototyping the semantics of a future recipe language, but would not be shipped.
-- **OCaml.** A credible compiler language (algebraic data types, fast native code, a garbage collector, a long track record in language tooling). Weaker Windows support and cross-compilation history, and a smaller ecosystem. Not selected. It would be reconsidered only if both Go and Rust were ruled out.
-- **TypeScript on Node.js or Bun.** The best semantic tooling for the source language (the TypeScript compiler API, Babel). However, it requires a JavaScript runtime or large bundled executables, its dependency culture conflicts with the dependency policy, and it is slower. The TypeScript team itself moved its compiler to Go for performance. Rejected for the engine.
+- **Zig.** Excellent control, performance, and cross-compilation. However, it is pre-1.0 with ongoing breaking changes, it is not memory-safe (safety checks catch some errors in checked build modes), and it has no reusable JS/TS parser. Too risky as a foundation for a long-lived project today.
+- **C.** Maximum portability and performance, but memory-unsafe parsing of untrusted input is a severe liability. Rejected as a primary language.
+- **C++.** Same memory-safety concerns as C, plus complex build systems and toolchains. Rejected as a primary language.
+- **Assembly.** Only justified for a measured, specialized hotspot (for example, vectorized byte scanning in a lexer) after profiling shows that high-level code cannot meet a budget. Rust allows targeted intrinsics and inline assembly if that ever happens.
+- **Haskell.** Strong for language processing: algebraic data types, parser combinators, pure transformations. Weak static distribution (especially on macOS), weak JS/TS tooling, and garbage collection with laziness-related space leaks. Not selected as the primary language.
+- **OCaml.** An excellent fit for the domain, with a long track record in program analysis tools. Weaker Windows support and cross-compilation, and a smaller ecosystem and contributor pool. The second-best candidate, not selected.
+- **TypeScript on Node.js or Bun.** The best semantic tooling for the source language (the TypeScript compiler API, Babel). However, it requires a JavaScript runtime or large bundled executables, its dependency culture conflicts with the dependency policy, and it is slower. Rejected for the engine.
 
-### 2.6 One language or several
+### 2.7 Additional languages for specific tasks
 
-| Combination | Assessment |
-| --- | --- |
-| Go engine with a Rust parser through cgo | Needs Rust and C toolchains for every target, loses CGO-free cross-compilation, and complicates reproducible builds. If a Rust parser were adopted, an all-Rust implementation would be simpler. Rejected. |
-| Go engine with a Rust parser compiled to WebAssembly and run inside Go | Portable, but adds a WebAssembly runtime dependency and call overhead to the most performance-sensitive path. Rejected. |
-| Go or Rust engine with optional external helper processes | Acceptable later for isolated, opt-in capabilities, such as invoking a type checker as an external tool in a later stage. The process boundary keeps the core simple and portable. |
-| Rust with Zig | No benefit beyond what Rust provides. Rejected. |
-| Rust with C (tree-sitter) for multi-language parsing in V3 | Possible later. Out of scope now. |
-| Any core language with Haskell for a rule language | Interoperability cost too high. Rejected. |
+**Accepted (`D-019`).** Rust is the primary language, but Frameshift's long-term architecture is not fully known. Other languages may be used for specific, important tasks when they provide a demonstrable advantage in correctness, quality, safety, performance, or capability that Rust cannot provide equally well. Effort and time investment are not arguments against such a choice (`D-020`).
 
-Conclusion: a **single implementation language** for engine and CLI. A second language requires an accepted decision record that shows a measured benefit outweighing the integration cost.
+Every additional language must meet all of the following:
 
-### 2.7 Recommendation
+1. **Decision record.** An entry in [DECISIONS.md](DECISIONS.md) names the task, explains why Rust is not the best tool for it, gives evidence (a prototype, a measurement, or an ecosystem fact), and lists the alternatives considered.
+2. **Clear boundary.** The component sits behind a defined interface. That is either a C ABI linked into the binary, a WebAssembly module, or a separate process with a versioned, structured protocol. No ad-hoc coupling.
+3. **Safety.** Code that processes untrusted input is memory-safe, or confined (process or WebAssembly isolation). C or C++ code that handles untrusted input is fuzzed and runs under sanitizers in CI.
+4. **Distribution quality.** It builds reproducibly with pinned toolchains on every tier 1 platform. The self-contained binary is preserved, unless a recorded decision makes the component an optional external helper.
+5. **Determinism and fail-closed behavior across the boundary.** Errors on the other side map to findings or internal errors, never to silent success.
+6. **Same engineering standard.** Tests, CI, formatting, linting, and documentation, plus an entry in `AGENTS.md` once the component exists.
+7. **Core independence.** Optional components (verification helpers, a future model advisor) never become requirements for inspection, analysis, planning, or migration.
 
-**Recommended direction (`P-001`, Proposed): Go as the single language for engine and CLI, with CGO disabled, standard library first, and purpose-built parsers (`P-002`).**
+Plausible future cases (examples, not decisions):
 
-Reasoning:
+- the tree-sitter runtime and generated grammars (C) for long-tail languages in V2 or V3;
+- the official compiler or tooling of a framework, run as an opt-in external verification helper;
+- SIMD or assembly code for a hotspot proven by profiling;
+- a formal specification or verification of rule semantics in a proof assistant or functional language, as development tooling.
 
-1. **The dependency philosophy neutralizes Rust's largest advantage.** Rust's lead is its reusable JavaScript tooling ecosystem. Frameshift's policy is to build components whose behavior is critical to correctness, and parsing is the most critical one. Once Frameshift builds its own parsers, the comparison is between the languages themselves.
-2. **Go's standard library covers almost everything else Frameshift needs.** JSON, hashing, filesystem traversal, concurrency, process control, archives, testing, benchmarks, fuzzing, profiling, and race detection all come without third-party code. A Rust implementation with equally few dependencies would need to build more of these basics.
-3. **Distribution and reproducibility are simpler.** CGO-free Go builds every target from one host, with one pinned toolchain.
-4. **Maintainability over a long horizon.** The Go 1 compatibility promise, fast builds, and readable code suit a long-lived project reviewed by humans and agents.
-5. **Performance is sufficient by evidence.** Go powers the TypeScript native compiler and esbuild, and Frameshift's own work is small compared with external verification.
+Not allowed: a second language for convenience or preference alone, or the same functionality implemented in two languages.
 
-Accepted costs and mitigations:
+### 2.8 Experiments for core techniques
 
-- *No sum types:* closed kind enumerations, fail-closed default branches, and an exhaustiveness check for switches over closed kinds (built as a small analysis tool, or adopted after review: `Q-010`).
-- *Building a parser:* a large up-front investment, bounded by specifications and conformance suites, and validated early by experiment E1.
-- *Higher memory than Rust:* compact representations and allocation discipline, and budgets checked in benchmarks.
+The language is decided. Two experiments validate the core techniques before milestone M1 (see [ROADMAP.md](ROADMAP.md)), because the parser and tree design shape everything after them.
 
-**Main alternative:** Rust as the single language, with purpose-built parsers or with oxc behind a facade. Rust becomes the better choice if any condition in section 2.9 occurs.
+**E1: parser and tree design in Rust.**
 
-### 2.8 Experiments that decide the language
-
-These experiments must finish before milestone M1 (see [ROADMAP.md](ROADMAP.md)), because switching languages later becomes much more expensive.
-
-**E1: parser feasibility in Go.**
-
-- Scope: a lexer and parser for JavaScript, TypeScript, JSX, and TSX that covers modules, statements, expressions (including arrow functions, async and await, optional chaining, template literals, destructuring), classes, JSX and TSX (including the generic arrow ambiguity), and TypeScript type syntax (parsed and preserved as spans). The AST representation must be designed for the real implementation, not as a throwaway.
+- Scope: a lexer and parser for JavaScript, TypeScript, JSX, and TSX that covers modules, statements, expressions (including arrow functions, async and await, optional chaining, template literals, destructuring), classes, JSX and TSX (including the generic arrow ambiguity), and TypeScript type syntax (parsed and preserved as spans). The arena-based tree representation must be designed for the real implementation, not as a throwaway.
 - Corpus: Frameshift's fictional fixtures plus a sample of real-world Next.js App Router files. Real-world files are kept outside the repository, and their licenses are respected.
 - Success criteria:
   - At least 99 percent of corpus files parse.
   - Every failure is explained by syntax not yet implemented, never by a design flaw.
   - Span correctness is checked by slicing tests.
-  - Throughput of at least 20 MB/s per core.
-  - Peak memory of at most 30 times the source size with full tree retention.
+  - Throughput of at least 30 MB/s per core.
+  - Peak memory of at most 20 times the source size with full tree retention.
   - Fuzzing for a fixed CPU budget finds no crashes or hangs.
-  - A documented review concludes that the tree and visitor design is maintainable without sum types.
+  - A documented review concludes that the arena, visitor, and pattern-matching design is maintainable and extensible to further languages.
 - Thresholds are set to expose design problems, not to win benchmarks.
 
 **E2: edit-based rewriting and Astro printing.**
@@ -155,16 +180,13 @@ These experiments must finish before milestone M1 (see [ROADMAP.md](ROADMAP.md))
 
 Later experiments, run before the milestones that depend on them, are listed in [DECISIONS.md](DECISIONS.md): E3 (static evaluation coverage), E4 (static output comparison), and E5 (draft and immutable release flow).
 
-### 2.9 Conditions that would change the recommendation
+### 2.9 Revisiting the language decision
 
-- E1 misses the throughput or memory budget by more than a factor of two, and design changes cannot close the gap.
-- The E1 review judges the tree design unmaintainable without sum types.
-- The project decides to adopt an existing parser instead of building one. Rust with oxc would then be the most coherent stack.
-- WebAssembly embedding becomes a primary requirement, for example for a browser-based frontend.
+`D-018` is meant to hold for the lifetime of the project. It is revisited only if a fundamental problem appears that cannot be solved within Rust or through an additional language under section 2.7, and the evidence for it is documented. Any revision requires a decision record with a full migration impact analysis.
 
 ### 2.10 Decisions that can safely be deferred
 
-Plugin mechanism (`DF-002`), WebAssembly target (`DF-012`), GUI technology (`DF-006`), any foreign-function interface, model-assisted processing (`DF-005`), and code signing (`DF-004`) do not affect the language choice now. The engine API and JSON contracts keep later options open.
+Plugin mechanism (`DF-002`), WebAssembly target (`DF-012`), GUI technology (`DF-006`), concrete foreign-function interfaces (under section 2.7), model-assisted processing (`DF-005`), and code signing (`DF-004`) do not need to be decided now. The engine API and JSON contracts keep these options open.
 
 ## 3. Build versus adopt
 
@@ -190,7 +212,7 @@ A dependency is evaluated on:
 6. **API stability:** versioning policy, and whether pre-1.0 churn is acceptable.
 7. **Licensing:** permissive licenses (MIT, BSD, Apache-2.0, ISC) are preferred, because the future license is undecided (`DF-003`). Copyleft runtime dependencies require an explicit decision.
 8. **Sustainability:** maintainers, governance, funding, and bus factor.
-9. **Portability:** no CGO, works on every target platform.
+9. **Portability:** builds from source with the pinned toolchains on every tier 1 platform, without extra system libraries.
 10. **Control over critical behavior:** if the component decides correctness (parsing, classification, code generation), Frameshift must be able to define and fix its behavior.
 11. **Binary size and build impact.**
 12. **Exit cost:** how hard it would be to replace later.
@@ -218,26 +240,31 @@ Building is not a license for unbounded work:
 
 ### 3.5 Proposed component decisions
 
-Valid under the Go recommendation. They will be re-evaluated if the language decision changes.
+Proposals for a Rust implementation. Each runtime adoption still needs its own decision record (section 3.6).
 
 | Component | Category | Proposal | Notes |
 | --- | --- | --- | --- |
-| JS, TS, JSX, TSX parser | Runtime | Build (E1) | Most critical component. Needs exact spans, comments, error policy, and resource limits. |
-| CSS tokenizer and structural parser | Runtime | Build | Specified by CSS Syntax Level 3. Bounded. |
-| JSON | Runtime | Standard library for reading. A small deterministic writer where key order or formatting must be controlled. | |
-| JSONC | Runtime | Build | Small |
+| JS, TS, JSX, TSX parser | Runtime | Build (E1) | Most critical component. Needs exact spans, comments, error policy, and resource limits. oxc may serve as a development-time test oracle. |
+| CSS tokenizer and structural parser | Runtime | Build | Specified by CSS Syntax Level 3. Bounded. Lightning CSS may serve as a test oracle. |
+| JSON reading and deterministic writing | Runtime | Build | RFC 8259 is small and precisely specified. Frameshift needs control over key order, formatting, and error positions, and shares the code with JSONC. |
+| JSONC | Runtime | Build | Extension of the JSON parser |
 | YAML subset for lockfiles | Runtime | Build | General YAML is large and risky. Only the lockfile subset is needed. |
 | Yarn classic lockfile | Runtime | Build | Small format |
 | npm semver range matching | Runtime | Build | Needed for knowledge base matching. The grammar is well documented. |
 | gitignore and glob matching | Runtime | Build | Specified behavior, small |
-| SHA-256 hashing | Runtime | Standard library | Never build cryptography |
-| Argument parsing | Runtime | Build on the standard library | |
-| Terminal detection and color | Runtime | Build minimally, or evaluate `golang.org/x/term` | Modules under `golang.org/x/` are maintained by the Go project but are outside the Go 1 compatibility promise, so they count as external dependencies |
+| SHA-256 hashing | Runtime | Adopt a well-audited implementation (for example from the RustCrypto project) after review | The standard library has no cryptographic hashes, and cryptography is never built in-house |
+| Parallelism | Runtime | Build on the standard library (scoped threads, channels) | A small, deterministic worker pool is enough. No work-stealing scheduler needed. |
+| Argument parsing | Runtime | Build | Small, and the CLI contract must be exact |
+| Terminal detection and color | Runtime | Build on the standard library | Terminal detection is in the standard library. Colors are plain ANSI sequences honoring `NO_COLOR`. |
 | Text diff for previews | Runtime | Build if needed | Myers' algorithm |
-| HTML parsing for static output comparison | Runtime (verification) | Evaluate `golang.org/x/net/html` against building (E4, `Q-005`) | |
-| Testing, benchmarking, fuzzing, profiling | Development | Standard toolchain | |
-| Additional linters | Development | Evaluated individually | Each one needs a reason |
-| Vulnerability scanning | Development | `govulncheck` | |
+| HTML parsing for static output comparison | Runtime (verification) | Evaluate an established HTML5 parser (for example html5ever) against building (E4, `Q-005`) | The HTML5 parsing algorithm is large but fully specified |
+| tree-sitter runtime and grammars | Runtime (V2 or later) | Evaluate when multi-language support starts (`D-019`) | C code compiled into the binary. Needs fuzzing and sanitizer runs. |
+| Unit and integration tests | Development | Standard toolchain | |
+| Golden-file and snapshot testing | Development | Build | Small, and the update workflow must match [TESTING.md](TESTING.md) |
+| Benchmarks | Development | Evaluate a statistics-based harness (for example criterion) against a small built harness | The standard benchmark attribute is not stable |
+| Fuzzing | Development | Evaluate coverage-guided fuzzing tools (for example cargo-fuzz) | Mandatory for every parser of untrusted input |
+| Formatting and linting | Development | rustfmt and Clippy (part of the toolchain) | Lints are configured, not just defaults |
+| Dependency audits and vulnerability scanning | Development | Evaluate cargo-audit and cargo-deny | Also checks licenses and duplicate dependencies |
 | Release automation | CI | Release Please action, GitHub CLI | Pinned (see [RELEASES.md](RELEASES.md)) |
 | Headless browser for validating Frameshift's own fixtures | CI only | External tool, never shipped. Decided in M10. | |
 
@@ -310,17 +337,17 @@ The layering in section 6 of [ARCHITECTURE.md](ARCHITECTURE.md) is enforced by t
 - Expected conditions in the source project (unsupported syntax, unknown packages) become findings, not errors.
 - Operational errors (I/O failures, missing permissions) are returned with context and mapped to exit codes by the CLI.
 - Internal invariant violations become internal errors (`FS9001`, exit code 70), and the run is marked untrustworthy.
-- No panics cross the engine API. Recovering from a panic is allowed only around isolated per-file tasks, which then report `FS9001`. It is never used to continue silently.
+- Fallible operations return results. No panics cross the engine API. Catching a panic is allowed only around isolated per-file tasks, which then report `FS9001`. It is never used to continue silently. Release builds unwind on panic, so this isolation works.
 
 ### 7.3 Fail-closed code
 
 - Every switch over a closed set of kinds (syntax node kinds, unit kinds, feature IDs, statuses) has an explicit default branch that reports an internal error or classifies the input as `unknown`. A silent default is never allowed.
-- Exhaustiveness of such switches is checked automatically. The mechanism depends on the language decision (`Q-010`).
+- Exhaustiveness is enforced by the compiler: matches over closed enumerations in core code have no wildcard arms, so a new variant breaks the build until every match handles it (section 2.5).
 - Rules return explicit results: an operation, a classification with a reason, or "not applicable". There is no implicit success.
 
 ### 7.4 Concurrency
 
-Bounded worker pools, cooperative cancellation, no shared mutable state between workers, and no leaked background work. The race detector runs in CI where the toolchain provides one.
+Bounded worker pools, cooperative cancellation, no shared mutable state between workers, and no leaked background work. Rust's type system rules out data races in safe code. Code under `D-019` that crosses a language boundary is additionally tested with sanitizers.
 
 ### 7.5 Comments and documentation
 
@@ -344,11 +371,11 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | --- | --- |
 | Product name | Frameshift, with exactly this capitalization. Never "FrameShift", "Frame Shift", or "frame-shift". |
 | Executable and command | `frameshift` (`frameshift.exe` on Windows) |
-| Repository name | `frameshift` |
-| Go module path (if Go is accepted) | `<host>/<owner>/frameshift`, fixed when the repository location is known. Package names are short, lowercase, and do not repeat the product name. For example, a planner package is named `plan`, not `frameshiftplan`. |
-| Rust crates (if Rust is chosen) | `frameshift-<subsystem>`, binary `frameshift` |
+| Repository | `eiserv/frameshift`, private (`D-026`) |
+| Rust crates | A Cargo workspace. Crates are named `frameshift-<subsystem>` (for example `frameshift-engine`, `frameshift-cli`). The binary is `frameshift`. Modules inside crates use short, lowercase names. The concrete crate layout is decided in M1. |
 | JSON document kinds | `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, `frameshift.manifest`, `frameshift.error` |
-| Output metadata | `.frameshift/` directory, `FRAMESHIFT.md` summary, `src/frameshift-compat/` helpers |
+| Output metadata | `.frameshift/` directory (with `SUMMARY.md`, `manifest.json`, `report.json`, `unmigrated/`), `src/frameshift-compat/` helpers |
+| Configuration file | `frameshift.jsonc` (`D-027`) |
 | Environment variable prefix | `FRAMESHIFT_` (reserved, none defined) |
 | Finding codes | `FS` followed by four digits, by area (see [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md)) |
 | Source adapter IDs | Lowercase framework name, for example `nextjs` |
@@ -373,6 +400,5 @@ Conventional Commit scopes follow the subsystems. Recommended scopes: `cli`, `co
 
 ## 10. Open questions
 
-- Exhaustiveness checking for closed kinds in Go (`Q-010`).
 - Parser error recovery depth (`Q-011`).
 - HTML parser for static output comparison: build or adopt (`Q-005`).
