@@ -30,7 +30,7 @@ The CLI is Frameshift's only user interface in the current scope (`D-004`). It i
 
 Commands that were considered and not included in V1:
 
-- `init`: there is no configuration file yet (`DF-001`).
+- `init`: the configuration file is small and described by a JSON Schema, so a generator adds little.
 - `diff`: covered by `migrate --dry-run --show-files` and by the plan document.
 - `targets`: covered by `rules` and `inspect`, which list available migration paths.
 - `review`: recording review acknowledgments is planned for V2 (`DF-008`).
@@ -141,6 +141,8 @@ frameshift migrate [<source>] --to <target> --out <dir>
 | `--dry-run` | Run everything except the commit. Nothing is written unless `--report` is given. |
 | `--show-files` | List every file operation |
 | `--strict` | Abort before commit if any unit is `unsupported`, `unknown`, or `failed`. Nothing is written, and the exit code is 1. |
+| `--env-names astro\|keep` | Naming of public environment variables (`D-021`). Default `astro` renames `NEXT_PUBLIC_X` to `PUBLIC_X`. `keep` preserves the original names. Also accepted by `plan`. |
+| `--config <file>`, `--no-config` | Use a specific configuration file, or none (section 5.1). Also accepted by `analyze` and `plan`. |
 | `--on-existing fail\|replace-managed` | `fail` (default) refuses an existing output. `replace-managed` replaces an existing output only if its manifest marks it as Frameshift output and no file in it was modified since generation. The previous output is moved aside, never deleted. |
 | `--clean-staging` | Remove a staging directory left by an interrupted run. Only directories carrying Frameshift's staging marker are removed. |
 
@@ -252,8 +254,18 @@ Planned
 - **JSON output.** With `--format json`, a failing command (exit codes 2 to 6, and 70) writes a `frameshift.error` document to standard output and a human-readable message to standard error.
 - **Progress events.** The engine emits structured progress events. A machine-readable NDJSON event stream (`--events <file>`) is planned for integrations and future frontends, and will be specified before implementation.
 - **Environment variables.** The CLI reads only presentation-related variables (`NO_COLOR`, and terminal detection). Environment variables never change analysis or migration results.
-- **Configuration file.** None in V1. Format and name are deferred (`DF-001`).
+- **Configuration file.** Optional `frameshift.jsonc`, see section 5.1.
 - **Interruption.** On Ctrl+C, the CLI stops cooperatively, removes its staging directory, and leaves the output location untouched. A hard kill can leave a marked staging directory, which `--clean-staging` removes.
+
+### 5.1 Configuration file
+
+V1 supports an optional project configuration file (`D-027`):
+
+- **Name and location.** `frameshift.jsonc` in the source root, or any path given with `--config <file>`. `--no-config` ignores the file.
+- **Format.** JSON with comments, validated against a published JSON Schema. A `$schema` property enables editor completion. Unknown keys are errors, not warnings.
+- **Contents.** Options that describe the project and the desired migration, for example the target, excluded paths, and `envNames` (`"astro"` or `"keep"`, `D-021`). The exact key set is specified in M6.
+- **Precedence.** Command-line flags override the file, and the file overrides defaults. The effective options are recorded in the plan and the report, so results stay reproducible.
+- **Safety.** The file is part of the source project, which may be untrusted. It can never enable `--allow-exec` or `--allow-install-scripts`, change overwrite policies, choose the output location, or reference paths outside the source root. Those decisions stay with the person running the command.
 
 ## 6. Safety options at a glance
 
@@ -308,6 +320,5 @@ Recommendations for CI:
 ## 9. Options intentionally absent from V1
 
 - Hydration optimization (for example choosing `client:visible`), because optimizations are opt-in and planned later.
-- Output layout normalization (moving all code under `src/`), because V1 uses minimal relocation (`P-017`).
 - Model-assisted processing, which is deferred and would always be opt-in (see [LLM_POLICY.md](LLM_POLICY.md)).
 - Interactive prompts or a terminal UI, because V1 is non-interactive by design.
