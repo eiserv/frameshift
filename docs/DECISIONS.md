@@ -60,7 +60,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 | P-017 | Minimal relocation policy for output layout | Superseded by D-024 |
 | DF-001 to DF-012 | Deferred decisions | Deferred or resolved (see table) |
 | Q-001 to Q-012 | Open questions | Open or resolved (see table) |
-| E1 to E5 | Planned experiments | Planned |
+| E1 to E5 | Experiments | E1 in progress; others planned |
 
 ## Accepted decisions
 
@@ -390,7 +390,7 @@ Statuses change only through an edit to this file in a pull request. A changed d
 | Q-011 | Parser error recovery depth | Enough recovery to report several errors. Never transform files with errors. | M3 |
 | Q-012 | Lowest supported Next.js version | Resolved by D-023 | Resolved |
 
-## Planned experiments
+## Experiments
 
 | ID | Experiment | Decides | Milestone |
 | --- | --- | --- | --- |
@@ -401,6 +401,8 @@ Statuses change only through an edit to this file in a pull request. A changed d
 | E5 | Draft and immutable release flow with Release Please in a private repository | P-014 details, DF-004 preparation | M11 |
 
 Detailed success criteria for E1 and E2 are in section 2.8 of [ENGINEERING.md](ENGINEERING.md). Experiment results are recorded here together with the decisions they inform.
+
+**E1 progress (2026-10-12):** Parser-directed JavaScript trivia and strict-string scanners are implemented in the framework-independent syntax crate, exposed through the engine facade, and tested with fictional inputs. Exact spans, comment ordering, newline evidence, typed errors, and explicit local limits are covered. This prepares parser-controlled lexical goals without guessing JSX, regular-expression, or template contexts. No complete token stream, AST arena, parser, corpus pass rate, throughput/memory result, or coverage-guided fuzzing result exists yet. P-002 remains Proposed, and E1 has not passed. Contracts and validation are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ## Template for new entries
 
