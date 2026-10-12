@@ -45,6 +45,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-035 | Template lexical components as the next M0 increment | Accepted |
 | D-036 | Pinned Unicode identifiers and regular-expression literals as the next M0 increments | Accepted |
 | D-037 | Complete regular-expression validation with Annex B, then the syntax tree arena | Accepted |
+| D-038 | Expression grammar completion with in-place pattern reinterpretation | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Proposed |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
@@ -125,6 +126,7 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Second one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-036` increments and their documentation, once the agent considers the work complete. This exception has the same limits as the first one.
 - **Third one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-037` regular-expression increment and its documentation, once the agent is satisfied with the work. This exception has the same limits as the first one.
 - **Fourth one-run exception (2026-10-12):** The project owner explicitly authorized committing and pushing directly to `main` for the bounded expression-parser increment and its documentation, if the agent is satisfied with the work. This exception has the same limits as the first one.
+- **Fifth one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-038` expression-completion increment and its documentation, once the agent is satisfied with the work. This exception has the same limits as the first one.
 
 ### D-011: Release management with Release Please
 
@@ -304,6 +306,18 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Implemented contract:** `scan_js_regexp` returns only the lexical extent (span, body, and flags). `validate_js_regexp` rescans and checks flags and pattern, returning typed flags and the capturing group count, or a typed error with a closed `RegExpPatternError` reason. The separation lets a future parser skip an invalid literal at a known boundary (`D-034`). Details are in section 4.7 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
 - **Unicode data:** `PropertyValueAliases.txt` 18.0.0, downloaded on 2026-10-12 with 83,536 bytes and the SHA-256 hash `06c4c8eaf7b0bf34abe73b113da1215bd784ac254d4c223600b90267caa4bbbd`. Like `DerivedCoreProperties.txt`, it is downloaded deliberately for each regeneration and is not committed.
 - **Revisit if:** the ECMAScript specification adds flags or pattern syntax, the Unicode version changes, or evidence shows that Annex B acceptance hides real defects in analyzed projects.
+
+### D-038: Expression grammar completion with in-place pattern reinterpretation
+
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Claude Code question interface.
+- **Context:** The initial expression parser (`D-037`) covers a bounded subset. The next E1 increment could complete the expression grammar, start statement and source-file parsing, or add a measurement harness first. The representation of destructuring targets and the handling of context-dependent names were also open.
+- **Decision:**
+  - Complete the expression grammar that does not need function bodies: array and object literals (properties, shorthand properties, computed keys, spread), spread arguments, assignment with all compound and logical operators, destructuring through the cover grammar, prefix and postfix update, `new` with and without arguments, and arrow functions with expression bodies. Methods, accessors, generator and async forms, arrow functions with block bodies, and function and class expressions remain fail-closed `UnsupportedSyntax` until statement parsing exists. Statement parsing and a measurement harness follow later.
+  - Destructuring and assignment targets use their own node kinds (array and object patterns, pattern properties, rest elements, default values, binding identifiers). The parser first builds the cover expression and, once `=` or `=>` decides its role, reinterprets the same arena nodes in place, keeping their `NodeId`s. Assignment targets keep identifier references; arrow parameters become binding identifiers.
+  - Names and constructs whose validity depends on the source goal, strict mode, or function context stay fail closed with typed errors: `await`, `yield`, strict-mode reserved words, async arrows, `new.target`, `eval` or `arguments` as targets, and `delete` of an identifier. The parser API gains no context parameter yet.
+- **Rationale:** Expressions are the largest part of the grammar that statements, JSX, and TypeScript build on, and the cover grammar is the main remaining design question of the arena (E1). Distinct pattern kinds let exhaustive matches separate reads from writes and bindings, which scope analysis in M4 needs (`D-033`). In-place reinterpretation avoids copying subtrees and leaves no unreachable nodes. Deferring context avoids fixing an API before the file parser knows the source goal.
+- **Tradeoffs:** Code that is valid only in sloppy mode or needs function context is rejected for now, so the parser accepts less than a complete one would. Expression-only early errors (shorthand initializers outside patterns, duplicate `__proto__`) are checked after the complete expression is parsed, so a later syntax error can be reported before them.
+- **Revisit if:** statement parsing introduces source goals and function context, or E1 evidence shows that in-place reinterpretation complicates recovery (`D-034`) or tree consumers.
 
 ## Technique proposals and related accepted decisions
 
