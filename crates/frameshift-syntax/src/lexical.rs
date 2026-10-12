@@ -35,6 +35,29 @@ impl Default for LexicalLimits {
     }
 }
 
+/// The ECMAScript goal symbol with which source text is parsed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceGoal {
+    /// A classic script, sloppy unless a directive prologue makes it strict.
+    /// Annex B HTML-like comments are recognized.
+    Script,
+    /// An ECMAScript module, which is always strict code.
+    Module,
+}
+
+/// Whether a scanner accepts the legacy octal-like forms that only sloppy
+/// code permits: `LegacyOctalIntegerLiteral` (`017`),
+/// `NonOctalDecimalIntegerLiteral` (`089`), `LegacyOctalEscapeSequence`
+/// (`"\17"`), and `NonOctalDecimalEscapeSequence` (`"\8"`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LegacyOctal {
+    /// Reject these forms with a typed error, as strict mode code requires.
+    Reject,
+    /// Accept these forms and report them, so the parser can apply strict
+    /// mode once it knows whether the code is strict.
+    Permit,
+}
+
 /// A JavaScript comment delimiter form.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CommentKind {
@@ -42,6 +65,11 @@ pub enum CommentKind {
     Line,
     /// A `/* */` comment, including both delimiters.
     Block,
+    /// An Annex B `<!--` comment in a script, excluding its terminating line break.
+    HtmlOpen,
+    /// An Annex B `-->` comment at the start of a script line, from `-->` to
+    /// the end of the line, excluding the line break.
+    HtmlClose,
 }
 
 /// An original-source comment, without copied content.
@@ -77,7 +105,8 @@ pub enum LexicalErrorKind {
     UnescapedLineBreak,
     /// A hexadecimal or Unicode escape is incomplete or out of range.
     InvalidEscape,
-    /// A legacy decimal escape is outside the supported strict-string subset.
+    /// A legacy octal or non-octal decimal escape occurred while such escapes
+    /// were rejected.
     LegacyDecimalEscape,
     /// A block comment reached EOF before `*/`.
     UnterminatedComment,
@@ -94,7 +123,7 @@ pub enum LexicalErrorKind {
     /// An identifier start, backslash, extra decimal digit, or invalid BigInt
     /// suffix follows a number.
     InvalidNumericContinuation,
-    /// A leading-zero integer is outside the supported strict-mode subset.
+    /// A legacy leading-zero integer occurred while such literals were rejected.
     LegacyLeadingZero,
     /// The numeric scan would consume more than the allowed number of bytes.
     NumberLimit,
@@ -155,7 +184,7 @@ impl fmt::Display for LexicalError {
             LexicalErrorKind::UnterminatedString => "unterminated string",
             LexicalErrorKind::UnescapedLineBreak => "unescaped string line break",
             LexicalErrorKind::InvalidEscape => "invalid string escape",
-            LexicalErrorKind::LegacyDecimalEscape => "legacy decimal escape is unsupported",
+            LexicalErrorKind::LegacyDecimalEscape => "legacy octal or decimal escape is rejected",
             LexicalErrorKind::UnterminatedComment => "unterminated block comment",
             LexicalErrorKind::CommentLimit => "comment count exceeds lexical limit",
             LexicalErrorKind::StringLimit => "string size exceeds lexical limit",
@@ -163,7 +192,7 @@ impl fmt::Display for LexicalError {
             LexicalErrorKind::MissingNumericDigit => "expected a numeric digit",
             LexicalErrorKind::InvalidNumericSeparator => "invalid numeric separator",
             LexicalErrorKind::InvalidNumericContinuation => "invalid numeric continuation",
-            LexicalErrorKind::LegacyLeadingZero => "legacy leading-zero number is unsupported",
+            LexicalErrorKind::LegacyLeadingZero => "legacy leading-zero number is rejected",
             LexicalErrorKind::NumberLimit => "number size exceeds lexical limit",
             LexicalErrorKind::ExpectedTemplateDelimiter => "expected a template delimiter",
             LexicalErrorKind::UnterminatedTemplate => "unterminated template segment",
@@ -239,17 +268,27 @@ impl std::error::Error for LexicalError {
 }
 
 /// Scans ECMAScript whitespace, line terminators, and `//` or `/* */` comments.
-/// The caller must select a JavaScript lexical context, never JSX text or a
-/// literal body. Hashbang and legacy HTML comments are not consumed. A slash
-/// that does not begin a comment is left for the parser's lexical goal.
+/// With [`SourceGoal::Script`], Annex B HTML-like comments are also consumed:
+/// `<!--` anywhere, and `-->` when a line terminator precedes it within the
+/// scanned trivia (possibly inside a block comment). The caller must therefore
+/// scan the complete trivia between two tokens from the end of the first one;
+/// at the start of the source, `-->` is not a comment. Module code has no
+/// HTML-like comments. The caller must select a JavaScript lexical context,
+/// never JSX text or a literal body. Hashbang comments are not consumed. A
+/// slash that does not begin a comment is left for the parser's lexical goal.
 /// Time is linear in consumed bytes; storage is bounded by `max_comments`.
 pub fn scan_js_trivia(
     source: &SourceText,
     offset: usize,
+    goal: SourceGoal,
     limits: LexicalLimits,
 ) -> Result<Trivia, LexicalError> {
     validate(source, offset)?;
     let text = source.as_str();
+    let html_comments = match goal {
+        SourceGoal::Script => true,
+        SourceGoal::Module => false,
+    };
     let mut cursor = offset;
     let mut comments = Vec::new();
     let mut has_line_terminator = false;
@@ -260,10 +299,14 @@ pub fn scan_js_trivia(
             continue;
         }
         let rest = &text[cursor..];
-        let kind = if rest.starts_with("//") {
-            CommentKind::Line
+        let (kind, delimiter) = if rest.starts_with("//") {
+            (CommentKind::Line, 2)
         } else if rest.starts_with("/*") {
-            CommentKind::Block
+            (CommentKind::Block, 2)
+        } else if html_comments && rest.starts_with("<!--") {
+            (CommentKind::HtmlOpen, 4)
+        } else if html_comments && has_line_terminator && rest.starts_with("-->") {
+            (CommentKind::HtmlClose, 3)
         } else {
             break;
         };
@@ -271,15 +314,10 @@ pub fn scan_js_trivia(
             return Err(error(cursor, LexicalErrorKind::CommentLimit));
         }
         let start = cursor;
-        cursor += 2;
+        cursor += delimiter;
         match kind {
-            CommentKind::Line => {
-                while let Some(ch) = text[cursor..].chars().next() {
-                    if is_line_terminator(ch) {
-                        break;
-                    }
-                    cursor += ch.len_utf8();
-                }
+            CommentKind::Line | CommentKind::HtmlOpen | CommentKind::HtmlClose => {
+                cursor = line_end(text, cursor);
             }
             CommentKind::Block => loop {
                 if text[cursor..].starts_with("*/") {
@@ -308,23 +346,37 @@ pub fn scan_js_trivia(
     })
 }
 
-/// Scans one single- or double-quoted ECMAScript strict-mode string literal.
+/// One original-source string literal accepted by [`scan_js_string`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StringToken {
+    /// Exact source span, including both quotes.
+    pub span: Span,
+    /// Backslash offset of the first legacy octal or non-octal decimal escape,
+    /// which only [`LegacyOctal::Permit`] accepts.
+    pub legacy_octal_escape: Option<usize>,
+}
+
+/// Scans one single- or double-quoted ECMAScript string literal.
 /// Returns its original span, without decoding or normalizing its value.
 /// Supports character, hexadecimal, Unicode, and line-continuation escapes.
-/// Legacy decimal escapes are explicitly unsupported. Raw U+2028 and U+2029
+/// Legacy octal (`\1`, `\08`) and non-octal decimal (`\8`, `\9`) escapes are
+/// rejected with [`LegacyOctal::Reject`], as strict mode code requires, and
+/// reported in the token with [`LegacyOctal::Permit`]. Raw U+2028 and U+2029
 /// are legal string characters. This is not a JSX attribute or JSON scanner.
 /// Scanning is iterative, allocation-free, and linear in consumed bytes.
 pub fn scan_js_string(
     source: &SourceText,
     offset: usize,
+    legacy: LegacyOctal,
     limits: LexicalLimits,
-) -> Result<Span, LexicalError> {
+) -> Result<StringToken, LexicalError> {
     validate(source, offset)?;
     let text = source.as_str();
     let Some(quote @ ('\'' | '"')) = text[offset..].chars().next() else {
         return Err(error(offset, LexicalErrorKind::ExpectedQuote));
     };
     let mut cursor = offset;
+    let mut legacy_octal_escape = None;
     advance(text, &mut cursor, offset, limits)?;
     while let Some(ch) = text[cursor..].chars().next() {
         if ch == '\r' || ch == '\n' {
@@ -333,35 +385,58 @@ pub fn scan_js_string(
         let start = cursor;
         advance(text, &mut cursor, offset, limits)?;
         if ch == quote {
-            return span(offset, cursor);
+            return Ok(StringToken {
+                span: span(offset, cursor)?,
+                legacy_octal_escape,
+            });
         }
-        if ch == '\\' {
-            scan_escape(text, &mut cursor, start, offset, limits)?;
+        if ch == '\\' && scan_escape(text, &mut cursor, start, offset, limits)? {
+            match legacy {
+                LegacyOctal::Reject => {
+                    return Err(error(start, LexicalErrorKind::LegacyDecimalEscape));
+                }
+                LegacyOctal::Permit => {
+                    legacy_octal_escape.get_or_insert(start);
+                }
+            }
         }
     }
     Err(error(offset, LexicalErrorKind::UnterminatedString))
 }
 
+fn line_end(text: &str, mut cursor: usize) -> usize {
+    while let Some(ch) = text[cursor..].chars().next() {
+        if is_line_terminator(ch) {
+            break;
+        }
+        cursor += ch.len_utf8();
+    }
+    cursor
+}
+
+// Consumes one escape after its backslash and reports whether it is a legacy
+// octal or non-octal decimal escape. Their following digits are ordinary
+// string characters for scanning purposes.
 fn scan_escape(
     text: &str,
     cursor: &mut usize,
     escape: usize,
     start: usize,
     limits: LexicalLimits,
-) -> Result<(), LexicalError> {
+) -> Result<bool, LexicalError> {
     let Some(ch) = text[*cursor..].chars().next() else {
         return Err(error(escape, LexicalErrorKind::InvalidEscape));
     };
     advance(text, cursor, start, limits)?;
     match ch {
-        'x' => hex_digits(text, cursor, 2, escape, start, limits),
+        'x' => hex_digits(text, cursor, 2, escape, start, limits).map(|()| false),
         'u' if text[*cursor..].starts_with('{') => {
             advance(text, cursor, start, limits)?;
             let mut value = 0u32;
             let mut has_digit = false;
             while let Some(ch) = text[*cursor..].chars().next() {
                 if ch == '}' && has_digit {
-                    return advance(text, cursor, start, limits);
+                    return advance(text, cursor, start, limits).map(|()| false);
                 }
                 let digit = ch
                     .to_digit(16)
@@ -375,11 +450,13 @@ fn scan_escape(
             }
             Err(error(escape, LexicalErrorKind::InvalidEscape))
         }
-        'u' => hex_digits(text, cursor, 4, escape, start, limits),
-        '0' if !text.as_bytes().get(*cursor).is_some_and(u8::is_ascii_digit) => Ok(()),
-        '0'..='9' => Err(error(escape, LexicalErrorKind::LegacyDecimalEscape)),
-        '\r' if text[*cursor..].starts_with('\n') => advance(text, cursor, start, limits),
-        _ => Ok(()),
+        'u' => hex_digits(text, cursor, 4, escape, start, limits).map(|()| false),
+        '0' if !text.as_bytes().get(*cursor).is_some_and(u8::is_ascii_digit) => Ok(false),
+        '0'..='9' => Ok(true),
+        '\r' if text[*cursor..].starts_with('\n') => {
+            advance(text, cursor, start, limits).map(|()| false)
+        }
+        _ => Ok(false),
     }
 }
 

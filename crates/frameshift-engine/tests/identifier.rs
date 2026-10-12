@@ -1,9 +1,9 @@
 //! Identifier and reserved-word contracts through the public facade, using fictional text.
 
 use frameshift_engine::{
-    Edit, EditLimits, EditOrder, IdentifierKind, LexicalError, LexicalErrorKind, LexicalLimits,
-    ReservedWord, ReservedWordClass, SourceText, Span, TextLimits, apply_edits, scan_js_identifier,
-    scan_js_number,
+    Edit, EditLimits, EditOrder, IdentifierKind, LegacyOctal, LexicalError, LexicalErrorKind,
+    LexicalLimits, ReservedWord, ReservedWordClass, SourceText, Span, TextLimits, apply_edits,
+    scan_js_identifier, scan_js_number,
 };
 
 fn source(text: &str) -> SourceText {
@@ -303,13 +303,13 @@ fn offsets_starts_and_byte_limits_are_checked_in_order() {
 fn numbers_and_names_share_the_identifier_start_boundary() {
     let input = source("3in x1 0x\u{2118}");
     assert_eq!(
-        scan_js_number(&input, 0, LexicalLimits::default()),
+        scan_js_number(&input, 0, LegacyOctal::Reject, LexicalLimits::default()),
         Err(error(1, LexicalErrorKind::InvalidNumericContinuation))
     );
     let name = scan_js_identifier(&input, 4, LexicalLimits::default()).unwrap();
     assert_eq!(input.slice(name.span).unwrap(), "x1");
     assert_eq!(
-        scan_js_number(&input, 7, LexicalLimits::default()),
+        scan_js_number(&input, 7, LegacyOctal::Reject, LexicalLimits::default()),
         Err(error(9, LexicalErrorKind::MissingNumericDigit))
     );
 }

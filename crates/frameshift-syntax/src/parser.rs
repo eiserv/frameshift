@@ -9,7 +9,8 @@ use crate::{
     },
     identifier::{IdentifierKind, IdentifierToken, ReservedWord, ReservedWordClass},
     lexical::{
-        Comment, LexicalError, LexicalErrorKind, LexicalLimits, scan_js_string, scan_js_trivia,
+        Comment, LegacyOctal, LexicalError, LexicalErrorKind, LexicalLimits, SourceGoal,
+        scan_js_string, scan_js_trivia,
     },
     numeric::scan_js_number,
     punctuator::{
@@ -545,8 +546,13 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_number(&mut self) -> Result<NodeId, ParseError> {
-        let literal = scan_js_number(self.source, self.cursor, self.limits.lexical)
-            .map_err(parse_lexical_error)?;
+        let literal = scan_js_number(
+            self.source,
+            self.cursor,
+            LegacyOctal::Reject,
+            self.limits.lexical,
+        )
+        .map_err(parse_lexical_error)?;
         self.consume_token(literal.span)?;
         self.add_node(
             SyntaxNodeKind::NumberLiteral {
@@ -558,8 +564,14 @@ impl<'source> Parser<'source> {
     }
 
     fn parse_string(&mut self) -> Result<(NodeId, Span), ParseError> {
-        let span = scan_js_string(self.source, self.cursor, self.limits.lexical)
-            .map_err(parse_lexical_error)?;
+        let span = scan_js_string(
+            self.source,
+            self.cursor,
+            LegacyOctal::Reject,
+            self.limits.lexical,
+        )
+        .map_err(parse_lexical_error)?
+        .span;
         self.consume_token(span)?;
         Ok((self.add_node(SyntaxNodeKind::StringLiteral, span)?, span))
     }
@@ -2210,6 +2222,7 @@ impl<'source> Parser<'source> {
         let trivia = scan_js_trivia(
             self.source,
             self.cursor,
+            SourceGoal::Module,
             LexicalLimits {
                 max_comments: remaining,
                 ..self.limits.lexical

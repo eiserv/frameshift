@@ -24,8 +24,8 @@ pub use identifier::{
     IdentifierKind, IdentifierToken, ReservedWord, ReservedWordClass, scan_js_identifier,
 };
 pub use lexical::{
-    Comment, CommentKind, LexicalError, LexicalErrorKind, LexicalLimits, Trivia, scan_js_string,
-    scan_js_trivia,
+    Comment, CommentKind, LegacyOctal, LexicalError, LexicalErrorKind, LexicalLimits, SourceGoal,
+    StringToken, Trivia, scan_js_string, scan_js_trivia,
 };
 pub use numeric::{NumericBase, NumericKind, NumericLiteral, scan_js_number};
 pub use parser::{ParseError, ParseErrorKind, ParseLimits, parse_js_expression};

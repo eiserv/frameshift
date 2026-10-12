@@ -1,8 +1,9 @@
 //! Lexical contracts exercised through the engine facade, using fictional text.
 
 use frameshift_engine::{
-    CommentKind, Edit, EditLimits, EditOrder, LexicalError, LexicalErrorKind, LexicalLimits,
-    SourceText, Span, TextError, TextLimits, apply_edits, scan_js_string, scan_js_trivia,
+    CommentKind, Edit, EditLimits, EditOrder, LegacyOctal, LexicalError, LexicalErrorKind,
+    LexicalLimits, SourceGoal, SourceText, Span, TextError, TextLimits, apply_edits,
+    scan_js_string, scan_js_trivia,
 };
 
 fn make_source(text: &str) -> SourceText {
@@ -17,7 +18,7 @@ fn error(offset: usize, kind: LexicalErrorKind) -> LexicalError {
 fn trivia_preserves_bytes_comments_and_line_break_evidence() {
     let text = "\u{feff}\t // é🦀\r\n/* first\u{2028}second */  'value'";
     let source = make_source(text);
-    let result = scan_js_trivia(&source, 0, LexicalLimits::default()).unwrap();
+    let result = scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default()).unwrap();
     assert_eq!(result.span, Span::new(0, text.find('\'').unwrap()).unwrap());
     assert!(result.has_line_terminator);
     assert_eq!(result.comments.len(), 2);
@@ -40,7 +41,8 @@ fn every_ecmascript_line_terminator_affects_trivia() {
             format!("/*{line_break}*/x"),
         ] {
             let source = make_source(&text);
-            let result = scan_js_trivia(&source, 0, LexicalLimits::default()).unwrap();
+            let result =
+                scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default()).unwrap();
             assert!(result.has_line_terminator);
             assert_eq!(result.span.end(), text.len() - 1);
             for comment in result.comments {
@@ -53,7 +55,7 @@ fn every_ecmascript_line_terminator_affects_trivia() {
     }
     let source = make_source("/**/\t");
     assert!(
-        !scan_js_trivia(&source, 0, LexicalLimits::default())
+        !scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default())
             .unwrap()
             .has_line_terminator
     );
@@ -63,14 +65,15 @@ fn every_ecmascript_line_terminator_affects_trivia() {
 fn consumes_ecmascript_whitespace_without_using_unicode_white_space_property() {
     let whitespace = "\t\u{b}\u{c} \u{a0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200a}\u{202f}\u{205f}\u{3000}\u{feff}";
     let source = make_source(whitespace);
-    let result = scan_js_trivia(&source, 0, LexicalLimits::default()).unwrap();
+    let result = scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default()).unwrap();
     assert_eq!(result.span.end(), source.len());
     assert!(!result.has_line_terminator);
     for text in [
         "\u{85}", "\u{180e}", "\u{200b}", "\0", "/", "/=", "/regex/", "#!x", "<!--x",
     ] {
         let source = make_source(text);
-        let result = scan_js_trivia(&source, 0, LexicalLimits::default()).unwrap();
+        let result =
+            scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default()).unwrap();
         assert!(result.span.is_empty(), "{text:?}");
         assert!(result.comments.is_empty());
     }
@@ -79,14 +82,22 @@ fn consumes_ecmascript_whitespace_without_using_unicode_white_space_property() {
 #[test]
 fn block_comments_do_not_nest_and_stop_at_first_closing_delimiter() {
     let source = make_source("/* a /* b */tail */");
-    let result = scan_js_trivia(&source, 0, LexicalLimits::default()).unwrap();
+    let result = scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default()).unwrap();
     assert_eq!(
         source.slice(result.comments[0].span).unwrap(),
         "/* a /* b */"
     );
     assert_eq!(&source.as_str()[result.span.end()..], "tail */");
     for text in ["//", "// at EOF", "/*/**/*/"] {
-        assert!(scan_js_trivia(&make_source(text), 0, LexicalLimits::default()).is_ok());
+        assert!(
+            scan_js_trivia(
+                &make_source(text),
+                0,
+                SourceGoal::Module,
+                LexicalLimits::default()
+            )
+            .is_ok()
+        );
     }
 }
 
@@ -94,7 +105,7 @@ fn block_comments_do_not_nest_and_stop_at_first_closing_delimiter() {
 fn trivia_errors_are_explicit_without_partial_results_or_source_content() {
     let source = make_source("/**/ /* secret");
     assert_eq!(
-        scan_js_trivia(&source, 0, LexicalLimits::default()),
+        scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default()),
         Err(error(5, LexicalErrorKind::UnterminatedComment))
     );
     let limits = LexicalLimits {
@@ -102,7 +113,7 @@ fn trivia_errors_are_explicit_without_partial_results_or_source_content() {
         ..LexicalLimits::default()
     };
     assert_eq!(
-        scan_js_trivia(&source, 0, limits),
+        scan_js_trivia(&source, 0, SourceGoal::Module, limits),
         Err(error(5, LexicalErrorKind::CommentLimit))
     );
     assert_eq!(source.as_str(), "/**/ /* secret");
@@ -112,11 +123,12 @@ fn trivia_errors_are_explicit_without_partial_results_or_source_content() {
             .contains("secret")
     );
     let source = make_source("/**/");
-    assert!(scan_js_trivia(&source, 0, limits).is_ok());
+    assert!(scan_js_trivia(&source, 0, SourceGoal::Module, limits).is_ok());
     assert!(
         scan_js_trivia(
             &source,
             source.len(),
+            SourceGoal::Module,
             LexicalLimits {
                 max_comments: 0,
                 ..limits
@@ -130,6 +142,7 @@ fn trivia_errors_are_explicit_without_partial_results_or_source_content() {
         scan_js_trivia(
             &source,
             0,
+            SourceGoal::Module,
             LexicalLimits {
                 max_comments: 0,
                 ..limits
@@ -156,7 +169,9 @@ fn strings_preserve_quotes_unicode_escapes_and_line_continuations() {
     ] {
         let text = format!("prefix{literal}suffix");
         let source = make_source(&text);
-        let span = scan_js_string(&source, 6, LexicalLimits::default()).unwrap();
+        let span = scan_js_string(&source, 6, LegacyOctal::Reject, LexicalLimits::default())
+            .unwrap()
+            .span;
         assert_eq!(span, Span::new(6, 6 + literal.len()).unwrap());
         assert_eq!(source.slice(span).unwrap(), literal);
         assert_eq!(source.as_str(), text);
@@ -177,7 +192,12 @@ fn rejects_malformed_and_legacy_escapes_with_exact_offsets() {
         "'\\",
     ] {
         assert_eq!(
-            scan_js_string(&make_source(literal), 0, LexicalLimits::default()),
+            scan_js_string(
+                &make_source(literal),
+                0,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(error(1, LexicalErrorKind::InvalidEscape)),
             "{literal:?}"
         );
@@ -185,29 +205,142 @@ fn rejects_malformed_and_legacy_escapes_with_exact_offsets() {
     for digit in '0'..='9' {
         let literal = format!("'\\{digit}1'");
         assert_eq!(
-            scan_js_string(&make_source(&literal), 0, LexicalLimits::default()),
+            scan_js_string(
+                &make_source(&literal),
+                0,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(error(1, LexicalErrorKind::LegacyDecimalEscape))
         );
     }
 }
 
 #[test]
+fn sloppy_strings_report_the_first_legacy_octal_escape() {
+    for (literal, first) in [
+        (r#"'\1'"#, Some(1)),
+        (r#"'a\08'"#, Some(2)),
+        (r#"'\377\8'"#, Some(1)),
+        (r#"'\x41\9'"#, Some(5)),
+        (r#"'\0'"#, None),
+        (r#"'\0a0'"#, None),
+    ] {
+        let token = scan_js_string(
+            &make_source(literal),
+            0,
+            LegacyOctal::Permit,
+            LexicalLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            token.span,
+            Span::new(0, literal.len()).unwrap(),
+            "{literal}"
+        );
+        assert_eq!(token.legacy_octal_escape, first, "{literal}");
+        let strict = scan_js_string(
+            &make_source(literal),
+            0,
+            LegacyOctal::Reject,
+            LexicalLimits::default(),
+        );
+        match first {
+            Some(offset) => assert_eq!(
+                strict,
+                Err(error(offset, LexicalErrorKind::LegacyDecimalEscape)),
+                "{literal}"
+            ),
+            None => assert_eq!(strict, Ok(token), "{literal}"),
+        }
+    }
+}
+
+#[test]
+fn script_goal_consumes_annex_b_html_like_comments() {
+    let text = "<!-- open é\n  /* one line */ --> close\r\n/* a\nb */ -->tail\n-->";
+    let source = make_source(text);
+    let result = scan_js_trivia(&source, 0, SourceGoal::Script, LexicalLimits::default()).unwrap();
+    assert_eq!(result.span, Span::new(0, text.len()).unwrap());
+    let comments: Vec<_> = result
+        .comments
+        .iter()
+        .map(|comment| (comment.kind, source.slice(comment.span).unwrap()))
+        .collect();
+    assert_eq!(
+        comments,
+        [
+            (CommentKind::HtmlOpen, "<!-- open é"),
+            (CommentKind::Block, "/* one line */"),
+            (CommentKind::HtmlClose, "--> close"),
+            (CommentKind::Block, "/* a\nb */"),
+            (CommentKind::HtmlClose, "-->tail"),
+            (CommentKind::HtmlClose, "-->"),
+        ]
+    );
+
+    // A close comment needs a preceding line terminator in the same trivia,
+    // so it is never one at the start of the source or after a token.
+    for (text, end) in [("-->", 0), (" /* x */ -->", 9), ("x\n-->", 0)] {
+        let result = scan_js_trivia(
+            &make_source(text),
+            0,
+            SourceGoal::Script,
+            LexicalLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(result.span.end(), end, "{text:?}");
+    }
+    // Module code has no HTML-like comments.
+    for text in ["<!-- x", "\n--> x"] {
+        let source = make_source(text);
+        let module =
+            scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default()).unwrap();
+        assert!(module.comments.is_empty(), "{text:?}");
+        assert_eq!(module.span.end(), text.find(['<', '-']).unwrap());
+    }
+    let limits = LexicalLimits {
+        max_comments: 1,
+        ..LexicalLimits::default()
+    };
+    assert_eq!(
+        scan_js_trivia(&make_source("<!--\n-->"), 0, SourceGoal::Script, limits),
+        Err(error(5, LexicalErrorKind::CommentLimit))
+    );
+}
+
+#[test]
 fn rejects_unterminated_strings_and_raw_cr_or_lf() {
     for literal in ["'", "'secret", "\"secret'"] {
         assert_eq!(
-            scan_js_string(&make_source(literal), 0, LexicalLimits::default()),
+            scan_js_string(
+                &make_source(literal),
+                0,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(error(0, LexicalErrorKind::UnterminatedString))
         );
     }
     for literal in ["'é\nx'", "'é\rx'", "'é\r\nx'"] {
         assert_eq!(
-            scan_js_string(&make_source(literal), 0, LexicalLimits::default()),
+            scan_js_string(
+                &make_source(literal),
+                0,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(error(3, LexicalErrorKind::UnescapedLineBreak))
         );
     }
     for text in ["", "`template`", "unquoted"] {
         assert_eq!(
-            scan_js_string(&make_source(text), 0, LexicalLimits::default()),
+            scan_js_string(
+                &make_source(text),
+                0,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(error(0, LexicalErrorKind::ExpectedQuote))
         );
     }
@@ -221,6 +354,7 @@ fn validates_offsets_and_string_byte_limits_including_delimiters() {
             let result = scan_js_string(
                 &source,
                 0,
+                LegacyOctal::Reject,
                 LexicalLimits {
                     max_string_bytes: limit,
                     ..LexicalLimits::default()
@@ -238,21 +372,29 @@ fn validates_offsets_and_string_byte_limits_including_delimiters() {
             scan_js_string(
                 &source,
                 0,
+                LegacyOctal::Reject,
                 LexicalLimits {
                     max_string_bytes: literal.len(),
                     ..LexicalLimits::default()
                 }
             )
             .unwrap()
+            .span
             .end(),
             literal.len()
         );
     }
     let long_escape = format!("'\\u{{{}41}}'", "0".repeat(16_384));
     assert_eq!(
-        scan_js_string(&make_source(&long_escape), 0, LexicalLimits::default())
-            .unwrap()
-            .end(),
+        scan_js_string(
+            &make_source(&long_escape),
+            0,
+            LegacyOctal::Reject,
+            LexicalLimits::default()
+        )
+        .unwrap()
+        .span
+        .end(),
         long_escape.len()
     );
     let source = make_source("'é🦀'");
@@ -260,11 +402,21 @@ fn validates_offsets_and_string_byte_limits_including_delimiters() {
         let cause = source.validate_offset(offset).unwrap_err();
         let expected = error(offset, LexicalErrorKind::InvalidOffset(cause));
         assert_eq!(
-            scan_js_trivia(&source, offset, LexicalLimits::default()),
+            scan_js_trivia(
+                &source,
+                offset,
+                SourceGoal::Module,
+                LexicalLimits::default()
+            ),
             Err(expected.clone())
         );
         assert_eq!(
-            scan_js_string(&source, offset, LexicalLimits::default()),
+            scan_js_string(
+                &source,
+                offset,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(expected)
         );
     }
@@ -273,6 +425,7 @@ fn validates_offsets_and_string_byte_limits_including_delimiters() {
             scan_js_string(
                 &source,
                 0,
+                LegacyOctal::Reject,
                 LexicalLimits {
                     max_string_bytes: limit,
                     ..LexicalLimits::default()
@@ -285,12 +438,14 @@ fn validates_offsets_and_string_byte_limits_including_delimiters() {
         scan_js_string(
             &source,
             0,
+            LegacyOctal::Reject,
             LexicalLimits {
                 max_string_bytes: 8,
                 ..LexicalLimits::default()
             }
         )
         .unwrap()
+        .span
         .end(),
         8
     );
@@ -298,6 +453,7 @@ fn validates_offsets_and_string_byte_limits_including_delimiters() {
         scan_js_string(
             &source,
             2,
+            LegacyOctal::Reject,
             LexicalLimits {
                 max_string_bytes: 0,
                 ..LexicalLimits::default()
@@ -313,8 +469,15 @@ fn validates_offsets_and_string_byte_limits_including_delimiters() {
 #[test]
 fn parser_selected_string_span_drives_a_provenance_preserving_edit() {
     let source = make_source("/* keep */\r\n'old é'; // keep too");
-    let trivia = scan_js_trivia(&source, 0, LexicalLimits::default()).unwrap();
-    let literal = scan_js_string(&source, trivia.span.end(), LexicalLimits::default()).unwrap();
+    let trivia = scan_js_trivia(&source, 0, SourceGoal::Module, LexicalLimits::default()).unwrap();
+    let literal = scan_js_string(
+        &source,
+        trivia.span.end(),
+        LegacyOctal::Reject,
+        LexicalLimits::default(),
+    )
+    .unwrap()
+    .span;
     let result = apply_edits(
         &source,
         &[Edit {
@@ -332,6 +495,54 @@ fn parser_selected_string_span_drives_a_provenance_preserving_edit() {
     assert_eq!(result.applied_edits()[0].source, literal);
     assert_eq!(result.provenance().len(), 3);
     assert_eq!(source.as_str(), "/* keep */\r\n'old é'; // keep too");
+}
+
+#[test]
+fn generated_html_like_comment_inputs_extend_module_trivia_deterministically() {
+    let alphabet = ['<', '!', '-', '>', '\n', '/', '*', ' ', 'x'];
+    let limits = LexicalLimits {
+        max_comments: 3,
+        ..LexicalLimits::default()
+    };
+    for length in 0..=5 {
+        for mut index in 0..alphabet.len().pow(length) {
+            let mut text = String::new();
+            for _ in 0..length {
+                text.push(alphabet[index % alphabet.len()]);
+                index /= alphabet.len();
+            }
+            let source = make_source(&text);
+            for offset in 0..=text.len() {
+                let script = scan_js_trivia(&source, offset, SourceGoal::Script, limits);
+                assert_eq!(
+                    script,
+                    scan_js_trivia(&source, offset, SourceGoal::Script, limits)
+                );
+                let module = scan_js_trivia(&source, offset, SourceGoal::Module, limits);
+                if let Ok(module) = &module {
+                    assert!(module.comments.iter().all(|comment| matches!(
+                        comment.kind,
+                        CommentKind::Line | CommentKind::Block
+                    )));
+                }
+                if let Ok(script) = script {
+                    for comment in &script.comments {
+                        let spelling = source.slice(comment.span).unwrap();
+                        let prefix = match comment.kind {
+                            CommentKind::Line => "//",
+                            CommentKind::Block => "/*",
+                            CommentKind::HtmlOpen => "<!--",
+                            CommentKind::HtmlClose => "-->",
+                        };
+                        assert!(spelling.starts_with(prefix), "{text:?}");
+                    }
+                    if let Ok(module) = module {
+                        assert!(script.span.end() >= module.span.end(), "{text:?}");
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -355,8 +566,11 @@ fn generated_short_inputs_have_deterministic_errors_and_valid_spans() {
                     max_string_bytes: 8,
                     ..LexicalLimits::default()
                 };
-                let trivia = scan_js_trivia(&source, offset, limits);
-                assert_eq!(trivia, scan_js_trivia(&source, offset, limits));
+                let trivia = scan_js_trivia(&source, offset, SourceGoal::Module, limits);
+                assert_eq!(
+                    trivia,
+                    scan_js_trivia(&source, offset, SourceGoal::Module, limits)
+                );
                 if let Ok(trivia) = trivia {
                     assert_eq!(trivia.span.start(), offset);
                     source.slice(trivia.span).unwrap();
@@ -365,9 +579,13 @@ fn generated_short_inputs_have_deterministic_errors_and_valid_spans() {
                         source.slice(comment.span).unwrap();
                     }
                 }
-                let string = scan_js_string(&source, offset, limits);
-                assert_eq!(string, scan_js_string(&source, offset, limits));
-                if let Ok(span) = string {
+                let string = scan_js_string(&source, offset, LegacyOctal::Reject, limits);
+                assert_eq!(
+                    string,
+                    scan_js_string(&source, offset, LegacyOctal::Reject, limits)
+                );
+                if let Ok(token) = string {
+                    let span = token.span;
                     let literal = source.slice(span).unwrap();
                     assert_eq!(span.start(), offset);
                     assert!(literal.len() >= 2);

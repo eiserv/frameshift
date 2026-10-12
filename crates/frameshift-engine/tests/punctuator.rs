@@ -1,9 +1,9 @@
 //! Punctuation grammar contracts through the engine facade, using fictional text.
 
 use frameshift_engine::{
-    GreaterThanMode, JsLexicalGoal, LexicalError, LexicalErrorKind, LexicalLimits, Punctuator,
-    PunctuatorContext, SourceText, Span, TextLimits, scan_js_number, scan_js_punctuator,
-    scan_js_trivia,
+    GreaterThanMode, JsLexicalGoal, LegacyOctal, LexicalError, LexicalErrorKind, LexicalLimits,
+    Punctuator, PunctuatorContext, SourceGoal, SourceText, Span, TextLimits, scan_js_number,
+    scan_js_punctuator, scan_js_trivia,
 };
 
 fn source(text: &str) -> SourceText {
@@ -179,7 +179,8 @@ fn optional_chaining_and_numeric_dots_obey_decimal_lookahead() {
                 .unwrap()
                 .is_none()
         );
-        let number = scan_js_number(&input, 1, LexicalLimits::default()).unwrap();
+        let number =
+            scan_js_number(&input, 1, LegacyOctal::Reject, LexicalLimits::default()).unwrap();
         assert_eq!(input.slice(number.span).unwrap(), format!(".{digit}"));
     }
     for text in [
@@ -297,14 +298,19 @@ fn trivia_numbers_and_punctuation_share_source_coordinates() {
     let input = source("/* keep */\r\n(1_0 + .5) >= 0xA;");
     let mut cursor = 0;
     for spelling in ["(", "1_0", "+", ".5", ")", ">=", "0xA", ";"] {
-        cursor = scan_js_trivia(&input, cursor, LexicalLimits::default())
+        cursor = scan_js_trivia(&input, cursor, SourceGoal::Module, LexicalLimits::default())
             .unwrap()
             .span
             .end();
         let span = if spelling.as_bytes()[0].is_ascii_digit() || spelling.starts_with('.') {
-            scan_js_number(&input, cursor, LexicalLimits::default())
-                .unwrap()
-                .span
+            scan_js_number(
+                &input,
+                cursor,
+                LegacyOctal::Reject,
+                LexicalLimits::default(),
+            )
+            .unwrap()
+            .span
         } else {
             scan_js_punctuator(&input, cursor, context(JsLexicalGoal::Div))
                 .unwrap()

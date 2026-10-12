@@ -1,10 +1,10 @@
 //! Template lexical contracts through the public facade, using fictional text.
 
 use frameshift_engine::{
-    Edit, EditLimits, EditOrder, GreaterThanMode, JsLexicalGoal, LexicalError, LexicalErrorKind,
-    LexicalLimits, Punctuator, PunctuatorContext, SourceText, Span, TemplateContext, TemplateKind,
-    TemplateMode, TemplatePosition, TextLimits, apply_edits, scan_js_number, scan_js_punctuator,
-    scan_js_string, scan_js_template, scan_js_trivia,
+    Edit, EditLimits, EditOrder, GreaterThanMode, JsLexicalGoal, LegacyOctal, LexicalError,
+    LexicalErrorKind, LexicalLimits, Punctuator, PunctuatorContext, SourceGoal, SourceText, Span,
+    TemplateContext, TemplateKind, TemplateMode, TemplatePosition, TextLimits, apply_edits,
+    scan_js_number, scan_js_punctuator, scan_js_string, scan_js_template, scan_js_trivia,
 };
 
 fn source(text: &str) -> SourceText {
@@ -391,11 +391,16 @@ fn parser_selected_segments_cooperate_with_other_lexical_goals() {
     let string_offset = text.find("'}'").unwrap();
     assert_eq!(
         input
-            .slice(scan_js_string(&input, string_offset, limits).unwrap())
+            .slice(
+                scan_js_string(&input, string_offset, LegacyOctal::Reject, limits)
+                    .unwrap()
+                    .span
+            )
             .unwrap(),
         "'}'"
     );
-    let trivia = scan_js_trivia(&input, text.find("/*").unwrap(), limits).unwrap();
+    let trivia =
+        scan_js_trivia(&input, text.find("/*").unwrap(), SourceGoal::Module, limits).unwrap();
     assert_eq!(input.slice(trivia.comments[0].span).unwrap(), "/* } */");
     let object_brace = text.find("} +").unwrap();
     let punctuation = scan_js_punctuator(
@@ -418,7 +423,7 @@ fn parser_selected_segments_cooperate_with_other_lexical_goals() {
     )
     .unwrap();
     assert_eq!(nested.kind, TemplateKind::Head);
-    let number = scan_js_number(&input, nested.span.end(), limits).unwrap();
+    let number = scan_js_number(&input, nested.span.end(), LegacyOctal::Reject, limits).unwrap();
     assert_eq!(input.slice(number.span).unwrap(), "2");
     let nested_tail = scan_js_template(
         &input,

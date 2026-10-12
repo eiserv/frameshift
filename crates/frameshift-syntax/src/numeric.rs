@@ -1,6 +1,8 @@
 use frameshift_core::{SourceText, Span};
 
-use crate::lexical::{LexicalError, LexicalErrorKind, LexicalLimits, error, span, validate};
+use crate::lexical::{
+    LegacyOctal, LexicalError, LexicalErrorKind, LexicalLimits, error, span, validate,
+};
 use crate::unicode::is_js_identifier_start;
 
 /// The spelling base of a numeric literal, without evaluating its value.
@@ -41,24 +43,31 @@ pub enum NumericKind {
 pub struct NumericLiteral {
     /// Exact source span, including separators, radix prefix, and BigInt suffix.
     pub span: Span,
-    /// Base indicated by the original spelling.
+    /// Base indicated by the original spelling. A legacy `017` is octal.
     pub base: NumericBase,
     /// Number or BigInt, without evaluation or normalization.
     pub kind: NumericKind,
+    /// Whether the spelling is a `LegacyOctalIntegerLiteral` (`017`, octal
+    /// base) or a `NonOctalDecimalIntegerLiteral` (`089`, decimal base,
+    /// possibly with a fraction or exponent), which strict mode code forbids.
+    pub legacy_octal: bool,
 }
 
-/// Scans one strict-mode ECMAScript numeric literal at a parser-selected offset.
+/// Scans one ECMAScript numeric literal at a parser-selected offset.
 /// Supports decimal fractions and exponents, binary/octal/hexadecimal integers,
 /// separators, and BigInt suffixes. Leading signs belong to separate operators.
-/// Legacy leading-zero integers are explicitly unsupported. A directly following
-/// `IdentifierStartChar` (pinned Unicode `ID_Start`, `$`, or `_`), backslash, or
-/// extra decimal digit is rejected; any other scalar ends the literal.
-/// The caller must select JavaScript context, never JSX text or literal bodies.
-/// This does not validate the surrounding expression or file. Scanning is
-/// iterative, allocation-free, and linear in consumed bytes.
+/// Legacy leading-zero integers are rejected with [`LegacyOctal::Reject`], as
+/// strict mode code requires, and marked in the result with
+/// [`LegacyOctal::Permit`]; they never take separators or a BigInt suffix. A
+/// directly following `IdentifierStartChar` (pinned Unicode `ID_Start`, `$`, or
+/// `_`), backslash, or extra decimal digit is rejected; any other scalar ends
+/// the literal. The caller must select JavaScript context, never JSX text or
+/// literal bodies. This does not validate the surrounding expression or file.
+/// Scanning is iterative, allocation-free, and linear in consumed bytes.
 pub fn scan_js_number(
     source: &SourceText,
     offset: usize,
+    legacy: LegacyOctal,
     limits: LexicalLimits,
 ) -> Result<NumericLiteral, LexicalError> {
     validate(source, offset)?;
@@ -75,7 +84,7 @@ pub fn scan_js_number(
         cursor: offset,
         max_bytes: limits.max_number_bytes,
     };
-    let base = if first == Some(b'0') {
+    let mut base = if first == Some(b'0') {
         match bytes.get(offset + 1) {
             Some(b'b' | b'B') => NumericBase::Binary,
             Some(b'o' | b'O') => NumericBase::Octal,
@@ -86,6 +95,7 @@ pub fn scan_js_number(
         NumericBase::Decimal
     };
     let mut integer = true;
+    let mut legacy_octal = false;
     match base {
         NumericBase::Binary | NumericBase::Octal | NumericBase::Hexadecimal => {
             scan.advance()?;
@@ -93,32 +103,46 @@ pub fn scan_js_number(
             scan.digits(base, true)?;
         }
         NumericBase::Decimal => {
+            let mut fraction_allowed = true;
             if first == Some(b'.') {
                 integer = false;
+                fraction_allowed = false;
                 scan.advance()?;
                 scan.digits(base, true)?;
-            } else {
-                if first == Some(b'0') {
-                    scan.advance()?;
-                    if scan.peek().is_some_and(|byte| byte.is_ascii_digit()) {
+            } else if first == Some(b'0') {
+                scan.advance()?;
+                if scan.peek().is_some_and(|byte| byte.is_ascii_digit()) {
+                    if legacy == LegacyOctal::Reject {
                         return Err(error(scan.cursor, LexicalErrorKind::LegacyLeadingZero));
                     }
-                    if scan.peek() == Some(b'_') {
-                        return Err(error(
-                            scan.cursor,
-                            LexicalErrorKind::InvalidNumericSeparator,
-                        ));
+                    legacy_octal = true;
+                    let mut octal = true;
+                    while let Some(byte) = scan.peek().filter(u8::is_ascii_digit) {
+                        octal &= byte <= b'7';
+                        scan.advance()?;
                     }
-                } else {
-                    scan.digits(base, true)?;
+                    // `017` is a LegacyOctalIntegerLiteral and cannot take a
+                    // fraction or exponent; `089` is a decimal literal.
+                    if octal {
+                        base = NumericBase::Octal;
+                        fraction_allowed = false;
+                    }
                 }
-                if scan.peek() == Some(b'.') {
-                    integer = false;
-                    scan.advance()?;
-                    scan.digits(base, false)?;
+                if scan.peek() == Some(b'_') {
+                    return Err(error(
+                        scan.cursor,
+                        LexicalErrorKind::InvalidNumericSeparator,
+                    ));
                 }
+            } else {
+                scan.digits(base, true)?;
             }
-            if matches!(scan.peek(), Some(b'e' | b'E')) {
+            if fraction_allowed && scan.peek() == Some(b'.') {
+                integer = false;
+                scan.advance()?;
+                scan.digits(base, false)?;
+            }
+            if base == NumericBase::Decimal && matches!(scan.peek(), Some(b'e' | b'E')) {
                 integer = false;
                 scan.advance()?;
                 if matches!(scan.peek(), Some(b'+' | b'-')) {
@@ -129,7 +153,7 @@ pub fn scan_js_number(
         }
     }
     let kind = if scan.peek() == Some(b'n') {
-        if !integer {
+        if !integer || legacy_octal {
             return Err(error(
                 scan.cursor,
                 LexicalErrorKind::InvalidNumericContinuation,
@@ -154,6 +178,7 @@ pub fn scan_js_number(
         span: span(offset, scan.cursor)?,
         base,
         kind,
+        legacy_octal,
     })
 }
 

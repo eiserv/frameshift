@@ -1,8 +1,8 @@
 //! Numeric scanning contracts through the public facade, using fictional text.
 
 use frameshift_engine::{
-    Edit, EditLimits, EditOrder, LexicalError, LexicalErrorKind, LexicalLimits, NumericBase,
-    NumericKind, SourceText, Span, TextLimits, apply_edits, scan_js_number,
+    Edit, EditLimits, EditOrder, LegacyOctal, LexicalError, LexicalErrorKind, LexicalLimits,
+    NumericBase, NumericKind, SourceText, Span, TextLimits, apply_edits, scan_js_number,
 };
 
 fn source(text: &str) -> SourceText {
@@ -38,7 +38,13 @@ fn decimal_spelling_is_preserved_without_evaluation() {
         let text = format!("🦀/* prefix */{literal}; // tail\r\n");
         let input = source(&text);
         let offset = "🦀/* prefix */".len();
-        let result = scan_js_number(&input, offset, LexicalLimits::default()).unwrap();
+        let result = scan_js_number(
+            &input,
+            offset,
+            LegacyOctal::Reject,
+            LexicalLimits::default(),
+        )
+        .unwrap();
         assert_eq!(result.base, NumericBase::Decimal, "{literal}");
         assert_eq!(result.kind, NumericKind::Number);
         assert_eq!(
@@ -65,7 +71,8 @@ fn radix_integers_and_bigints_retain_their_categories() {
         for (suffix, kind) in [("", NumericKind::Number), ("n", NumericKind::BigInt)] {
             let text = format!("{literal}{suffix}");
             let input = source(&text);
-            let result = scan_js_number(&input, 0, LexicalLimits::default()).unwrap();
+            let result =
+                scan_js_number(&input, 0, LegacyOctal::Reject, LexicalLimits::default()).unwrap();
             assert_eq!(result.base, base);
             assert_eq!(result.kind, kind);
             assert_eq!(input.slice(result.span).unwrap(), text);
@@ -114,7 +121,7 @@ fn malformed_parts_fail_at_precise_offsets_without_partial_results() {
     ] {
         let input = source(text);
         assert_eq!(
-            scan_js_number(&input, 0, LexicalLimits::default()),
+            scan_js_number(&input, 0, LegacyOctal::Reject, LexicalLimits::default()),
             Err(error(offset, kind)),
             "{text}"
         );
@@ -126,7 +133,12 @@ fn malformed_parts_fail_at_precise_offsets_without_partial_results() {
 fn strict_mode_rejects_legacy_leading_zero_forms() {
     for text in ["00", "01", "077", "08", "09.5", "00e2", "01n"] {
         assert_eq!(
-            scan_js_number(&source(text), 0, LexicalLimits::default()),
+            scan_js_number(
+                &source(text),
+                0,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(error(1, LexicalErrorKind::LegacyLeadingZero)),
             "{text}"
         );
@@ -134,10 +146,70 @@ fn strict_mode_rejects_legacy_leading_zero_forms() {
 }
 
 #[test]
+fn sloppy_mode_permits_and_marks_legacy_octal_like_literals() {
+    let scan = |text: &str| {
+        scan_js_number(
+            &source(text),
+            0,
+            LegacyOctal::Permit,
+            LexicalLimits::default(),
+        )
+    };
+    for (text, literal, base, legacy) in [
+        ("00", "00", NumericBase::Octal, true),
+        ("017;", "017", NumericBase::Octal, true),
+        ("0777.toString()", "0777", NumericBase::Octal, true),
+        // A legacy octal literal takes no fraction, so `.5` is a new token.
+        ("07.5", "07", NumericBase::Octal, true),
+        ("08", "08", NumericBase::Decimal, true),
+        ("0789", "0789", NumericBase::Decimal, true),
+        ("09.5", "09.5", NumericBase::Decimal, true),
+        ("08.1_2e-3", "08.1_2e-3", NumericBase::Decimal, true),
+        ("019e1", "019e1", NumericBase::Decimal, true),
+        ("0", "0", NumericBase::Decimal, false),
+        ("0.5", "0.5", NumericBase::Decimal, false),
+        ("0o17", "0o17", NumericBase::Octal, false),
+    ] {
+        let result = scan(text).unwrap();
+        assert_eq!(source(text).slice(result.span).unwrap(), literal, "{text}");
+        assert_eq!(
+            (result.base, result.kind, result.legacy_octal),
+            (base, NumericKind::Number, legacy),
+            "{text}"
+        );
+    }
+    for (text, offset, kind) in [
+        ("07n", 2, LexicalErrorKind::InvalidNumericContinuation),
+        ("08n", 2, LexicalErrorKind::InvalidNumericContinuation),
+        ("07e1", 2, LexicalErrorKind::InvalidNumericContinuation),
+        ("00e2", 2, LexicalErrorKind::InvalidNumericContinuation),
+        ("07_1", 2, LexicalErrorKind::InvalidNumericSeparator),
+        ("08_1", 2, LexicalErrorKind::InvalidNumericSeparator),
+        ("0_7", 1, LexicalErrorKind::InvalidNumericSeparator),
+    ] {
+        assert_eq!(scan(text), Err(error(offset, kind)), "{text}");
+    }
+    let limits = LexicalLimits {
+        max_number_bytes: 3,
+        ..LexicalLimits::default()
+    };
+    assert!(scan_js_number(&source("012"), 0, LegacyOctal::Permit, limits).is_ok());
+    assert_eq!(
+        scan_js_number(&source("0123"), 0, LegacyOctal::Permit, limits),
+        Err(error(3, LexicalErrorKind::NumberLimit))
+    );
+}
+
+#[test]
 fn numeric_boundaries_use_pinned_unicode_identifier_starts() {
     for suffix in ["é", "中", "\u{2118}", "\u{309b}", "\u{3d000}"] {
         assert_eq!(
-            scan_js_number(&source(&format!("1{suffix}")), 0, LexicalLimits::default()),
+            scan_js_number(
+                &source(&format!("1{suffix}")),
+                0,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(error(1, LexicalErrorKind::InvalidNumericContinuation)),
             "{suffix}"
         );
@@ -149,7 +221,8 @@ fn numeric_boundaries_use_pinned_unicode_identifier_starts() {
         "\u{180e}", "\u{2e2f}", "€",
     ] {
         let input = source(&format!("0x1n{suffix}"));
-        let result = scan_js_number(&input, 0, LexicalLimits::default()).unwrap();
+        let result =
+            scan_js_number(&input, 0, LegacyOctal::Reject, LexicalLimits::default()).unwrap();
         assert_eq!(result.span, Span::new(0, 4).unwrap(), "{suffix}");
     }
     for suffix in [
@@ -181,13 +254,15 @@ fn numeric_boundaries_use_pinned_unicode_identifier_starts() {
     ] {
         for literal in ["1", "0b1", "0xF", "1n"] {
             let input = source(&format!("{literal}{suffix}"));
-            let result = scan_js_number(&input, 0, LexicalLimits::default()).unwrap();
+            let result =
+                scan_js_number(&input, 0, LegacyOctal::Reject, LexicalLimits::default()).unwrap();
             assert_eq!(input.slice(result.span).unwrap(), literal);
         }
     }
     for (text, expected) in [("1..field", "1."), ("0x1.field", "0x1"), ("1n.field", "1n")] {
         let input = source(text);
-        let result = scan_js_number(&input, 0, LexicalLimits::default()).unwrap();
+        let result =
+            scan_js_number(&input, 0, LegacyOctal::Reject, LexicalLimits::default()).unwrap();
         assert_eq!(input.slice(result.span).unwrap(), expected);
     }
 }
@@ -198,7 +273,12 @@ fn offsets_and_byte_limits_are_checked_before_consumption() {
         "", ".", "...", "+1", "-1", "Infinity", "NaN", "_1", "é", ".x",
     ] {
         assert_eq!(
-            scan_js_number(&source(text), 0, LexicalLimits::default()),
+            scan_js_number(
+                &source(text),
+                0,
+                LegacyOctal::Reject,
+                LexicalLimits::default()
+            ),
             Err(error(0, LexicalErrorKind::ExpectedNumber))
         );
     }
@@ -208,6 +288,7 @@ fn offsets_and_byte_limits_are_checked_before_consumption() {
             scan_js_number(
                 &input,
                 offset,
+                LegacyOctal::Reject,
                 LexicalLimits {
                     max_number_bytes: 0,
                     ..LexicalLimits::default()
@@ -220,7 +301,12 @@ fn offsets_and_byte_limits_are_checked_before_consumption() {
         );
     }
     assert_eq!(
-        scan_js_number(&input, input.len(), LexicalLimits::default()),
+        scan_js_number(
+            &input,
+            input.len(),
+            LegacyOctal::Reject,
+            LexicalLimits::default()
+        ),
         Err(error(input.len(), LexicalErrorKind::ExpectedNumber))
     );
     for literal in [
@@ -239,6 +325,7 @@ fn offsets_and_byte_limits_are_checked_before_consumption() {
                 scan_js_number(
                     &input,
                     2,
+                    LegacyOctal::Reject,
                     LexicalLimits {
                         max_number_bytes: limit,
                         ..LexicalLimits::default()
@@ -252,6 +339,7 @@ fn offsets_and_byte_limits_are_checked_before_consumption() {
             scan_js_number(
                 &input,
                 2,
+                LegacyOctal::Reject,
                 LexicalLimits {
                     max_number_bytes: literal.len(),
                     ..LexicalLimits::default()
@@ -265,14 +353,24 @@ fn offsets_and_byte_limits_are_checked_before_consumption() {
     }
     let huge = "1".repeat(32_768);
     assert_eq!(
-        scan_js_number(&source(&huge), 0, LexicalLimits::default())
-            .unwrap()
-            .span
-            .len(),
+        scan_js_number(
+            &source(&huge),
+            0,
+            LegacyOctal::Reject,
+            LexicalLimits::default()
+        )
+        .unwrap()
+        .span
+        .len(),
         huge.len()
     );
-    let failure =
-        scan_js_number(&source("1privateSecret"), 0, LexicalLimits::default()).unwrap_err();
+    let failure = scan_js_number(
+        &source("1privateSecret"),
+        0,
+        LegacyOctal::Reject,
+        LexicalLimits::default(),
+    )
+    .unwrap_err();
     assert_eq!(
         failure.to_string(),
         "invalid numeric continuation at byte offset 1"
@@ -283,7 +381,8 @@ fn offsets_and_byte_limits_are_checked_before_consumption() {
 #[test]
 fn a_parser_selected_numeric_span_can_drive_an_exact_edit() {
     let input = source("/* keep */\r\n0xF_Fn; // retained\r\n");
-    let literal = scan_js_number(&input, 12, LexicalLimits::default()).unwrap();
+    let literal =
+        scan_js_number(&input, 12, LegacyOctal::Reject, LexicalLimits::default()).unwrap();
     let rewritten = apply_edits(
         &input,
         &[Edit {
@@ -325,8 +424,11 @@ fn generated_numbers_have_deterministic_results_and_bounded_spans() {
                     max_number_bytes: 3,
                     ..LexicalLimits::default()
                 };
-                let result = scan_js_number(&input, offset, limits);
-                assert_eq!(result, scan_js_number(&input, offset, limits));
+                let result = scan_js_number(&input, offset, LegacyOctal::Reject, limits);
+                assert_eq!(
+                    result,
+                    scan_js_number(&input, offset, LegacyOctal::Reject, limits)
+                );
                 match result {
                     Ok(literal) => {
                         assert_eq!(literal.span.start(), offset);

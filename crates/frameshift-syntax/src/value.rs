@@ -97,7 +97,20 @@ fn escape_unit(chars: &mut Chars<'_>) -> Option<u32> {
         'r' => 0x0d,
         't' => 0x09,
         'v' => 0x0b,
-        '0' => 0,
+        // `\0` and the legacy octal escapes of sloppy strings: up to three
+        // octal digits after 0 to 3, and up to two after 4 to 7.
+        '0'..='7' => {
+            let mut value = ch.to_digit(8).unwrap_or(0);
+            let digits = if ch <= '3' { 3 } else { 2 };
+            for _ in 1..digits {
+                let Some(digit) = chars.clone().next().and_then(|d| d.to_digit(8)) else {
+                    break;
+                };
+                chars.next();
+                value = value * 8 + digit;
+            }
+            value
+        }
         'x' => hex(chars, 2),
         'u' if chars.clone().next() == Some('{') => {
             chars.next();
