@@ -9,7 +9,7 @@
 use frameshift_core::Span;
 
 use crate::{
-    ast::{NodeId, SyntaxNodeKind},
+    ast::{ChildList, NodeId, SyntaxNodeKind},
     jsx::{scan_jsx_identifier, scan_jsx_string, scan_jsx_text},
     punctuator::Punctuator,
 };
@@ -104,7 +104,7 @@ impl<'source> Parser<'source> {
     fn parse_jsx_children(
         &mut self,
         element_start: usize,
-    ) -> Result<(crate::ast::ChildList, usize), ParseError> {
+    ) -> Result<(ChildList, usize), ParseError> {
         let mut children = self.take_list();
         let closing_start = loop {
             match self.text.as_bytes().get(self.cursor) {
@@ -217,7 +217,7 @@ impl<'source> Parser<'source> {
     }
 
     // Parses attributes until `/` or `>`, which stays unconsumed.
-    fn parse_jsx_attributes(&mut self) -> Result<crate::ast::ChildList, ParseError> {
+    fn parse_jsx_attributes(&mut self) -> Result<ChildList, ParseError> {
         let mut attributes = self.take_list();
         loop {
             let attribute = match self.peek_jsx_byte()? {
