@@ -915,22 +915,26 @@ impl Parser<'_> {
         result
     }
 
+    // An object type ends at its own right brace, also when the type is
+    // inside a template substitution, as in `${value as { a: T }}`.
     fn ts_object_type(&mut self) -> Result<NodeId, ParseError> {
-        let mapped = self.lookahead(|parser| {
-            parser.ts_expect('{')?;
-            parser.ts_symbol('+')?;
-            parser.ts_symbol('-')?;
-            parser.consume_word("readonly")?;
-            if !parser.ts_symbol('[')? || !parser.identifier_can_start_here()? {
-                return Ok(false);
+        self.within_braces(|parser| {
+            let mapped = parser.lookahead(|parser| {
+                parser.ts_expect('{')?;
+                parser.ts_symbol('+')?;
+                parser.ts_symbol('-')?;
+                parser.consume_word("readonly")?;
+                if !parser.ts_symbol('[')? || !parser.identifier_can_start_here()? {
+                    return Ok(false);
+                }
+                parser.scan_identifier()?;
+                parser.at_word("in")
+            })?;
+            if mapped {
+                return parser.ts_mapped_type();
             }
-            parser.scan_identifier()?;
-            parser.at_word("in")
-        })?;
-        if mapped {
-            return self.ts_mapped_type();
-        }
-        self.ts_members(Ts::TypeLiteral)
+            parser.ts_members(Ts::TypeLiteral)
+        })
     }
 
     pub(super) fn ts_members(&mut self, kind: Ts) -> Result<NodeId, ParseError> {
@@ -1008,10 +1012,18 @@ impl Parser<'_> {
         &mut self,
         items: &mut Vec<NodeId>,
     ) -> Result<(), ParseError> {
-        self.ts_modifiers(items, false)
+        self.ts_modifiers(items, false).map(|_| ())
     }
 
-    pub(super) fn ts_class_modifiers(&mut self, items: &mut Vec<NodeId>) -> Result<(), ParseError> {
+    /// Parses the modifiers of a class element and reports whether they
+    /// include `static`. `static` and `async` normally stay with the element,
+    /// which records them, but a `static` followed by a TypeScript-only
+    /// modifier, as in `static readonly`, becomes a modifier node too, and
+    /// the caller passes the result on to the element.
+    pub(super) fn ts_class_modifiers(
+        &mut self,
+        items: &mut Vec<NodeId>,
+    ) -> Result<bool, ParseError> {
         self.ts_modifiers(items, true)
     }
 
@@ -1019,10 +1031,36 @@ impl Parser<'_> {
         &mut self,
         items: &mut Vec<NodeId>,
         preserve_runtime: bool,
-    ) -> Result<(), ParseError> {
+    ) -> Result<bool, ParseError> {
+        let mut is_static = false;
         while let Some(token) = self.peek_name()? {
-            if preserve_runtime && matches!(self.slice(token.span), "static" | "async") {
+            if preserve_runtime && self.is_unescaped(token, "async") {
                 break;
+            }
+            if preserve_runtime && self.slice(token.span) == "static" {
+                let before_typescript_modifier = !token.has_escape
+                    && !is_static
+                    && self.lookahead(|parser| {
+                        parser.scan_identifier()?;
+                        Ok(parser.peek_name()?.is_some_and(|next| {
+                            !next.has_escape
+                                && matches!(
+                                    parser.slice(next.span),
+                                    "readonly"
+                                        | "public"
+                                        | "private"
+                                        | "protected"
+                                        | "abstract"
+                                        | "declare"
+                                        | "override"
+                                        | "accessor"
+                                )
+                        }))
+                    })?;
+                if !before_typescript_modifier {
+                    break;
+                }
+                is_static = true;
             }
             if token.has_escape
                 || !matches!(
@@ -1041,9 +1079,12 @@ impl Parser<'_> {
             {
                 break;
             }
+            // Like the compiler, `static` may be followed by a line break,
+            // as it may in JavaScript; the other modifiers may not.
+            let after_line_break = is_static && self.slice(token.span) == "static";
             let is_modifier = self.lookahead(|parser| {
                 parser.scan_identifier()?;
-                Ok(!parser.line_break_before_next()?
+                Ok((after_line_break || !parser.line_break_before_next()?)
                     && (parser.identifier_can_start_here()?
                         || parser.at_char('[')?
                         || matches!(parser.peek_char()?, Some('\'' | '"' | '@'))))
@@ -1054,7 +1095,7 @@ impl Parser<'_> {
             let modifier = self.ts_modifier()?;
             self.push_child(items, modifier)?;
         }
-        Ok(())
+        Ok(is_static)
     }
 
     pub(super) fn ts_type_member(&mut self) -> Result<NodeId, ParseError> {
@@ -1254,6 +1295,79 @@ impl Parser<'_> {
         let result = self.ts_node(Ts::TypedBinding { optional, definite }, start, &items);
         self.recycle_list(items);
         result
+    }
+
+    // The operand of a TypeScript wrapper around an assignment target: a
+    // typed binding or non-null expression, and with `assertions` also an
+    // `as`, `satisfies`, or angle-bracket assertion.
+    pub(super) fn ts_target_operand(&self, id: NodeId, assertions: bool) -> Option<NodeId> {
+        let SyntaxNodeKind::TypeScript { kind, children } = self.node_kind(id) else {
+            return None;
+        };
+        let index = match kind {
+            Ts::TypedBinding { .. } | Ts::NonNull => 0,
+            Ts::As | Ts::Satisfies if assertions => 0,
+            Ts::Assertion if assertions => 1,
+            Ts::As
+            | Ts::Satisfies
+            | Ts::Assertion
+            | Ts::Keyword
+            | Ts::Reference
+            | Ts::QualifiedName
+            | Ts::TypeArguments
+            | Ts::TypeParameters { .. }
+            | Ts::TypeParameter
+            | Ts::Constraint
+            | Ts::DefaultType
+            | Ts::Parenthesized
+            | Ts::Union
+            | Ts::Intersection
+            | Ts::Conditional
+            | Ts::Operator
+            | Ts::Infer
+            | Ts::Array
+            | Ts::IndexedAccess
+            | Ts::Tuple
+            | Ts::TupleElement { .. }
+            | Ts::Literal
+            | Ts::Template
+            | Ts::TemplateSegment
+            | Ts::Query
+            | Ts::ImportType
+            | Ts::TypeLiteral
+            | Ts::Mapped
+            | Ts::NameRemapping
+            | Ts::PropertySignature { .. }
+            | Ts::MethodSignature { .. }
+            | Ts::CallSignature
+            | Ts::ConstructSignature
+            | Ts::IndexSignature
+            | Ts::FunctionType
+            | Ts::ConstructorType
+            | Ts::Predicate { .. }
+            | Ts::Annotation
+            | Ts::Parameter { .. }
+            | Ts::Modifier
+            | Ts::Decorator
+            | Ts::TypeAlias
+            | Ts::Interface
+            | Ts::Heritage
+            | Ts::Enum
+            | Ts::EnumMember
+            | Ts::Namespace
+            | Ts::NamespaceBody
+            | Ts::ImportEquals
+            | Ts::ExternalModuleReference
+            | Ts::TypeOnly
+            | Ts::ExportAssignment
+            | Ts::NamespaceExport
+            | Ts::ModifiedDeclaration
+            | Ts::GenericDeclaration
+            | Ts::BodylessFunction
+            | Ts::Instantiation
+            | Ts::JSDoc => return None,
+        };
+        self.children.get(children.range().start + index).copied()
     }
 
     pub(super) fn ts_unwrap_binding(&self, mut id: NodeId) -> NodeId {
@@ -1724,17 +1838,22 @@ impl Parser<'_> {
         } else {
             self.ts_try(|parser| {
                 let args = parser.ts_type_arguments()?;
+                // The pinned compiler re-scans the closing `>` together with
+                // a directly following `>` or `=` into one operator, so such
+                // a list is no type argument list: `f<T>= x` and
+                // `a < b, c >= d` compare.
+                if parser.text.as_bytes().get(parser.cursor) == Some(&b'=') {
+                    return Ok(None);
+                }
                 // TypeScript's `canFollowTypeArgumentsInExpression` decides
                 // whether `a < b > c` compares or instantiates: a call, a
                 // tagged template, or a property access takes the type
                 // arguments, and so does any token that cannot start an
                 // expression, any binary operator (including `=`, `in`,
                 // `as`, and `satisfies`), or any token after a line break.
-                // The pinned compiler scans a `>` without merging it with a
-                // following `>` or `=`, so a follower that starts with `>`
-                // is always its `>` token and keeps the comparison, as do
-                // `<`, `+`, and `-` in their single-character forms, while
-                // `<=` and `<<` arrive as one token and instantiate.
+                // A follower that starts with `>` keeps the comparison, as
+                // do `<`, `+`, and `-` in their single-character forms,
+                // while `<=` and `<<` arrive as one token and instantiate.
                 if parser.at_punctuator(Punctuator::LeftParen)?
                     || parser.at_punctuator(Punctuator::Dot)?
                     || parser.at_char('`')?

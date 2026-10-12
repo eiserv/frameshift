@@ -234,7 +234,9 @@ impl<'source> Parser<'source> {
             if self.at_end()? {
                 return Err(self.error(self.cursor, ParseErrorKind::ExpectedClosingBrace));
             }
-            if let Some(element) = self.parse_class_element(derived, &mut constructor_seen)? {
+            if let Some(element) =
+                self.parse_class_element(derived, &mut constructor_seen, false)?
+            {
                 self.push_child(&mut elements, element)?;
             }
         }
@@ -244,10 +246,13 @@ impl<'source> Parser<'source> {
         self.add_node(SyntaxNodeKind::ClassBody { elements }, span)
     }
 
+    // `modifier_static` reports a `static` that the TypeScript modifiers
+    // before this element consumed.
     fn parse_class_element(
         &mut self,
         derived: bool,
         constructor_seen: &mut bool,
+        modifier_static: bool,
     ) -> Result<Option<NodeId>, ParseError> {
         self.skip_trivia()?;
         let start = self.cursor;
@@ -257,10 +262,10 @@ impl<'source> Parser<'source> {
                 let decorator = self.ts_decorator()?;
                 self.push_child(&mut modifiers, decorator)?;
             }
-            self.ts_class_modifiers(&mut modifiers)?;
+            let is_static = self.ts_class_modifiers(&mut modifiers)? || modifier_static;
             if !modifiers.is_empty() {
                 self.enter()?;
-                let element = self.parse_class_element(derived, constructor_seen);
+                let element = self.parse_class_element(derived, constructor_seen, is_static);
                 self.leave();
                 let element = element?.ok_or_else(|| {
                     self.error(self.cursor, ParseErrorKind::InvalidTypeScriptSyntax)
@@ -285,7 +290,7 @@ impl<'source> Parser<'source> {
         {
             return Ok(None);
         }
-        let mut is_static = false;
+        let mut is_static = modifier_static;
         if let Some(token) = self.peek_name()?
             && self.is_unescaped(token, "static")
         {

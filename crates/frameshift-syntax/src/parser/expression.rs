@@ -506,6 +506,11 @@ impl<'source> Parser<'source> {
         self.skip_trivia()?;
         let offset = self.cursor;
         if self.typescript && (self.at_char('(')? || self.at_char('<')?) {
+            // The compiler scans `<<` as one shift operator, so it never
+            // begins an assertion or a generic arrow function.
+            if self.text[offset..].starts_with("<<") {
+                return Err(self.error(offset, ParseErrorKind::ExpectedExpression));
+            }
             if let Some(arrow) = self.ts_try_arrow(offset, false, arrow_allowed)? {
                 return Ok(arrow);
             }

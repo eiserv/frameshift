@@ -76,9 +76,31 @@ impl<'source> Parser<'source> {
         id: NodeId,
         web_compat: bool,
     ) -> Result<(), ParseError> {
-        let mut current = self.ts_unwrap_binding(id);
-        while let SyntaxNodeKind::Parenthesized { expression } = self.node_kind(current) {
-            current = expression;
+        self.check_target_operand(id, web_compat, false)
+    }
+
+    // Like the compiler, TypeScript's non-null expressions wrap a simple
+    // target anywhere, and `as`, `satisfies`, and angle-bracket assertions
+    // wrap one inside parentheses or as a destructuring element, where
+    // `assertions` permits them: `(x as T) = y` and `[x as T] = y` assign to
+    // `x`, while `x as T = y` is a syntax error.
+    fn check_target_operand(
+        &self,
+        id: NodeId,
+        web_compat: bool,
+        assertions: bool,
+    ) -> Result<(), ParseError> {
+        let mut current = id;
+        let mut assertions = assertions;
+        loop {
+            if let SyntaxNodeKind::Parenthesized { expression } = self.node_kind(current) {
+                assertions = true;
+                current = expression;
+            } else if let Some(operand) = self.ts_target_operand(current, assertions) {
+                current = operand;
+            } else {
+                break;
+            }
         }
         let strict = self.context.strict;
         let kind = self.node_kind(current);
@@ -236,8 +258,10 @@ impl<'source> Parser<'source> {
             if matches!(kind, SyntaxNodeKind::Member { .. }) && !self.is_optional_chain(id) {
                 return Ok(());
             }
-            if matches!(kind, SyntaxNodeKind::Parenthesized { .. }) {
-                return self.check_simple_target(id, false);
+            if matches!(kind, SyntaxNodeKind::Parenthesized { .. })
+                || self.ts_target_operand(id, true).is_some()
+            {
+                return self.check_target_operand(id, false, true);
             }
         }
         if let SyntaxNodeKind::ArrayExpression {

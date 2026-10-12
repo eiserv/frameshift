@@ -415,6 +415,51 @@ fn instantiation_followers_and_property_access_match_the_pinned_compiler() {
     );
 }
 
+fn rejects(text: &str, kind: frameshift_engine::ParseErrorKind) {
+    let source = input(text);
+    let error = parse_js_program(
+        &source,
+        SourceGoal::Module,
+        JsDialect::TypeScript,
+        ParseLimits::default(),
+    )
+    .err()
+    .unwrap_or_else(|| panic!("accepted {text}"));
+    assert_eq!(error.kind, kind, "{text}");
+}
+
+#[test]
+fn generated_corpus_regressions_match_the_pinned_compiler() {
+    use frameshift_engine::ParseErrorKind;
+    // Regressions found with the generated TypeScript corpus (D-043). Each
+    // verdict was compared with the pinned compiler, whose checker accepts
+    // the assignments below.
+    // TypeScript modifiers may follow `static`, also after a line break.
+    ts(
+        "class A { static readonly a = 1; static override b = 2; declare private static readonly c: number; }",
+    );
+    ts("class A { public static override readonly a = 1; static\nreadonly b = 2; }");
+    ts("class A { static readonly #a = 1; static m() { return A.#a; } static readonly = 3; }");
+    // An object type ends at its own brace inside a template substitution.
+    ts("const a = `${new Map<string, { a: T }>()}${x as { [K in keyof T]: T[K] }}`;");
+    ts("const a = `${(y: { b: number }) => y}${<{ c: T }>z}`;");
+    // A `>` directly followed by `=` is re-scanned into `>=`, so the list
+    // is no type argument list.
+    ts("const a = f<T>= x; b = \"s\" < b, c >= d;");
+    rejects("const a = f<T>== x;", ParseErrorKind::ExpectedExpression);
+    // Assertions wrap an assignment target inside parentheses or as a
+    // destructuring element, never directly.
+    ts("(x as any) = y; (<any>x) = y; (x as any)++; [x as any] = y; ({ a: x as any } = y);");
+    rejects("x as any = y;", ParseErrorKind::InvalidAssignmentTarget);
+    rejects("<any>x = y;", ParseErrorKind::InvalidAssignmentTarget);
+    // `<<` is a shift operator and begins no assertion.
+    ts("const a = < <T>() => T>y; f<<T>() => T>(y);");
+    rejects(
+        "const a = <<T>() => T>y;",
+        ParseErrorKind::ExpectedExpression,
+    );
+}
+
 #[test]
 fn malformed_types_never_produce_a_partial_tree() {
     for text in [
