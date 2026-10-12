@@ -216,6 +216,14 @@ struct Parser<'source> {
     template_expression_depth: usize,
     // Whether the trivia before the next token contains a line terminator.
     line_break_before: bool,
+    // Lookahead caches. The grammar peeks at the next token several times
+    // before consuming it, and scans are pure functions of the offset and the
+    // requested context, so a repeated peek reuses the last result. A skip
+    // stops before a non-trivia character, so skipping again at the offset
+    // where the last successful skip stopped changes nothing.
+    trivia_end: Option<usize>,
+    peeked_identifier: Option<(usize, IdentifierToken)>,
+    peeked_punctuator: Option<(usize, JsLexicalGoal, Option<PunctuatorToken>)>,
     // The `[~In]` grammar parameter: `in` is not a binary operator here.
     no_in: bool,
     context: Context,
@@ -285,6 +293,9 @@ impl<'source> Parser<'source> {
             token_count: 0,
             template_expression_depth: 0,
             line_break_before: false,
+            trivia_end: None,
+            peeked_identifier: None,
+            peeked_punctuator: None,
             no_in: false,
             context,
             jumps: JumpTargets::default(),
@@ -486,6 +497,9 @@ impl<'source> Parser<'source> {
     }
 
     fn skip_trivia(&mut self) -> Result<(), ParseError> {
+        if self.trivia_end == Some(self.cursor) {
+            return Ok(());
+        }
         let remaining = self
             .limits
             .lexical
@@ -530,6 +544,7 @@ impl<'source> Parser<'source> {
                 }
             }
         }
+        self.trivia_end = Some(self.cursor);
         Ok(())
     }
 
@@ -555,8 +570,15 @@ impl<'source> Parser<'source> {
 
     fn peek_identifier(&mut self) -> Result<IdentifierToken, ParseError> {
         self.skip_trivia()?;
-        scan_js_identifier(self.source, self.cursor, self.limits.lexical)
-            .map_err(parse_lexical_error)
+        if let Some((offset, token)) = self.peeked_identifier
+            && offset == self.cursor
+        {
+            return Ok(token);
+        }
+        let token = scan_js_identifier(self.source, self.cursor, self.limits.lexical)
+            .map_err(parse_lexical_error)?;
+        self.peeked_identifier = Some((self.cursor, token));
+        Ok(token)
     }
 
     // Returns the next token if it is an identifier name, without consuming it.
@@ -600,7 +622,13 @@ impl<'source> Parser<'source> {
         goal: JsLexicalGoal,
     ) -> Result<Option<PunctuatorToken>, ParseError> {
         self.skip_trivia()?;
-        scan_js_punctuator(
+        if let Some((offset, cached_goal, token)) = self.peeked_punctuator
+            && offset == self.cursor
+            && cached_goal == goal
+        {
+            return Ok(token);
+        }
+        let token = scan_js_punctuator(
             self.source,
             self.cursor,
             PunctuatorContext {
@@ -608,7 +636,9 @@ impl<'source> Parser<'source> {
                 greater_than: GreaterThanMode::LongestMatch,
             },
         )
-        .map_err(parse_lexical_error)
+        .map_err(parse_lexical_error)?;
+        self.peeked_punctuator = Some((self.cursor, goal, token));
+        Ok(token)
     }
 
     fn at_punctuator(&mut self, expected: Punctuator) -> Result<bool, ParseError> {
