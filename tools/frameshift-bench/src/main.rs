@@ -1,16 +1,17 @@
 //! Development-only measurement harness for experiment E1 (`D-040`, `D-043`).
 //!
 //! It generates deterministic corpora of fictional JavaScript, JSX, and
-//! TypeScript,
-//! parses them through the engine facade, and reports parser throughput and peak heap
+//! TypeScript. It parses them through the engine facade and reports throughput and peak heap
 //! memory against the E1 budgets in `docs/ENGINEERING.md` (section 4.1).
 //! With `--dir`, it reads the JavaScript and TypeScript files of a directory
 //! instead and also reports which of them parse. Timing depends on the
 //! machine, and budgets are judged on the reference hardware. The tool writes
 //! no files, starts no processes, and performs no network access. No product
 //! crate depends on it.
+//! `--check` validates generated parser and empty-edit contracts without timing.
 
 mod alloc;
+mod check;
 mod corpus;
 mod directory;
 mod measure;
@@ -46,12 +47,14 @@ const DEFAULT_ITERATIONS: usize = 5;
 const SCALING_KIB: [usize; 7] = [1, 4, 16, 64, 256, 1_024, 4_096];
 
 const USAGE: &str = "usage: frameshift-bench [--seed <n>] [--files <n>] [--iterations <n>]\n       \
+                     frameshift-bench --check [--seed <n>] [--files <n>]\n       \
                      frameshift-bench --dir <path> [--iterations <n>]\n       \
                      frameshift-bench --print <index> [--seed <n>] [--files <n>]\n       \
                      frameshift-bench --print-component <index> [--seed <n>] [--files <n>]\n       \
                      frameshift-bench --print-typescript <index> [--seed <n>] [--files <n>]";
 
 struct Options {
+    check: bool,
     seed: u64,
     files: usize,
     iterations: usize,
@@ -86,6 +89,15 @@ fn main() -> ExitCode {
     let corpus = Corpus::mixed(options.seed, options.files);
     let components = Corpus::components(options.seed, options.files);
     let typescript = Corpus::typescript(options.seed, options.files);
+    if options.check {
+        return match run_checks(&options, &corpus, &components, &typescript) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("frameshift-bench: {message}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let printed = match (
         options.print,
         options.print_component,
@@ -124,6 +136,7 @@ fn main() -> ExitCode {
 
 fn parse_options(mut args: impl Iterator<Item = String>) -> Result<Options, String> {
     let mut options = Options {
+        check: false,
         seed: DEFAULT_SEED,
         files: DEFAULT_FILES,
         iterations: DEFAULT_ITERATIONS,
@@ -133,6 +146,10 @@ fn parse_options(mut args: impl Iterator<Item = String>) -> Result<Options, Stri
         directory: None,
     };
     while let Some(flag) = args.next() {
+        if flag == "--check" {
+            options.check = true;
+            continue;
+        }
         let value = args
             .next()
             .ok_or_else(|| format!("{flag} requires a value"))?;
@@ -155,7 +172,51 @@ fn parse_options(mut args: impl Iterator<Item = String>) -> Result<Options, Stri
     if options.files == 0 || options.iterations == 0 {
         return Err("--files and --iterations must be positive".to_owned());
     }
+    let modes = [
+        options.check,
+        options.directory.is_some(),
+        options.print.is_some(),
+        options.print_component.is_some(),
+        options.print_typescript.is_some(),
+    ];
+    if modes.into_iter().filter(|&selected| selected).count() > 1 {
+        return Err(
+            "choose only one of --check, --dir, --print, --print-component, and --print-typescript"
+                .to_owned(),
+        );
+    }
     Ok(options)
+}
+
+fn run_checks(
+    options: &Options,
+    mixed: &Corpus,
+    components: &Corpus,
+    typescript: &Corpus,
+) -> Result<(), String> {
+    println!(
+        "frameshift-bench: E1 corpus contract check, generator v{GENERATOR_VERSION}, seed {:#x}",
+        options.seed
+    );
+    for (label, corpus) in [
+        ("mixed", mixed),
+        ("components", components),
+        ("typescript", typescript),
+    ] {
+        let checked = check::corpus(&corpus.files).map_err(|error| format!("{label}, {error}"))?;
+        println!(
+            "  {label}: {} files, {} bytes, {} nodes, {} comments, fingerprint {:016x}",
+            checked.files,
+            checked.bytes,
+            checked.nodes,
+            checked.comments,
+            corpus.fingerprint()
+        );
+    }
+    println!(
+        "checked: complete source spans, reachable source-ordered trees, template and comment spans, repeated parses, byte-exact empty edits and provenance"
+    );
+    Ok(())
 }
 
 fn parse_number(text: &str) -> Option<u64> {
@@ -468,21 +529,7 @@ fn print_timing(label: &str, bytes: usize, timing: &Timing, budget: bool) {
 }
 
 fn print_file_memory(files: &[FileMemory]) {
-    let bytes: usize = files.iter().map(|file| file.bytes).sum();
-    let nodes: usize = files.iter().map(|file| file.nodes).sum();
-    let comments: usize = files.iter().map(|file| file.comments).sum();
-    println!(
-        "  syntax               {} nodes ({:.3} per byte), {} comments",
-        grouped(nodes),
-        nodes as f64 / bytes as f64,
-        grouped(comments)
-    );
-    let default_nodes = ParseLimits::default().max_nodes;
-    println!(
-        "  node limit           the default {} nodes are reached at about {} KB of this mix",
-        grouped(default_nodes),
-        grouped((default_nodes as f64 * bytes as f64 / nodes as f64 / 1_000.0) as usize)
-    );
+    print!("{}", syntax_summary(files));
     // An empty file has no meaningful ratio to its size; real directories
     // contain some.
     let empty = files.iter().filter(|file| file.bytes == 0).count();
@@ -522,6 +569,31 @@ fn print_file_memory(files: &[FileMemory]) {
     );
 }
 
+fn syntax_summary(files: &[FileMemory]) -> String {
+    let bytes: usize = files.iter().map(|file| file.bytes).sum();
+    let nodes: usize = files.iter().map(|file| file.nodes).sum();
+    let comments: usize = files.iter().map(|file| file.comments).sum();
+    if bytes == 0 {
+        return format!(
+            "  syntax               {} nodes, {} comments; no source bytes\n",
+            grouped(nodes),
+            grouped(comments)
+        );
+    }
+    let summary = format!(
+        "  syntax               {} nodes ({:.3} per byte), {} comments",
+        grouped(nodes),
+        nodes as f64 / bytes as f64,
+        grouped(comments)
+    );
+    let default_nodes = ParseLimits::default().max_nodes;
+    format!(
+        "{summary}\n  node limit           the default {} nodes are reached at about {} KB of this mix\n",
+        grouped(default_nodes),
+        grouped((default_nodes as f64 * bytes as f64 / nodes as f64 / 1_000.0) as usize)
+    )
+}
+
 fn rate(bytes: usize, duration: Duration) -> f64 {
     bytes as f64 / duration.as_secs_f64() / 1e6
 }
@@ -549,6 +621,21 @@ fn grouped(value: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_sources_have_no_node_density_or_size_estimate() {
+        let files = [FileMemory {
+            bytes: 0,
+            nodes: 1,
+            comments: 0,
+            peak: 672,
+            retained: 352,
+        }];
+        assert_eq!(
+            syntax_summary(&files),
+            "  syntax               1 nodes, 0 comments; no source bytes\n"
+        );
+    }
 
     fn options(args: &[&str]) -> Result<Options, String> {
         parse_options(args.iter().map(|arg| (*arg).to_owned()))
@@ -579,6 +666,25 @@ mod tests {
             (defaults.seed, defaults.files, defaults.iterations),
             (DEFAULT_SEED, DEFAULT_FILES, DEFAULT_ITERATIONS)
         );
+        let checked =
+            options(&["--check", "--seed", "0x1f", "--files", "12"]).expect("check options");
+        assert!(checked.check);
+        assert_eq!((checked.seed, checked.files), (31, 12));
+    }
+
+    #[test]
+    fn conflicting_modes_are_rejected() {
+        for args in [
+            &["--check", "--dir", "sample"][..],
+            &["--check", "--print", "0"],
+            &["--check", "--print-component", "0"],
+            &["--check", "--print-typescript", "0"],
+            &["--dir", "sample", "--print", "0"],
+            &["--print", "0", "--print-component", "0"],
+            &["--print-component", "0", "--print-typescript", "0"],
+        ] {
+            assert!(options(args).is_err(), "{args:?}");
+        }
     }
 
     #[test]

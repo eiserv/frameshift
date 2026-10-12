@@ -2009,7 +2009,6 @@ fn capitalize(word: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use frameshift_engine::{ParseLimits, SourceText, TextLimits, parse_js_program};
 
     #[test]
     fn rng_matches_the_splitmix64_reference_sequence() {
@@ -2073,28 +2072,16 @@ mod tests {
         assert_eq!(corpus.fingerprint(), 0x607A_5FF6_0744_ECD6);
     }
 
-    // The harness rejects a corpus with a syntax error; this keeps generator
-    // changes from reaching it.
+    // Generator changes must also preserve the parser and rewriting contracts
+    // exercised by the standalone --check mode.
     #[test]
-    fn generated_files_parse_in_their_goal() {
+    fn generated_files_preserve_parser_and_rewriting_contracts() {
         for seed in 0..40 {
             let mut corpus = Corpus::mixed(seed, 6);
             corpus.files.extend(Corpus::components(seed, 6).files);
             corpus.files.extend(Corpus::typescript(seed, 6).files);
-            for (index, file) in corpus.files.iter().enumerate() {
-                let source = SourceText::new(file.text.clone(), TextLimits::default())
-                    .expect("generated text is within the default limits");
-                if let Err(error) =
-                    parse_js_program(&source, file.goal, file.dialect, ParseLimits::default())
-                {
-                    let start = error.offset.saturating_sub(80);
-                    let end = (error.offset + 80).min(file.text.len());
-                    panic!(
-                        "seed {seed}, file {index}: {error:?}\n{}",
-                        file.text.get(start..end).unwrap_or_default()
-                    );
-                }
-            }
+            crate::check::corpus(&corpus.files)
+                .unwrap_or_else(|error| panic!("seed {seed}: {error}"));
         }
     }
 }
