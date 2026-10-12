@@ -23,6 +23,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "frameshift-entity-gen"
+version = "0.0.0"
+
+[[package]]
 name = "frameshift-syntax"
 version = "0.0.0"
 dependencies = [

@@ -8,12 +8,15 @@ mod lexical;
 mod numeric;
 mod parser;
 mod punctuator;
+mod reference;
 mod regexp;
 mod regexp_pattern;
 mod regexp_property;
 mod template;
 mod unicode;
 mod value;
+#[rustfmt::skip]
+mod entity_tables;
 #[rustfmt::skip]
 mod unicode_tables;
 
@@ -38,6 +41,10 @@ pub use parser::{
 pub use punctuator::{
     GreaterThanMode, JsLexicalGoal, Punctuator, PunctuatorContext, PunctuatorToken,
     scan_js_punctuator,
+};
+pub use reference::{
+    HtmlCharacterReference, HtmlReferenceContext, HtmlReferenceValue, JsxCharacterReference,
+    decode_html_character_reference, decode_jsx_character_reference,
 };
 pub use regexp::{
     RegExpFlag, RegExpFlags, RegExpLiteral, RegExpToken, scan_js_regexp, validate_js_regexp,

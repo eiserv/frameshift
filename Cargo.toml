@@ -5,6 +5,7 @@ members = [
     "crates/frameshift-transform",
     "crates/frameshift-engine",
     "tools/frameshift-bench",
+    "tools/frameshift-entity-gen",
     "tools/frameshift-unicode-gen",
 ]
 resolver = "3"

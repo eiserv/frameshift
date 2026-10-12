@@ -3,21 +3,23 @@
 //! This M0 API exposes source positions, lexical primitives, a JavaScript
 //! parser for Script and Module source text with an optional JSX dialect,
 //! regular-expression validation, pinned Unicode identifier classification,
-//! and span rewriting. It contains no project inspection, TypeScript parser,
+//! character reference decoding with pinned tables, and span rewriting. It contains no project inspection, TypeScript parser,
 //! migration, or verification pipeline. Future CLI code must depend on this
 //! facade rather than lower layers.
 
 pub use frameshift_core::{Position, SourceText, Span, TextError, TextLimits};
 pub use frameshift_syntax::{
     AssignmentOperator, BinaryOperator, ChildList, ChildNodes, Comment, CommentKind, FunctionKind,
-    GreaterThanMode, IdentifierKind, IdentifierToken, JsDialect, JsLexicalGoal, JsxStringToken,
-    LegacyOctal, LexicalError, LexicalErrorKind, LexicalLimits, MetaPropertyKind, MethodKind,
-    NodeId, NumericBase, NumericKind, NumericLiteral, ParseError, ParseErrorKind, ParseLimits,
-    Punctuator, PunctuatorContext, PunctuatorToken, RegExpFlag, RegExpFlags, RegExpLiteral,
-    RegExpPatternError, RegExpToken, ReservedWord, ReservedWordClass, SourceGoal, StrictModeError,
-    StringToken, SyntaxNode, SyntaxNodeKind, SyntaxTree, TemplateContext, TemplateKind,
-    TemplateMode, TemplatePart, TemplatePartList, TemplatePosition, TemplateToken, Trivia,
-    UNICODE_VERSION, UnaryOperator, UpdateOperator, VariableKind, is_js_identifier_part,
+    GreaterThanMode, HtmlCharacterReference, HtmlReferenceContext, HtmlReferenceValue,
+    IdentifierKind, IdentifierToken, JsDialect, JsLexicalGoal, JsxCharacterReference,
+    JsxStringToken, LegacyOctal, LexicalError, LexicalErrorKind, LexicalLimits, MetaPropertyKind,
+    MethodKind, NodeId, NumericBase, NumericKind, NumericLiteral, ParseError, ParseErrorKind,
+    ParseLimits, Punctuator, PunctuatorContext, PunctuatorToken, RegExpFlag, RegExpFlags,
+    RegExpLiteral, RegExpPatternError, RegExpToken, ReservedWord, ReservedWordClass, SourceGoal,
+    StrictModeError, StringToken, SyntaxNode, SyntaxNodeKind, SyntaxTree, TemplateContext,
+    TemplateKind, TemplateMode, TemplatePart, TemplatePartList, TemplatePosition, TemplateToken,
+    Trivia, UNICODE_VERSION, UnaryOperator, UpdateOperator, VariableKind,
+    decode_html_character_reference, decode_jsx_character_reference, is_js_identifier_part,
     is_js_identifier_start, parse_js_expression, parse_js_program, scan_js_identifier,
     scan_js_number, scan_js_punctuator, scan_js_regexp, scan_js_string, scan_js_template,
     scan_js_trivia, scan_jsx_identifier, scan_jsx_string, scan_jsx_text, validate_js_regexp,

@@ -203,7 +203,7 @@ To be completed before the repository becomes public:
 - [ ] Choose and add a license. Confirm that every dependency and vendored file is compatible with it (`DF-003`).
 - [ ] Decide on contribution terms (Developer Certificate of Origin or a contributor agreement), and add `CONTRIBUTING.md` and a code of conduct.
 - [ ] Turn this document into a public security policy with a private reporting channel (GitHub private vulnerability reporting).
-- [ ] Generate `THIRD_PARTY_NOTICES.md` from the dependencies actually shipped and any vendored code or data, including the notice for the Unicode-derived identifier and property value tables (`D-036`, `D-037`). This item is due before the first distributed binary, even in the private phase.
+- [ ] Generate `THIRD_PARTY_NOTICES.md` from the dependencies actually shipped and any vendored code or data, including the notices for the Unicode-derived identifier and property value tables (`D-036`, `D-037`) and for the character reference tables derived from the WHATWG HTML Standard (CC BY 4.0) and the XHTML 1.0 entity sets (ISO 8879 notice) (`D-041`). This item is due before the first distributed binary, even in the private phase.
 - [ ] Review the licensing of test data: fixtures, conformance suites, and any committed third-party material.
 - [ ] Audit dependencies and run vulnerability scans.
 - [ ] Scan the full Git history for secrets and remove any findings (history rewrite if necessary).
