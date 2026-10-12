@@ -174,7 +174,7 @@ Textual replacement (regular expressions, string search) is excluded for transfo
 
 | Format | Purpose | Notes |
 | --- | --- | --- |
-| JavaScript, TypeScript, JSX, TSX (`.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.mts`, `.cts`, `.tsx`) | Source code analysis and transformation | Full syntax coverage required. Types are parsed completely into structured nodes with exact spans and preserved without type checking (`D-042`). |
+| JavaScript, TypeScript, JSX, TSX (`.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.mts`, `.cts`, `.tsx`) | Source code analysis and transformation | Full syntax coverage required. Types are parsed completely into structured nodes with exact spans and preserved without type checking (`D-042`). Declaration files (`.d.ts`, `.d.mts`, `.d.cts`) use an ambient dialect that the caller selects (`D-043`). |
 | CSS, SCSS | Imports, `url()` references, CSS Modules class names, Tailwind directives | Tokenizer following the CSS Syntax specification, plus a structural parser. SCSS is supported at the level needed for imports and references. |
 | JSON, JSONC | `package.json`, `tsconfig.json`, `jsconfig.json`, npm and Bun lockfiles | JSONC (comments, trailing commas) is required for TypeScript configuration and `bun.lock`. |
 | YAML subset | `pnpm-lock.yaml`, `pnpm-workspace.yaml`, Yarn Berry lockfiles | A restricted parser for the subset these files use. Anything outside the subset is rejected with a finding. |
