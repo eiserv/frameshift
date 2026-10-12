@@ -2,6 +2,8 @@ use std::fmt;
 
 use frameshift_core::{SourceText, Span, TextError};
 
+use crate::regexp_pattern::RegExpPatternError;
+
 /// Explicit resource bounds for individual lexical scans.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LexicalLimits {
@@ -15,6 +17,9 @@ pub struct LexicalLimits {
     pub max_template_bytes: usize,
     /// Maximum bytes in one identifier, including `#` and escapes, default 1 MiB.
     pub max_identifier_bytes: usize,
+    /// Maximum bytes in one regular-expression literal, including both
+    /// slashes and the flags, default 1 MiB.
+    pub max_regexp_bytes: usize,
 }
 
 impl Default for LexicalLimits {
@@ -25,6 +30,7 @@ impl Default for LexicalLimits {
             max_number_bytes: 1024 * 1024,
             max_template_bytes: 1024 * 1024,
             max_identifier_bytes: 1024 * 1024,
+            max_regexp_bytes: 1024 * 1024,
         }
     }
 }
@@ -107,7 +113,24 @@ pub enum LexicalErrorKind {
     InvalidIdentifierEscape,
     /// The identifier scan would consume more than the allowed number of bytes.
     IdentifierLimit,
-    /// Comment storage could not be reserved.
+    /// A regular-expression scan did not start at a slash, or the slash
+    /// begins a comment.
+    ExpectedRegExp,
+    /// A regular-expression literal reached EOF before its closing slash.
+    UnterminatedRegExp,
+    /// A line terminator occurred inside a regular-expression literal.
+    RegExpLineTerminator,
+    /// A flag is not one of `dgimsuvy`, or a backslash follows the flags.
+    InvalidRegExpFlag,
+    /// A flag occurs more than once.
+    DuplicateRegExpFlag,
+    /// The flags contain both `u` and `v`.
+    IncompatibleRegExpFlags,
+    /// The pattern violates the grammar selected by the flags.
+    InvalidRegExpPattern(RegExpPatternError),
+    /// The regular-expression scan would consume more than the allowed number of bytes.
+    RegExpLimit,
+    /// Scanner storage could not be reserved.
     AllocationFailed,
     /// A scanner produced an invalid range, indicating an internal defect.
     InternalInvariant(TextError),
@@ -149,7 +172,24 @@ impl fmt::Display for LexicalError {
             LexicalErrorKind::ExpectedIdentifier => "expected an identifier",
             LexicalErrorKind::InvalidIdentifierEscape => "invalid identifier escape",
             LexicalErrorKind::IdentifierLimit => "identifier size exceeds lexical limit",
-            LexicalErrorKind::AllocationFailed => "could not allocate comment storage",
+            LexicalErrorKind::ExpectedRegExp => "expected a regular expression",
+            LexicalErrorKind::UnterminatedRegExp => "unterminated regular expression",
+            LexicalErrorKind::RegExpLineTerminator => "line terminator in regular expression",
+            LexicalErrorKind::InvalidRegExpFlag => "invalid regular-expression flag",
+            LexicalErrorKind::DuplicateRegExpFlag => "duplicate regular-expression flag",
+            LexicalErrorKind::IncompatibleRegExpFlags => {
+                "regular-expression flags u and v are incompatible"
+            }
+            LexicalErrorKind::InvalidRegExpPattern(pattern) => {
+                return write!(
+                    f,
+                    "invalid regular expression: {} at byte offset {}",
+                    pattern.message(),
+                    self.offset
+                );
+            }
+            LexicalErrorKind::RegExpLimit => "regular expression size exceeds lexical limit",
+            LexicalErrorKind::AllocationFailed => "could not allocate lexical storage",
             LexicalErrorKind::InternalInvariant(error) => {
                 return write!(f, "internal lexical error at {}: {error}", self.offset);
             }
@@ -185,6 +225,14 @@ impl std::error::Error for LexicalError {
             | LexicalErrorKind::ExpectedIdentifier
             | LexicalErrorKind::InvalidIdentifierEscape
             | LexicalErrorKind::IdentifierLimit
+            | LexicalErrorKind::ExpectedRegExp
+            | LexicalErrorKind::UnterminatedRegExp
+            | LexicalErrorKind::RegExpLineTerminator
+            | LexicalErrorKind::InvalidRegExpFlag
+            | LexicalErrorKind::DuplicateRegExpFlag
+            | LexicalErrorKind::IncompatibleRegExpFlags
+            | LexicalErrorKind::InvalidRegExpPattern(_)
+            | LexicalErrorKind::RegExpLimit
             | LexicalErrorKind::AllocationFailed => None,
         }
     }

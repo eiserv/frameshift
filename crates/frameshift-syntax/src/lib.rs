@@ -5,6 +5,9 @@ mod identifier;
 mod lexical;
 mod numeric;
 mod punctuator;
+mod regexp;
+mod regexp_pattern;
+mod regexp_property;
 mod template;
 mod unicode;
 #[rustfmt::skip]
@@ -22,6 +25,10 @@ pub use punctuator::{
     GreaterThanMode, JsLexicalGoal, Punctuator, PunctuatorContext, PunctuatorToken,
     scan_js_punctuator,
 };
+pub use regexp::{
+    RegExpFlag, RegExpFlags, RegExpLiteral, RegExpToken, scan_js_regexp, validate_js_regexp,
+};
+pub use regexp_pattern::RegExpPatternError;
 pub use template::{
     TemplateContext, TemplateKind, TemplateMode, TemplatePosition, TemplateToken, scan_js_template,
 };

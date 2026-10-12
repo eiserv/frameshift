@@ -1,8 +1,9 @@
-//! Development-only generator for Frameshift's pinned Unicode identifier tables.
+//! Development-only generator for Frameshift's pinned Unicode tables.
 //!
-//! It reads a local copy of the Unicode Character Database file
-//! `DerivedCoreProperties.txt` and writes, or with `--check` compares, the range
-//! tables compiled into `frameshift-syntax`. It performs no network access, and
+//! It reads local copies of the Unicode Character Database files
+//! `DerivedCoreProperties.txt` and `PropertyValueAliases.txt` and writes, or
+//! with `--check` compares, the identifier ranges and property value names
+//! compiled into `frameshift-syntax`. It performs no network access, and
 //! no product crate depends on it. Changing the pinned version is a deliberate
 //! decision, recorded in `docs/DECISIONS.md`.
 
@@ -14,20 +15,28 @@ const UNICODE_VERSION: &str = "18.0.0";
 /// Extracted properties and the Rust constants that hold them.
 const PROPERTIES: [(&str, &str); 2] = [("ID_Start", "ID_START"), ("ID_Continue", "ID_CONTINUE")];
 
-const USAGE: &str =
-    "usage: frameshift-unicode-gen [--check] <DerivedCoreProperties.txt> <unicode_tables.rs>";
+/// Property value sections (short name, long name) and the Rust constants
+/// that hold their value names. Script_Extensions has no values of its own;
+/// ECMAScript uses the Script values for it.
+const VALUE_PROPERTIES: [(&str, &str, &str); 2] = [
+    ("gc", "General_Category", "GENERAL_CATEGORY_VALUES"),
+    ("sc", "Script", "SCRIPT_VALUES"),
+];
+
+const USAGE: &str = "usage: frameshift-unicode-gen [--check] <DerivedCoreProperties.txt> \
+                     <PropertyValueAliases.txt> <unicode_tables.rs>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
-    let (check, input, output) = match args.as_slice() {
-        [input, output] => (false, input, output),
-        [flag, input, output] if flag == "--check" => (true, input, output),
+    let (check, core, aliases, output) = match args.as_slice() {
+        [core, aliases, output] => (false, core, aliases, output),
+        [flag, core, aliases, output] if flag == "--check" => (true, core, aliases, output),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::from(2);
         }
     };
-    match run(check, input, output) {
+    match run(check, core, aliases, output) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("frameshift-unicode-gen: {message}");
@@ -36,22 +45,24 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(check: bool, input: &str, output: &str) -> Result<(), String> {
-    let bytes = fs::read(input).map_err(|error| format!("cannot read {input}: {error}"))?;
-    let input_bytes = bytes.len();
-    let text = String::from_utf8(bytes).map_err(|_| format!("{input} is not UTF-8"))?;
-    let generated = generate(&text, input_bytes)?;
+fn run(check: bool, core: &str, aliases: &str, output: &str) -> Result<(), String> {
+    let generated = generate(&read(core)?, &read(aliases)?)?;
     if check {
         let current =
             fs::read_to_string(output).map_err(|error| format!("cannot read {output}: {error}"))?;
         if current != generated {
             return Err(format!(
-                "{output} differs from the tables generated from {input}"
+                "{output} differs from the tables generated from {core} and {aliases}"
             ));
         }
         return Ok(());
     }
     fs::write(output, generated).map_err(|error| format!("cannot write {output}: {error}"))
+}
+
+fn read(path: &str) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|error| format!("cannot read {path}: {error}"))?;
+    String::from_utf8(bytes).map_err(|_| format!("{path} is not UTF-8"))
 }
 
 struct Property {
@@ -61,19 +72,49 @@ struct Property {
     declared_total: Option<u64>,
 }
 
+struct ValueProperty {
+    name: &'static str,
+    constant: &'static str,
+    values: Vec<String>,
+}
+
+struct Source<'a> {
+    file: &'static str,
+    bytes: usize,
+    header: Vec<&'a str>,
+}
+
 /// Parses, validates, and renders the tables. Pure, so output is a function of
-/// the input text and its byte length only.
-fn generate(text: &str, input_bytes: usize) -> Result<String, String> {
-    let expected = format!("# DerivedCoreProperties-{UNICODE_VERSION}.txt");
+/// the two input texts only.
+fn generate(core: &str, aliases: &str) -> Result<String, String> {
+    let sources = [
+        source(core, "DerivedCoreProperties")?,
+        source(aliases, "PropertyValueAliases")?,
+    ];
+    let (properties, totals) = identifier_ranges(core)?;
+    let values = property_values(aliases)?;
+    Ok(render(&sources, &properties, &totals, &values))
+}
+
+/// Checks the version line and keeps the leading comment lines, which hold
+/// the date and Unicode's copyright and terms notice.
+fn source<'a>(text: &'a str, file: &'static str) -> Result<Source<'a>, String> {
+    let expected = format!("# {file}-{UNICODE_VERSION}.txt");
     if text.lines().next() != Some(expected.as_str()) {
         return Err(format!("the first line must be {expected:?}"));
     }
-    // Leading comment lines hold the date and Unicode's copyright and terms notice.
-    let header: Vec<&str> = text
-        .lines()
-        .skip(1)
-        .map_while(|line| line.strip_prefix("# "))
-        .collect();
+    Ok(Source {
+        file,
+        bytes: text.len(),
+        header: text
+            .lines()
+            .skip(1)
+            .map_while(|line| line.strip_prefix("# "))
+            .collect(),
+    })
+}
+
+fn identifier_ranges(text: &str) -> Result<([Property; 2], Vec<u64>), String> {
     let mut properties = PROPERTIES.map(|(name, constant)| Property {
         name,
         constant,
@@ -136,7 +177,77 @@ fn generate(text: &str, input_bytes: usize) -> Result<String, String> {
             ));
         }
     }
-    Ok(render(&header, input_bytes, &properties, &totals))
+    Ok((properties, totals))
+}
+
+/// Collects every value name and alias of the selected properties. Each data
+/// line lists a short name, a long name, and optional further aliases, all of
+/// which ECMAScript property escapes accept exactly, without loose matching.
+fn property_values(text: &str) -> Result<[ValueProperty; 2], String> {
+    let mut properties = VALUE_PROPERTIES.map(|(_, name, constant)| ValueProperty {
+        name,
+        constant,
+        values: Vec::new(),
+    });
+    let mut section = None;
+    for (index, line) in text.lines().enumerate() {
+        let number = index + 1;
+        if let Some(title) = line.strip_prefix("# ") {
+            // Section titles have the form "# Script (sc)"; other comments do not end in ")".
+            if title.ends_with(')') {
+                section = VALUE_PROPERTIES
+                    .iter()
+                    .position(|&(short, long, _)| title == format!("{long} ({short})"));
+            }
+            continue;
+        }
+        let data = line.split('#').next().unwrap_or_default();
+        let mut fields = data.split(';').map(str::trim);
+        let short = fields.next().unwrap_or_default();
+        let Some(position) = VALUE_PROPERTIES
+            .iter()
+            .position(|&(name, _, _)| name == short)
+        else {
+            continue;
+        };
+        if section != Some(position) {
+            return Err(format!("line {number}: {short} data outside its section"));
+        }
+        let names: Vec<&str> = fields.collect();
+        if names.len() < 2 {
+            return Err(format!(
+                "line {number}: expected a short and a long value name"
+            ));
+        }
+        for (field, &name) in names.iter().enumerate() {
+            // Short and long names may be identical, as in "sc ; Ahom ; Ahom".
+            if names[..field].contains(&name) {
+                continue;
+            }
+            if name.is_empty()
+                || !name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            {
+                return Err(format!("line {number}: invalid value name {name:?}"));
+            }
+            properties[position].values.push(name.to_owned());
+        }
+    }
+    for property in &mut properties {
+        if property.values.is_empty() {
+            return Err(format!("no values for {}", property.name));
+        }
+        // Byte-wise order lets the consumer binary search with `str::cmp`.
+        property.values.sort_unstable();
+        if let Some(pair) = property.values.windows(2).find(|pair| pair[0] == pair[1]) {
+            return Err(format!(
+                "{} repeats the value name {}",
+                property.name, pair[0]
+            ));
+        }
+    }
+    Ok(properties)
 }
 
 fn parse_range(field: &str) -> Result<(u32, u32), String> {
@@ -196,16 +307,24 @@ fn contains(ranges: &[(u32, u32)], first: u32, last: u32) -> bool {
         .is_some_and(|&(start, end)| start <= first && last <= end)
 }
 
-fn render(header: &[&str], input_bytes: usize, properties: &[Property], totals: &[u64]) -> String {
+fn render(
+    sources: &[Source<'_>],
+    properties: &[Property],
+    totals: &[u64],
+    values: &[ValueProperty],
+) -> String {
     let mut out =
         String::from("// @generated by tools/frameshift-unicode-gen. Do not edit by hand.\n");
-    out.push_str(&format!(
-        "// Source: DerivedCoreProperties-{UNICODE_VERSION}.txt, {input_bytes} bytes.\n"
-    ));
-    for line in header {
-        out.push_str(&format!("// {line}\n"));
+    for source in sources {
+        out.push_str(&format!(
+            "// Source: {}-{UNICODE_VERSION}.txt, {} bytes.\n",
+            source.file, source.bytes
+        ));
+        for line in &source.header {
+            out.push_str(&format!("// {line}\n"));
+        }
+        out.push_str("//\n");
     }
-    out.push_str("//\n");
     for (property, total) in properties.iter().zip(totals) {
         out.push_str(&format!(
             "// {}: {total} code points in {} ranges.\n",
@@ -213,7 +332,14 @@ fn render(header: &[&str], input_bytes: usize, properties: &[Property], totals: 
             property.ranges.len()
         ));
     }
-    out.push_str("\n/// The Unicode Character Database version of the identifier tables.\n");
+    for property in values {
+        out.push_str(&format!(
+            "// {}: {} value names and aliases.\n",
+            property.name,
+            property.values.len()
+        ));
+    }
+    out.push_str("\n/// The Unicode Character Database version of these tables.\n");
     out.push_str(&format!(
         "pub const UNICODE_VERSION: &str = \"{UNICODE_VERSION}\";\n"
     ));
@@ -231,6 +357,20 @@ fn render(header: &[&str], input_bytes: usize, properties: &[Property], totals: 
         }
         out.push_str("];\n");
     }
+    for property in values {
+        out.push_str(&format!(
+            "\n/// Byte-wise sorted `{}` value names and aliases.\n",
+            property.name
+        ));
+        out.push_str(&format!(
+            "pub(crate) const {}: &[&str] = &[\n",
+            property.constant
+        ));
+        for value in &property.values {
+            out.push_str(&format!("    \"{value}\",\n"));
+        }
+        out.push_str("];\n");
+    }
     out
 }
 
@@ -240,11 +380,20 @@ mod tests {
 
     const HEADER: &str = "# DerivedCoreProperties-18.0.0.txt\n# Date: fictional\n#\n";
 
+    const ALIASES: &str = "# PropertyValueAliases-18.0.0.txt\n# Date: fictional too\n#\n\
+        \n# General_Category (gc)\n\ngc ; L ; Letter # Ll | Lu\ngc ; Nd ; Decimal_Number ; digit\n\
+        \n# Script (sc)\n\nsc ; Zinh ; Inherited ; Qaai\nsc ; Latn ; Latin\nsc ; Ahom ; Ahom\n\
+        \n# Script_Extensions (scx)\n\n# Other (oth)\noth ; X ; Ignored\n";
+
     fn input(start: &str, start_total: u32, continuation: &str, continuation_total: u32) -> String {
         format!(
             "{HEADER}\n# Derived Property: ID_Start\n{start}\n# Total code points: {start_total}\n\
              \n# Derived Property: ID_Continue\n{continuation}\n# Total code points: {continuation_total}\n"
         )
+    }
+
+    fn valid_core() -> String {
+        input("0041 ; ID_Start", 1, "0041 ; ID_Continue", 1)
     }
 
     #[test]
@@ -256,16 +405,37 @@ mod tests {
              0061..007A ; ID_Continue\n0041 ; XID_Start",
             63,
         );
-        let output = generate(&text, text.len()).unwrap();
-        assert_eq!(output, generate(&text, text.len()).unwrap());
-        assert!(
-            output.contains("// Date: fictional\n//\n// ID_Start: 52 code points in 2 ranges.")
-        );
+        let output = generate(&text, ALIASES).unwrap();
+        assert_eq!(output, generate(&text, ALIASES).unwrap());
+        assert!(output.contains(&format!(
+            "// Source: DerivedCoreProperties-18.0.0.txt, {} bytes.\n// Date: fictional\n//\n\
+             // Source: PropertyValueAliases-18.0.0.txt, {} bytes.\n// Date: fictional too\n//\n\
+             // ID_Start: 52 code points in 2 ranges.",
+            text.len(),
+            ALIASES.len()
+        )));
         assert!(output.contains("pub const UNICODE_VERSION: &str = \"18.0.0\";"));
         assert!(output.contains(
             "pub(crate) const ID_START: &[(u32, u32)] = &[\n    (0x0041, 0x005a),\n    (0x0061, 0x007a),\n];"
         ));
         assert!(output.contains("    (0x005f, 0x005f),\n"));
+    }
+
+    #[test]
+    fn property_values_include_every_alias_in_byte_order() {
+        let output = generate(&valid_core(), ALIASES).unwrap();
+        assert!(output.contains(
+            "// General_Category: 5 value names and aliases.\n// Script: 6 value names and aliases.\n"
+        ));
+        assert!(output.contains(
+            "pub(crate) const GENERAL_CATEGORY_VALUES: &[&str] = &[\n    \"Decimal_Number\",\n    \
+             \"L\",\n    \"Letter\",\n    \"Nd\",\n    \"digit\",\n];"
+        ));
+        assert!(output.contains(
+            "pub(crate) const SCRIPT_VALUES: &[&str] = &[\n    \"Ahom\",\n    \"Inherited\",\n    \"Latin\",\n    \
+             \"Latn\",\n    \"Qaai\",\n    \"Zinh\",\n];"
+        ));
+        assert!(!output.contains("Ignored"));
     }
 
     #[test]
@@ -305,7 +475,38 @@ mod tests {
                 "outside",
             ),
         ] {
-            let error = generate(&text, text.len()).unwrap_err();
+            let error = generate(&text, ALIASES).unwrap_err();
+            assert!(error.contains(message), "{error}");
+        }
+    }
+
+    #[test]
+    fn inconsistent_property_values_are_rejected() {
+        let core = valid_core();
+        for (aliases, message) in [
+            (
+                ALIASES.replace("Aliases-18.0.0", "Aliases-17.0.0"),
+                "first line",
+            ),
+            (
+                ALIASES.replace("gc ; L ; Letter", "gc ; L"),
+                "short and a long",
+            ),
+            (ALIASES.replace("Latin", "Lat-in"), "invalid value name"),
+            (ALIASES.replace("Qaai", "Latn"), "repeats"),
+            (
+                ALIASES.replace("# Script (sc)", "# Scripts (sc)"),
+                "outside its section",
+            ),
+            (
+                ALIASES.replace(
+                    "sc ; Zinh ; Inherited ; Qaai\nsc ; Latn ; Latin\nsc ; Ahom ; Ahom\n",
+                    "",
+                ),
+                "no values for Script",
+            ),
+        ] {
+            let error = generate(&core, &aliases).unwrap_err();
             assert!(error.contains(message), "{error}");
         }
     }
