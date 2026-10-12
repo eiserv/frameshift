@@ -1,9 +1,11 @@
 //! Framework-independent syntax primitives for the E1 parser experiment.
 //! These scanners do not validate a file or authorize transformations.
 
+mod ast;
 mod identifier;
 mod lexical;
 mod numeric;
+mod parser;
 mod punctuator;
 mod regexp;
 mod regexp_pattern;
@@ -13,6 +15,10 @@ mod unicode;
 #[rustfmt::skip]
 mod unicode_tables;
 
+pub use ast::{
+    BinaryOperator, ChildList, NodeId, SyntaxNode, SyntaxNodeKind, SyntaxTree, TemplatePart,
+    TemplatePartList, UnaryOperator,
+};
 pub use identifier::{
     IdentifierKind, IdentifierToken, ReservedWord, ReservedWordClass, scan_js_identifier,
 };
@@ -21,6 +27,7 @@ pub use lexical::{
     scan_js_trivia,
 };
 pub use numeric::{NumericBase, NumericKind, NumericLiteral, scan_js_number};
+pub use parser::{ParseError, ParseErrorKind, ParseLimits, parse_js_expression};
 pub use punctuator::{
     GreaterThanMode, JsLexicalGoal, Punctuator, PunctuatorContext, PunctuatorToken,
     scan_js_punctuator,
