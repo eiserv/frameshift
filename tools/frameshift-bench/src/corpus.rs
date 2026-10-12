@@ -7,7 +7,7 @@
 //! errors, and each construct is emitted only where its goal and function
 //! context permit it. All content is invented for Frameshift.
 
-use frameshift_engine::SourceGoal;
+use frameshift_engine::{JsDialect, SourceGoal};
 
 /// Version of the generated output. Any change to the bytes produced for a
 /// seed requires a new version and a new pinned fingerprint.
@@ -57,10 +57,12 @@ impl Rng {
     }
 }
 
-/// One generated source file and the goal it must be parsed with.
+/// One generated source file and the goal and dialect it must be parsed with.
 pub struct GeneratedFile {
     /// Script for CommonJS-style files, Module otherwise.
     pub goal: SourceGoal,
+    /// JSX for component modules, JavaScript otherwise.
+    pub dialect: JsDialect,
     /// The complete source text.
     pub text: String,
 }
@@ -91,6 +93,21 @@ impl Corpus {
         Self { files }
     }
 
+    /// Generates `count` JSX component modules whose sizes follow
+    /// [`mixed_file_size`], like the `.jsx` files of an application. About
+    /// half of the top-level items are components that return JSX, and JSX
+    /// also appears inside other expressions.
+    pub fn components(seed: u64, count: usize) -> Self {
+        let mut rng = Rng::new(seed ^ COMPONENT_SALT);
+        let files = (0..count)
+            .map(|_| {
+                let target = mixed_file_size(&mut rng);
+                generate_component_file(rng.next_u64(), target)
+            })
+            .collect();
+        Self { files }
+    }
+
     /// Returns the total source size in bytes.
     pub fn bytes(&self) -> usize {
         self.files.iter().map(|file| file.text.len()).sum()
@@ -104,8 +121,9 @@ impl Corpus {
             .count()
     }
 
-    /// Returns a 64-bit FNV-1a hash over each file's goal, length, and bytes.
-    /// It identifies a corpus across platforms; it is not a security hash.
+    /// Returns a 64-bit FNV-1a hash over each file's goal and dialect, length,
+    /// and bytes. It identifies a corpus across platforms; it is not a
+    /// security hash.
     pub fn fingerprint(&self) -> u64 {
         const PRIME: u64 = 0x0000_0100_0000_01B3;
         let mut hash: u64 = 0xCBF2_9CE4_8422_2325;
@@ -115,9 +133,11 @@ impl Corpus {
             }
         };
         for file in &self.files {
-            feed(match file.goal {
-                SourceGoal::Script => b"S",
-                SourceGoal::Module => b"M",
+            feed(match (file.goal, file.dialect) {
+                (SourceGoal::Script, JsDialect::JavaScript) => b"S",
+                (SourceGoal::Module, JsDialect::JavaScript) => b"M",
+                (SourceGoal::Script, JsDialect::Jsx) => b"s",
+                (SourceGoal::Module, JsDialect::Jsx) => b"X",
             });
             feed(&(file.text.len() as u64).to_le_bytes());
             feed(file.text.as_bytes());
@@ -140,13 +160,64 @@ pub fn mixed_file_size(rng: &mut Rng) -> usize {
 /// Generates one file of at least `target` bytes. It exceeds the target by
 /// at most one top-level item.
 pub fn generate_file(seed: u64, goal: SourceGoal, target: usize) -> GeneratedFile {
-    let mut emitter = Emitter::new(seed, goal);
+    let mut emitter = Emitter::new(seed, goal, false);
     emitter.file(target);
     GeneratedFile {
         goal,
+        dialect: JsDialect::JavaScript,
         text: emitter.out,
     }
 }
+
+/// Generates one JSX component module of at least `target` bytes. It exceeds
+/// the target by at most one top-level item.
+pub fn generate_component_file(seed: u64, target: usize) -> GeneratedFile {
+    let mut emitter = Emitter::new(seed, SourceGoal::Module, true);
+    emitter.file(target);
+    GeneratedFile {
+        goal: SourceGoal::Module,
+        dialect: JsDialect::Jsx,
+        text: emitter.out,
+    }
+}
+
+// Separates the component corpus from the mixed corpus of the same seed.
+const COMPONENT_SALT: u64 = 0x4A53_5800_0000_0001;
+
+const INTRINSIC_TAGS: [&str; 16] = [
+    "div", "section", "article", "p", "span", "ul", "li", "a", "button", "header", "footer",
+    "main", "nav", "h2", "label", "strong",
+];
+
+const VOID_TAGS: [&str; 4] = ["img", "input", "br", "hr"];
+
+const CLASS_NAMES: [&str; 10] = [
+    "card",
+    "card card--wide",
+    "list",
+    "list-item",
+    "title",
+    "muted",
+    "button primary",
+    "grid gap-4",
+    "hero",
+    "sr-only",
+];
+
+const JSX_TEXTS: [&str; 12] = [
+    "Read more",
+    "Welcome back &amp; enjoy your stay",
+    "Price:&nbsp;",
+    "&copy; 2026 Example Ltd.",
+    "No results found",
+    "Loading&hellip;",
+    "Step 1 of 3",
+    "Contact us",
+    "Terms &amp; conditions",
+    "Last updated:",
+    "Show all",
+    "Back to top",
+];
 
 const NOUNS: [&str; 30] = [
     "post", "page", "route", "user", "item", "cart", "price", "title", "slug", "locale", "theme",
@@ -459,10 +530,14 @@ struct Emitter {
     // Private names of the class being generated.
     privates: Vec<String>,
     default_exported: bool,
+    // Whether JSX is generated, which only component modules do.
+    jsx: bool,
+    // Components declared so far, usable as element names.
+    components: Vec<String>,
 }
 
 impl Emitter {
-    fn new(seed: u64, goal: SourceGoal) -> Self {
+    fn new(seed: u64, goal: SourceGoal, jsx: bool) -> Self {
         let mut rng = Rng::new(seed);
         let newline = if rng.percent(10) { "\r\n" } else { "\n" };
         let indent_unit = rng.pick(&["  ", "  ", "  ", "    ", "\t"]);
@@ -482,6 +557,8 @@ impl Emitter {
             mutable: Vec::new(),
             privates: Vec::new(),
             default_exported: false,
+            jsx,
+            components: Vec::new(),
         }
     }
 
@@ -643,6 +720,13 @@ impl Emitter {
     }
 
     fn top_level_item(&mut self) {
+        // Random draws for JSX happen only in component modules, so the
+        // mixed corpus keeps its bytes.
+        if self.jsx && self.rng.percent(50) {
+            self.component();
+            self.blank();
+            return;
+        }
         if self.rng.percent(15) {
             self.comment();
         }
@@ -1320,6 +1404,9 @@ impl Emitter {
         if depth == 0 {
             return self.atom(frame);
         }
+        if self.jsx && self.rng.percent(12) {
+            return self.jsx_inline(frame, depth - 1);
+        }
         match self.rng.below(12) {
             0..=4 => self.operand(frame, depth),
             5 | 6 => self.binary(frame, depth),
@@ -1571,6 +1658,146 @@ impl Emitter {
         format!("function{name}({parameters}) {body}")
     }
 
+    // A function component with destructured props that returns a JSX tree
+    // laid out over several lines.
+    fn component(&mut self) {
+        let export = self.export_prefix(70);
+        let noun = capitalize(self.rng.pick(&NOUNS));
+        let name = self.fresh(&format!("{noun}View"));
+        let scope = self.locals.len();
+        let mutable = self.mutable.len();
+        let mut props = Vec::new();
+        for _ in 0..=self.rng.below(3) {
+            let prop = self.fresh_noun();
+            props.push(prop.clone());
+            self.locals.push(prop);
+        }
+        let frame = Frame::TOP.function(false, false);
+        self.line(&format!(
+            "{export}function {name}({{ {} }}) {{",
+            props.join(", ")
+        ));
+        self.indent += 1;
+        for _ in 0..self.rng.below(3) {
+            self.variable(frame, 2);
+        }
+        self.line("return (");
+        self.indent += 1;
+        self.jsx_block(frame, 3);
+        self.indent -= 1;
+        self.line(&format!("){}", self.semi()));
+        self.indent -= 1;
+        self.line("}");
+        self.locals.truncate(scope);
+        self.mutable.truncate(mutable);
+        self.components.push(name.clone());
+        self.declare(name);
+    }
+
+    // An element or fragment with one child per line.
+    fn jsx_block(&mut self, frame: Frame, depth: u32) {
+        let count = if depth == 0 { 0 } else { self.rng.below(5) };
+        if count == 0 && self.rng.percent(40) {
+            let tag = self.rng.pick(&VOID_TAGS);
+            let attributes = self.jsx_attributes(frame, depth);
+            self.line(&format!("<{tag}{attributes} />"));
+            return;
+        }
+        let (open, close) = if self.rng.percent(8) {
+            ("<>".to_owned(), "</>".to_owned())
+        } else {
+            let tag = self.jsx_tag();
+            let attributes = self.jsx_attributes(frame, depth);
+            (format!("<{tag}{attributes}>"), format!("</{tag}>"))
+        };
+        self.line(&open);
+        self.indent += 1;
+        for _ in 0..count {
+            match self.rng.below(10) {
+                0..=2 => {
+                    let text = self.rng.pick(&JSX_TEXTS);
+                    self.line(text);
+                }
+                3 | 4 => {
+                    let expression = self.expression(frame, depth - 1);
+                    self.line(&format!("{{{expression}}}"));
+                }
+                5 => {
+                    let list = self.reference();
+                    let item = self.fresh("item");
+                    let property = self.rng.pick(&PROPERTIES);
+                    self.line(&format!(
+                        "{{{list}.map(({item}) => <li key={{{item}.id}}>{{{item}.{property}}}</li>)}}"
+                    ));
+                }
+                6 => {
+                    let condition = self.reference();
+                    let element = self.jsx_inline(frame, depth - 1);
+                    if self.rng.percent(50) {
+                        self.line(&format!("{{{condition} && {element}}}"));
+                    } else {
+                        let alternate = self.jsx_inline(frame, depth - 1);
+                        self.line(&format!("{{{condition} ? {element} : {alternate}}}"));
+                    }
+                }
+                7 => {
+                    let comment = self.rng.pick(&COMMENTS);
+                    self.line(&format!("{{/* {comment} */}}"));
+                }
+                _ => self.jsx_block(frame, depth - 1),
+            }
+        }
+        self.indent -= 1;
+        self.line(&close);
+    }
+
+    // A one-line element, for JSX inside other expressions.
+    fn jsx_inline(&mut self, frame: Frame, depth: u32) -> String {
+        if self.rng.percent(30) {
+            let tag = self.rng.pick(&VOID_TAGS);
+            let attributes = self.jsx_attributes(frame, depth);
+            return format!("<{tag}{attributes} />");
+        }
+        let tag = self.jsx_tag();
+        let attributes = self.jsx_attributes(frame, depth);
+        let child = match self.rng.below(3) {
+            0 => self.rng.pick(&JSX_TEXTS).to_owned(),
+            1 => format!("{{{}}}", self.atom(frame)),
+            _ => format!("{}{{{}}}", self.rng.pick(&JSX_TEXTS), self.reference()),
+        };
+        format!("<{tag}{attributes}>{child}</{tag}>")
+    }
+
+    fn jsx_tag(&mut self) -> String {
+        match self.rng.below(10) {
+            0 | 1 if !self.components.is_empty() => {
+                self.components[self.rng.index(self.components.len())].clone()
+            }
+            2 => format!("Icons.{}", capitalize(self.rng.pick(&NOUNS))),
+            _ => self.rng.pick(&INTRINSIC_TAGS).to_owned(),
+        }
+    }
+
+    fn jsx_attributes(&mut self, frame: Frame, depth: u32) -> String {
+        let mut attributes = String::new();
+        for _ in 0..self.rng.below(4) {
+            let attribute = match self.rng.below(10) {
+                0 | 1 => format!("className=\"{}\"", self.rng.pick(&CLASS_NAMES)),
+                2 => format!("id={{{}}}", self.atom(frame)),
+                3 => format!("{{...{}}}", self.reference()),
+                4 => format!("onClick={{{}}}", self.arrow(frame, depth.max(1))),
+                5 => format!("aria-label=\"{}\"", self.rng.pick(&JSX_TEXTS)),
+                6 => format!("data-index={{{}}}", self.rng.pick(&NUMBERS)),
+                7 => "disabled".to_owned(),
+                8 => format!("style={{{{ color: {} }}}}", self.rng.pick(&STRINGS)),
+                _ => format!("key={{{}}}", self.reference()),
+            };
+            attributes.push(' ');
+            attributes.push_str(&attribute);
+        }
+        attributes
+    }
+
     // A braced block generated into a string at the current indentation, for
     // functions nested in expressions.
     fn nested_block(&mut self, frame: Frame, depth: u32, may_return: bool) -> String {
@@ -1597,7 +1824,7 @@ fn capitalize(word: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use frameshift_engine::{JsDialect, ParseLimits, SourceText, TextLimits, parse_js_program};
+    use frameshift_engine::{ParseLimits, SourceText, TextLimits, parse_js_program};
 
     #[test]
     fn rng_matches_the_splitmix64_reference_sequence() {
@@ -1645,21 +1872,27 @@ mod tests {
         assert_eq!(corpus.fingerprint(), 0x7C71_C5E6_160D_3383);
     }
 
+    // Pins the default component corpus in the same way.
+    #[test]
+    fn default_component_corpus_fingerprint_is_pinned() {
+        let corpus = Corpus::components(DEFAULT_SEED, 1_000);
+        assert_eq!(corpus.bytes(), 10_065_738);
+        assert_eq!(corpus.fingerprint(), 0x3B5B_6CD2_3FAC_9FDB);
+    }
+
     // The harness rejects a corpus with a syntax error; this keeps generator
     // changes from reaching it.
     #[test]
     fn generated_files_parse_in_their_goal() {
         for seed in 0..40 {
-            let corpus = Corpus::mixed(seed, 6);
+            let mut corpus = Corpus::mixed(seed, 6);
+            corpus.files.extend(Corpus::components(seed, 6).files);
             for (index, file) in corpus.files.iter().enumerate() {
                 let source = SourceText::new(file.text.clone(), TextLimits::default())
                     .expect("generated text is within the default limits");
-                if let Err(error) = parse_js_program(
-                    &source,
-                    file.goal,
-                    JsDialect::JavaScript,
-                    ParseLimits::default(),
-                ) {
+                if let Err(error) =
+                    parse_js_program(&source, file.goal, file.dialect, ParseLimits::default())
+                {
                     let start = error.offset.saturating_sub(80);
                     let end = (error.offset + 80).min(file.text.len());
                     panic!(

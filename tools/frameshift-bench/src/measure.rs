@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use frameshift_engine::{JsDialect, ParseLimits, SourceText, TextLimits, parse_js_program};
+use frameshift_engine::{ParseLimits, SourceText, TextLimits, parse_js_program};
 
 use crate::{ALLOCATOR, corpus::GeneratedFile};
 
@@ -57,7 +57,7 @@ pub fn throughput(
             let source = SourceText::new(text, TextLimits::default())
                 .map_err(|error| format!("file {index}: {error:?}"))?;
             let indexed = Instant::now();
-            let tree = parse_js_program(&source, file.goal, JsDialect::JavaScript, limits)
+            let tree = parse_js_program(&source, file.goal, file.dialect, limits)
                 .map_err(|error| format!("file {index}: {error:?}"))?;
             let parsed = Instant::now();
             black_box(&tree);
@@ -102,7 +102,7 @@ pub fn file_memory(
         let base = counters.reset_peak();
         let source = SourceText::new(text, TextLimits::default())
             .map_err(|error| format!("file {index}: {error:?}"))?;
-        let tree = parse_js_program(&source, file.goal, JsDialect::JavaScript, limits)
+        let tree = parse_js_program(&source, file.goal, file.dialect, limits)
             .map_err(|error| format!("file {index}: {error:?}"))?;
         let growth = |value: usize| {
             value
@@ -151,7 +151,7 @@ pub fn corpus_memory(files: &[GeneratedFile], limits: ParseLimits) -> Result<Cor
     let mut trees = Vec::with_capacity(sources.len());
     for (index, (text, file)) in sources.iter().zip(files).enumerate() {
         trees.push(
-            parse_js_program(text, file.goal, JsDialect::JavaScript, limits)
+            parse_js_program(text, file.goal, file.dialect, limits)
                 .map_err(|error| format!("file {index}: {error:?}"))?,
         );
     }

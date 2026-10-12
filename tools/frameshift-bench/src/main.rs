@@ -1,7 +1,7 @@
 //! Development-only measurement harness for experiment E1 (`D-040`).
 //!
-//! It generates a deterministic corpus of fictional JavaScript, parses it
-//! through the engine facade, and reports parser throughput and peak heap
+//! It generates deterministic corpora of fictional JavaScript and JSX,
+//! parses them through the engine facade, and reports parser throughput and peak heap
 //! memory against the E1 budgets in `docs/ENGINEERING.md` (section 4.1).
 //! Timing depends on the machine, and budgets are judged on the reference
 //! hardware. The tool reads no files, starts no processes, and performs no
@@ -35,13 +35,15 @@ const DEFAULT_ITERATIONS: usize = 5;
 const SCALING_KIB: [usize; 7] = [1, 4, 16, 64, 256, 1_024, 4_096];
 
 const USAGE: &str = "usage: frameshift-bench [--seed <n>] [--files <n>] [--iterations <n>]\n       \
-                     frameshift-bench --print <index> [--seed <n>] [--files <n>]";
+                     frameshift-bench --print <index> [--seed <n>] [--files <n>]\n       \
+                     frameshift-bench --print-component <index> [--seed <n>] [--files <n>]";
 
 struct Options {
     seed: u64,
     files: usize,
     iterations: usize,
     print: Option<usize>,
+    print_component: Option<usize>,
 }
 
 fn main() -> ExitCode {
@@ -54,7 +56,13 @@ fn main() -> ExitCode {
         }
     };
     let corpus = Corpus::mixed(options.seed, options.files);
-    if let Some(index) = options.print {
+    let components = Corpus::components(options.seed, options.files);
+    let printed = match (options.print, options.print_component) {
+        (Some(index), _) => Some((&corpus, index)),
+        (None, Some(index)) => Some((&components, index)),
+        (None, None) => None,
+    };
+    if let Some((corpus, index)) = printed {
         let Some(file) = corpus.files.get(index) else {
             eprintln!(
                 "frameshift-bench: file {index} does not exist; the corpus has {} files",
@@ -71,7 +79,7 @@ fn main() -> ExitCode {
         eprintln!("frameshift-bench: measurements require an optimized build (--release)");
         return ExitCode::from(2);
     }
-    match run(&options, &corpus) {
+    match run(&options, &corpus, &components) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("frameshift-bench: {message}");
@@ -86,6 +94,7 @@ fn parse_options(mut args: impl Iterator<Item = String>) -> Result<Options, Stri
         files: DEFAULT_FILES,
         iterations: DEFAULT_ITERATIONS,
         print: None,
+        print_component: None,
     };
     while let Some(flag) = args.next() {
         let value = args
@@ -98,6 +107,7 @@ fn parse_options(mut args: impl Iterator<Item = String>) -> Result<Options, Stri
             "--files" => options.files = count()?,
             "--iterations" => options.iterations = count()?,
             "--print" => options.print = Some(count()?),
+            "--print-component" => options.print_component = Some(count()?),
             _ => return Err(format!("unknown option {flag:?}")),
         }
     }
@@ -114,16 +124,21 @@ fn parse_number(text: &str) -> Option<u64> {
     }
 }
 
-fn run(options: &Options, corpus: &Corpus) -> Result<(), String> {
-    let bytes = corpus.bytes();
+fn run(options: &Options, corpus: &Corpus, components: &Corpus) -> Result<(), String> {
     println!("frameshift-bench: E1 parser measurement (D-040)");
     println!(
         "corpus: generator v{GENERATOR_VERSION}, seed {:#x}, {} files ({} scripts), {} bytes, fingerprint {:016x}",
         options.seed,
         grouped(corpus.files.len()),
         grouped(corpus.scripts()),
-        grouped(bytes),
+        grouped(corpus.bytes()),
         corpus.fingerprint()
+    );
+    println!(
+        "components: {} JSX modules, {} bytes, fingerprint {:016x}",
+        grouped(components.files.len()),
+        grouped(components.bytes()),
+        components.fingerprint()
     );
     println!(
         "timing: one warm-up and {} measured passes on one thread; MB = 10^6 bytes",
@@ -132,25 +147,10 @@ fn run(options: &Options, corpus: &Corpus) -> Result<(), String> {
 
     println!();
     println!("Mixed corpus, default parse limits");
-    let throughput = measure::throughput(&corpus.files, ParseLimits::default(), options.iterations)
-        .map_err(|error| format!("mixed corpus, {error}"))?;
-    print_timing("text and parse", bytes, &throughput.text_and_parse, false);
-    print_timing("parse", bytes, &throughput.parse, true);
-    let files = measure::file_memory(&corpus.files, ParseLimits::default())
-        .map_err(|error| format!("mixed corpus, {error}"))?;
-    print_file_memory(&files);
-    let all = measure::corpus_memory(&corpus.files, ParseLimits::default())
-        .map_err(|error| format!("mixed corpus, {error}"))?;
-    let retained = all.source + all.indexes + all.trees;
-    println!(
-        "  all trees retained   {} source + {} indexes + {} trees = {} ({:.1}x), peak {:.1}x",
-        megabytes(all.source),
-        megabytes(all.indexes),
-        megabytes(all.trees),
-        megabytes(retained),
-        ratio(retained, all.source),
-        ratio(all.peak, all.source)
-    );
+    measure_corpus("mixed corpus", corpus, options.iterations)?;
+    println!();
+    println!("Component corpus (JSX dialect), default parse limits");
+    measure_corpus("component corpus", components, options.iterations)?;
 
     println!();
     println!("Scaling series, one module per size, unbounded node and token counts");
@@ -177,6 +177,30 @@ fn run(options: &Options, corpus: &Corpus) -> Result<(), String> {
             ratio(memory[0].peak, size)
         );
     }
+    Ok(())
+}
+
+fn measure_corpus(label: &str, corpus: &Corpus, iterations: usize) -> Result<(), String> {
+    let bytes = corpus.bytes();
+    let throughput = measure::throughput(&corpus.files, ParseLimits::default(), iterations)
+        .map_err(|error| format!("{label}, {error}"))?;
+    print_timing("text and parse", bytes, &throughput.text_and_parse, false);
+    print_timing("parse", bytes, &throughput.parse, true);
+    let files = measure::file_memory(&corpus.files, ParseLimits::default())
+        .map_err(|error| format!("{label}, {error}"))?;
+    print_file_memory(&files);
+    let all = measure::corpus_memory(&corpus.files, ParseLimits::default())
+        .map_err(|error| format!("{label}, {error}"))?;
+    let retained = all.source + all.indexes + all.trees;
+    println!(
+        "  all trees retained   {} source + {} indexes + {} trees = {} ({:.1}x), peak {:.1}x",
+        megabytes(all.source),
+        megabytes(all.indexes),
+        megabytes(all.trees),
+        megabytes(retained),
+        ratio(retained, all.source),
+        ratio(all.peak, all.source)
+    );
     Ok(())
 }
 
@@ -281,6 +305,11 @@ mod tests {
         assert_eq!(
             (parsed.seed, parsed.files, parsed.iterations, parsed.print),
             (31, 12, 3, None)
+        );
+        let component = options(&["--print-component", "4"]).expect("valid options");
+        assert_eq!(
+            (component.print, component.print_component),
+            (None, Some(4))
         );
         let defaults = options(&[]).expect("no options");
         assert_eq!(
