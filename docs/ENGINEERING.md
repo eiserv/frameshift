@@ -263,7 +263,7 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | Unit and integration tests | Development | Standard toolchain | |
 | Golden-file and snapshot testing | Development | Build | Small, and the update workflow must match [TESTING.md](TESTING.md) |
 | Benchmarks | Development | Build: a small standard-library harness with a counting allocator (`D-040`, implemented as `tools/frameshift-bench`). Statistics-based tools are evaluated again for M11. | The standard benchmark attribute is not stable, and criterion does not measure memory |
-| Fuzzing | Development | Evaluate coverage-guided fuzzing tools (for example cargo-fuzz) | Mandatory for every parser of untrusted input |
+| Fuzzing | Development | Build: a coverage-guided fuzzer with stable SanitizerCoverage instrumentation, a purpose-built runtime, and a purpose-built mutator (`D-044`, planned). cargo-fuzz was not adopted, because it needs a nightly toolchain and a C++ build. | Mandatory for every parser of untrusted input. Falls back to generation and mutation without coverage feedback if the instrumentation is unusable with the pinned toolchain. |
 | Formatting and linting | Development | rustfmt and Clippy (part of the toolchain) | Lints are configured, not just defaults |
 | Dependency audits and vulnerability scanning | Development | Evaluate cargo-audit and cargo-deny | Also checks licenses and duplicate dependencies |
 | Release automation | CI | Release Please action, GitHub CLI | Pinned (see [RELEASES.md](RELEASES.md)) |

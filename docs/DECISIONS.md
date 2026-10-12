@@ -50,6 +50,8 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-040 | Built measurement harness with a counting allocator, then a throughput increment before JSX | Accepted |
 | D-041 | JSX by the specification grammar with an explicit dialect, and pinned character reference tables | Accepted |
 | D-042 | Integrated TypeScript and TSX parsing with structured type nodes | Accepted |
+| D-043 | E1 evidence from a TypeScript corpus and an approved real-world sample | Accepted |
+| D-044 | Purpose-built coverage-guided fuzzing on stable Rust | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Proposed |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
@@ -140,6 +142,8 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Eleventh one-run exception (2026-10-12):** Through the Codex chat, the project owner explicitly authorized committing and pushing the verified `D-042` TypeScript and TSX increment and its documentation directly to `main`, once the agent is satisfied with the work. This exception has the same limits as the first one.
 
 - **Twelfth one-run exception (2026-10-12):** Through the Asker chat, the project owner explicitly authorized completing the interrupted `D-042` run and committing and pushing its verified TypeScript and TSX increment and documentation directly to `main`, once the agent is satisfied with the work. This exception has the same limits as the first one.
+
+- **Thirteenth one-run exception (2026-10-13):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-043` increment, the `D-044` decision, and their documentation, once the agent is satisfied with the work. This exception has the same limits as the first one.
 
 ### D-011: Release management with Release Please
 
@@ -386,6 +390,45 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale (`D-033`):** Integrating the grammar exercises actual TS/TSX file contexts and shared JavaScript constructs immediately. Structured types support future declared-type analysis in M15 and source-preserving edits without committing to a type checker. The shared arena and visitor keep all syntax traversable with bounded storage and preserve the E1 experiment gate.
 - **Tradeoffs:** TypeScript's authoritative grammar is its compiler implementation rather than a current formal specification. Syntax acceptance does not prove type correctness or target compatibility. Speculation around generics and arrows needs deterministic work limits and rollback of arena state. E1 remains open until corpus, reference-hardware, fuzzing, and maintainability evidence exists.
 - **Implemented contract:** `JsDialect` gains `TypeScript` and `Tsx`, and `Program` nodes record the dialect. `crates/frameshift-syntax/src/typescript.rs` defines the closed `TypeScriptKind` node set and `src/parser/typescript.rs` parses the type grammar, declarations, and extensions inside the shared arena, with speculation limited to type syntax and function heads, rollback of arena and scope state, and a `ts_work` bound that counts consumed tokens during speculation. The instantiation reading of `a < b > c` follows `canFollowTypeArgumentsInExpression` of the oracle, a property access directly on an instantiation expression is a parse error, and heritage clauses keep their type arguments without the comparison ambiguity. Frameshift keeps the ECMAScript early errors of invalid assignment and update targets as parse errors in these dialects, where the oracle's parser accepts most of them and its checker reports them later; this, and the single-`>` type-argument closing, are the recorded deviations. The dialects report no redeclaration early errors, because TypeScript declares overloads and merges declarations while a genuine duplicate is a checker diagnostic, and the oracle's parser accepts every case of the comparison battery. Details are in section 4.15 of [IMPLEMENTATION.md](IMPLEMENTATION.md), and the oracle comparisons with their results are in section 5.
+
+### D-043: E1 evidence from a TypeScript corpus and an approved real-world sample
+
+- **Status:** Accepted (2026-10-13), confirmed by the project owner through the Claude Code question interface, including the project list below.
+- **Context:** After `D-042`, experiment E1 still lacked throughput and memory measurements for the TypeScript dialects, the sample of real-world Next.js App Router files that section 2.8 of [ENGINEERING.md](ENGINEERING.md) requires (at least 99 percent of files parse, and every failure is explained by syntax not yet implemented), fuzzing, and a maintainability review. `D-030` governs the evaluation corpus only from M5 on, so how the E1 sample is selected was open, as were the order of the remaining E1 work and the fuzzing approach (`D-044`).
+- **Decision:**
+  - The next increment extends the development-only measurement harness `tools/frameshift-bench` (`D-040`) in two ways: a deterministic generated corpus of TypeScript modules and TSX components, and a read-only directory mode that parses the JavaScript and TypeScript files of a directory outside the repository and reports the parse rate, every file that fails with its position and error kind, and throughput and peak memory on the accepted files. This ends the deferral of real files in `D-040`. The directory mode maps file name extensions to dialects and source goals itself; that mapping belongs to the tool and does not anticipate the project layer's file classification (M2, M4).
+  - The E1 sample follows the `D-030` process early: the agent proposes public Next.js App Router projects with permissive licenses (MIT, Apache-2.0, BSD, or ISC) and a reason for each, and the project owner approves the list. Approved projects are fetched at pinned commits into a cache outside the repository, never committed, and never built, installed, or executed; they are only parsed. The repository records the repository, commit, and license of each project.
+  - `typescript` 6.0.3 and `@babel/parser` 8.0.7 remain development-time oracles (`D-041`, `D-042`), installed with npm outside the repository with install scripts disabled. They explain rejections on the sample and check the generated TypeScript corpus. They are not part of the repository, any test, or the build.
+  - Fuzzing follows in its own increment under `D-044`. The maintainability review closes E1 after that.
+- **Approved sample (2026-10-13):** about 13,300 JavaScript and TypeScript files, 36 MB. Next.js versions are the declared dependencies at the pinned commits.
+
+  | Repository | Commit | License | Next.js | Reason |
+  | --- | --- | --- | --- | --- |
+  | `vercel/next.js`, `examples/` only | `e7feae7d53c1b62741d8fe6b6adb429dc669079d` | MIT | mixed | 226 official examples with the broadest construct mix, including `.js` and `.jsx` |
+  | `vercel/examples` | `ecee7812ac6f28d7f169445fae155fac6d503c18` | MIT | 16.x | Many small App Router applications in JavaScript and TypeScript |
+  | `vercel/commerce` | `3761e52e60df9c6a316e067dbfd7032e494d3634` | MIT | 15.6 | Reference commerce application |
+  | `vercel/next-learn` | `bb2558441a6673ab76c89914c25018bffa27a2ba` | MIT | 14.x and latest | Official course with a dashboard application |
+  | `nextjs/saas-starter` | `6e33e58b1e553a41fe22e6b941a7229a002de361` | MIT | 15.6 | App Router starter |
+  | `timlrx/tailwind-nextjs-starter-blog` | `b45bef66b40c63b6f57c15ee8cd090682238df4c` | MIT | 15.5 | Static blog with `.mjs` and `.cjs` configuration |
+  | `shadcn-ui/ui` | `30a58d4498f270af1c1e981a7d78a15cf5740841` | MIT | 16.3 and 16.4 | Large TSX component corpus in App Router applications |
+  | `shadcn-ui/taxonomy` | `298a8857c7128a0d121e7f699dfd729f23b3966d` | MIT | 13.3 | Early App Router application, outside the `D-023` range, used as parser evidence only |
+  | `steven-tey/precedent` | `3be40205d7cdf56082cd284f07f12251b9208f79` | MIT | 14.3 | App Router starter |
+  | `fuma-nama/fumadocs` | `abe12092fa27d4d61209944d5c95052e50dde101` | MIT | 16.3 | Static documentation framework and site, TypeScript-heavy |
+  | `shuding/nextra` | `d6e80e1dd627b781429a6ee989b15ebba688c8ea` | MIT | 16.x | Static documentation on the App Router, with `.jsx` and `.mts` |
+  | `heroui-inc/heroui` | `88a39c793a5c5545eb1f3cb966524c726d6716c7` | Apache-2.0 | 16.4 | Component library with an App Router documentation application, TSX-heavy |
+
+- **Rationale:** Real files are the strongest available evidence for the parse-rate criterion and expose grammar gaps that generated and hand-picked inputs miss. Pinned commits make the sample reproducible, permissive licenses allow local analysis, and keeping the files outside the repository respects `D-012` and the rule that committed fixtures are fictional. A generated TypeScript corpus measures the TypeScript dialects under the same controlled conditions as the existing corpora (`D-040`).
+- **Tradeoffs:** The sample is weighted toward popular templates, component libraries, and documentation sites, and several repositories also contain library code and test fixtures that are not Next.js application files. Fetching needs network access once. A pinned commit identifies content but cannot guarantee that a public repository stays available.
+- **Revisit if:** M5 replaces the sample with the `D-030` evaluation corpus, a pinned commit becomes unavailable, or a new sample parses below 99 percent.
+
+### D-044: Purpose-built coverage-guided fuzzing on stable Rust
+
+- **Status:** Accepted (2026-10-13), confirmed by the project owner through the Claude Code question interface. Implementation is a later increment.
+- **Context:** E1 requires fuzzing for a fixed CPU budget without crashes or hangs, section 3.3 of [TESTING.md](TESTING.md) requires fuzzing of every parser of untrusted input, and section 3.5 of [ENGINEERING.md](ENGINEERING.md) asked for an evaluation of coverage-guided tools such as cargo-fuzz. cargo-fuzz needs a nightly toolchain, a C++ compiler to build libFuzzer, and the `libfuzzer-sys` crate, and its Windows support is limited. A fuzzer without coverage feedback needs no unsafe code or new tooling but reaches deep parser states less reliably.
+- **Decision:** Build a development-only, coverage-guided fuzzer as a tool in the workspace. Coverage comes from LLVM SanitizerCoverage instrumentation, enabled through code generation options of the pinned stable `rustc` (`-C passes=sancov-module` with `-C llvm-args`) and read by a small purpose-built runtime. Inputs come from a purpose-built mutator seeded with the generated corpora and fictional fixtures. The runtime's callbacks need unsafe code, which is confined to one reviewed module of the tool under the rules of the counting allocator (`D-040`). The first step checks feasibility on the development platforms. If the instrumentation is not usable with the pinned stable toolchain, the fallback is a standard-library-only generation and mutation fuzzer without coverage feedback, recorded as an update to this decision.
+- **Rationale:** Coverage feedback finds parser states that random generation misses. Stable instrumentation keeps the pinned toolchain (`D-032`) and adds no dependency (`D-013`), and a purpose-built runtime also works on Windows, where development happens.
+- **Tradeoffs:** Building a runtime and mutator costs more than adopting libFuzzer (`D-020`). The instrumentation options are low-level contracts of `rustc` and LLVM that can change with the toolchain. The tool contains unsafe code.
+- **Revisit if:** the feasibility check fails, an established coverage-guided fuzzer becomes usable on stable Rust and Windows without a C++ build, or the purpose-built fuzzer misses defects that an established fuzzer finds.
 
 ## Technique proposals and related accepted decisions
 

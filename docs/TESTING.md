@@ -36,7 +36,7 @@ Pure functions and small components: path normalization, semver matching, gitign
 
 ### 3.3 Fuzzing
 
-Every parser of untrusted input and the static evaluator are fuzzed. Short fuzzing runs on every pull request, and longer runs on a schedule. Crashing inputs become permanent regression fixtures. Fuzzing also checks the resource limits: no input may exceed configured depth, memory, or time bounds.
+Every parser of untrusted input and the static evaluator are fuzzed. The planned fuzzer is a purpose-built, coverage-guided development tool (`D-044`). Short fuzzing runs on every pull request, and longer runs on a schedule. Crashing inputs become permanent regression fixtures. Fuzzing also checks the resource limits: no input may exceed configured depth, memory, or time bounds.
 
 ### 3.4 Transformation fixtures
 
