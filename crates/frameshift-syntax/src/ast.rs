@@ -43,6 +43,10 @@ impl ChildList {
     pub(crate) const fn new(start: u32, len: u32) -> Self {
         Self { start, len }
     }
+
+    pub(crate) const fn range(self) -> std::ops::Range<usize> {
+        self.start as usize..self.start as usize + self.len as usize
+    }
 }
 
 /// A contiguous range of template parts owned by one expression tree.
@@ -142,6 +146,52 @@ pub enum BinaryOperator {
     Remainder,
     /// Exponentiation `**`.
     Exponent,
+}
+
+/// An operator represented by an assignment expression node.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AssignmentOperator {
+    /// Plain assignment `=`.
+    Assign,
+    /// Addition assignment `+=`.
+    AddAssign,
+    /// Subtraction assignment `-=`.
+    SubtractAssign,
+    /// Multiplication assignment `*=`.
+    MultiplyAssign,
+    /// Division assignment `/=`.
+    DivideAssign,
+    /// Remainder assignment `%=`.
+    RemainderAssign,
+    /// Exponentiation assignment `**=`.
+    ExponentAssign,
+    /// Left shift assignment `<<=`.
+    ShiftLeftAssign,
+    /// Signed right shift assignment `>>=`.
+    ShiftRightAssign,
+    /// Unsigned right shift assignment `>>>=`.
+    ShiftRightUnsignedAssign,
+    /// Bitwise AND assignment `&=`.
+    BitwiseAndAssign,
+    /// Bitwise OR assignment `|=`.
+    BitwiseOrAssign,
+    /// Bitwise XOR assignment `^=`.
+    BitwiseXorAssign,
+    /// Logical AND assignment `&&=`.
+    LogicalAndAssign,
+    /// Logical OR assignment `||=`.
+    LogicalOrAssign,
+    /// Nullish coalescing assignment `??=`.
+    NullishAssign,
+}
+
+/// An operator represented by an update expression node.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateOperator {
+    /// Increment `++`.
+    Increment,
+    /// Decrement `--`.
+    Decrement,
 }
 
 /// One child part of a template literal, in source order.
@@ -258,6 +308,121 @@ pub enum SyntaxNodeKind {
         /// Template literal expression.
         template: NodeId,
     },
+    /// An array literal. Holes are [`SyntaxNodeKind::Elision`] elements.
+    ArrayExpression {
+        /// Element node IDs, in source order.
+        elements: ChildList,
+        /// Whether a separating comma follows the last element that is not a hole.
+        trailing_comma: bool,
+    },
+    /// An object literal.
+    ObjectExpression {
+        /// Property, shorthand, and spread node IDs, in source order.
+        properties: ChildList,
+        /// Whether a comma follows the last property.
+        trailing_comma: bool,
+    },
+    /// A hole in an array literal or array pattern, with an empty span at its comma.
+    Elision,
+    /// A spread element `...argument` in an array literal, object literal, or argument list.
+    Spread {
+        /// Spread expression.
+        argument: NodeId,
+    },
+    /// An object literal property `key: value`.
+    Property {
+        /// Identifier name, string, or number key, or the computed key expression.
+        key: NodeId,
+        /// Property value expression.
+        value: NodeId,
+        /// Whether the key is inside brackets.
+        computed: bool,
+    },
+    /// A shorthand object literal property `{ name }`. The property and its
+    /// identifier reference share one span.
+    ShorthandProperty {
+        /// Identifier reference node.
+        identifier: NodeId,
+    },
+    /// An assignment expression.
+    Assignment {
+        /// Applied operator.
+        operator: AssignmentOperator,
+        /// Simple target or, for `=`, an array or object pattern.
+        target: NodeId,
+        /// Assigned value expression.
+        value: NodeId,
+    },
+    /// A prefix or postfix update expression.
+    Update {
+        /// Applied operator.
+        operator: UpdateOperator,
+        /// Whether the operator precedes its operand.
+        prefix: bool,
+        /// Simple assignment target.
+        operand: NodeId,
+    },
+    /// A `new` expression, with `None` arguments when no argument list follows.
+    New {
+        /// Constructor expression.
+        callee: NodeId,
+        /// Argument node IDs, in source order, when an argument list is present.
+        arguments: Option<ChildList>,
+    },
+    /// An arrow function with an expression body.
+    ArrowFunction {
+        /// Parameter patterns, in source order.
+        parameters: ChildList,
+        /// Concise body expression.
+        body: NodeId,
+    },
+    /// A name declared by a binding pattern, such as an arrow parameter.
+    BindingIdentifier {
+        /// Whether any part of the name used a Unicode escape.
+        has_escape: bool,
+    },
+    /// An array destructuring pattern, reinterpreted from an array literal.
+    ArrayPattern {
+        /// Target, default, rest, and hole node IDs, in source order.
+        elements: ChildList,
+        /// Whether a separating comma follows the last element that is not a hole.
+        trailing_comma: bool,
+    },
+    /// An object destructuring pattern, reinterpreted from an object literal.
+    ObjectPattern {
+        /// Pattern property and rest node IDs, in source order.
+        properties: ChildList,
+        /// Whether a comma follows the last property.
+        trailing_comma: bool,
+    },
+    /// An object pattern property `key: target`.
+    PatternProperty {
+        /// Identifier name, string, or number key, or the computed key expression.
+        key: NodeId,
+        /// Target pattern, possibly with a default value.
+        value: NodeId,
+        /// Whether the key is inside brackets.
+        computed: bool,
+    },
+    /// A shorthand object pattern property `{ name }` or `{ name = default }`.
+    ShorthandPatternProperty {
+        /// Identifier reference in assignment patterns, binding identifier in parameters.
+        target: NodeId,
+        /// Default value expression, if present.
+        default: Option<NodeId>,
+    },
+    /// A rest element `...target` in a pattern or parameter list.
+    RestElement {
+        /// Rest target.
+        argument: NodeId,
+    },
+    /// A target with a default value, `target = default`.
+    AssignmentPattern {
+        /// Target pattern.
+        target: NodeId,
+        /// Default value expression.
+        default: NodeId,
+    },
 }
 
 /// One expression node in a syntax tree arena.
@@ -280,6 +445,11 @@ impl SyntaxNode {
 }
 
 /// An expression tree backed by flat node and child-list arenas.
+///
+/// Array elements, object properties, arrow parameters, and argument lists
+/// share the child arena. Patterns are reinterpreted from their cover
+/// expressions in place, so every node of a returned tree is reachable from
+/// the root.
 pub struct SyntaxTree<'source> {
     pub(crate) source: &'source SourceText,
     pub(crate) nodes: Vec<SyntaxNode>,
@@ -311,7 +481,7 @@ impl<'source> SyntaxTree<'source> {
         &self.nodes
     }
 
-    /// Returns child IDs for a call argument list, or `None` for an invalid list.
+    /// Returns the node IDs of a child list, or `None` for an invalid list.
     pub fn children(&self, list: ChildList) -> Option<&[NodeId]> {
         slice_range(&self.children, list.start, list.len)
     }

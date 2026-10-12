@@ -12,12 +12,13 @@ mod regexp_pattern;
 mod regexp_property;
 mod template;
 mod unicode;
+mod value;
 #[rustfmt::skip]
 mod unicode_tables;
 
 pub use ast::{
-    BinaryOperator, ChildList, NodeId, SyntaxNode, SyntaxNodeKind, SyntaxTree, TemplatePart,
-    TemplatePartList, UnaryOperator,
+    AssignmentOperator, BinaryOperator, ChildList, NodeId, SyntaxNode, SyntaxNodeKind, SyntaxTree,
+    TemplatePart, TemplatePartList, UnaryOperator, UpdateOperator,
 };
 pub use identifier::{
     IdentifierKind, IdentifierToken, ReservedWord, ReservedWordClass, scan_js_identifier,

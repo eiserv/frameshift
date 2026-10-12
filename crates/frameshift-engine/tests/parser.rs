@@ -230,7 +230,7 @@ fn unary_exponent_and_nullish_grammar_errors_fail_closed() {
             0,
             ParseErrorKind::ContextualKeywordRequiresContext,
         ),
-        ("f({ value: 1 })", 2, ParseErrorKind::UnsupportedSyntax),
+        ("f({ value() {} })", 9, ParseErrorKind::UnsupportedSyntax),
     ] {
         let input = source(source_text);
         let error = failure(&input, 0, ParseLimits::default());
