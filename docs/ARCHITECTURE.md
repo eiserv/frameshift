@@ -1,6 +1,6 @@
 # Architecture
 
-**Status: planned architecture with M0 in progress.** Immutable source text, byte spans, derived positions, parser-directed JavaScript scanners, regular-expression literal validation, identifier classification from pinned Unicode tables, character reference decoding with pinned HTML and XHTML tables, pure span rewriting with text provenance, and a JavaScript parser with a flat syntax-node arena for complete Script and Module source text, with an explicit JSX dialect, are implemented. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the existing modules and exact contracts. There is no TypeScript, CSS, or JSON parser yet. The pipeline and all remaining subsystems below are design intent. Identifiers such as `D-006` or `P-003` refer to entries in [DECISIONS.md](DECISIONS.md): "Accepted" entries are binding, "Proposed" entries are recommendations that still need confirmation.
+**Status: planned architecture with M0 in progress.** Immutable source text, byte spans, derived positions, parser-directed JavaScript scanners, regular-expression literal validation, identifier classification from pinned Unicode tables, character reference decoding with pinned HTML and XHTML tables, pure span rewriting with text provenance, and a JavaScript parser with a flat syntax-node arena for complete Script and Module source text, with explicit JSX, TypeScript, and TSX dialects, are implemented. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the existing modules and exact contracts. There is no CSS or JSON parser yet. The pipeline and all remaining subsystems below are design intent. Identifiers such as `D-006` or `P-003` refer to entries in [DECISIONS.md](DECISIONS.md): "Accepted" entries are binding, "Proposed" entries are recommendations that still need confirmation.
 
 Related documents:
 
@@ -174,7 +174,7 @@ Textual replacement (regular expressions, string search) is excluded for transfo
 
 | Format | Purpose | Notes |
 | --- | --- | --- |
-| JavaScript, TypeScript, JSX, TSX (`.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.mts`, `.cts`, `.tsx`) | Source code analysis and transformation | Full syntax coverage required. Types are parsed completely but treated mostly as opaque, preserved text. No type checking. |
+| JavaScript, TypeScript, JSX, TSX (`.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.mts`, `.cts`, `.tsx`) | Source code analysis and transformation | Full syntax coverage required. Types are parsed completely into structured nodes with exact spans and preserved without type checking (`D-042`). |
 | CSS, SCSS | Imports, `url()` references, CSS Modules class names, Tailwind directives | Tokenizer following the CSS Syntax specification, plus a structural parser. SCSS is supported at the level needed for imports and references. |
 | JSON, JSONC | `package.json`, `tsconfig.json`, `jsconfig.json`, npm and Bun lockfiles | JSONC (comments, trailing commas) is required for TypeScript configuration and `bun.lock`. |
 | YAML subset | `pnpm-lock.yaml`, `pnpm-workspace.yaml`, Yarn Berry lockfiles | A restricted parser for the subset these files use. Anything outside the subset is rejected with a finding. |
