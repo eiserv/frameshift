@@ -203,6 +203,54 @@ fn literal_types_can_end_an_arrow_return_type() {
 }
 
 #[test]
+fn declaration_files_are_an_ambient_typescript_dialect() {
+    let declarations = "/// <reference types=\"next\" />\nexport const simple: Redirect[]\nexport const complex: Redirect[]\ndeclare const value: string;\nexport function load(path: string): Promise<string>;\nexport interface Redirect { source: string }\n";
+    check(declarations, JsDialect::TypeScriptDeclaration);
+    // An ordinary TypeScript file is not ambient, so its `const` needs a value.
+    let source = input(declarations);
+    let error = parse_js_program(
+        &source,
+        SourceGoal::Module,
+        JsDialect::TypeScript,
+        ParseLimits::default(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        error.kind,
+        frameshift_engine::ParseErrorKind::MissingInitializer
+    );
+    let tree = parse_js_program(
+        &source,
+        SourceGoal::Module,
+        JsDialect::TypeScriptDeclaration,
+        ParseLimits::default(),
+    )
+    .unwrap();
+    assert!(matches!(
+        tree.node(tree.root()).unwrap().kind(),
+        SyntaxNodeKind::Program {
+            dialect: JsDialect::TypeScriptDeclaration,
+            ..
+        }
+    ));
+    // Declaration files have the TypeScript grammar without JSX.
+    check(
+        "declare const a: unknown; export const b = <string>a;",
+        JsDialect::TypeScriptDeclaration,
+    );
+    assert!(
+        parse_js_program(
+            &input("export const c = <div />;"),
+            SourceGoal::Module,
+            JsDialect::TypeScriptDeclaration,
+            ParseLimits::default(),
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn redeclaration_early_errors_do_not_apply_to_the_typescript_dialects() {
     // TypeScript declares overloads, merges interfaces, namespaces, and
     // enums, and allows ambient redeclaration, so these dialects report no

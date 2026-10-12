@@ -77,6 +77,11 @@ pub enum JsDialect {
     TypeScript,
     /// TypeScript with JSX and the TSX generic-arrow disambiguation rules.
     Tsx,
+    /// A TypeScript declaration file, such as `next-env.d.ts`: the TypeScript
+    /// grammar without JSX, with the whole file in an ambient context as if
+    /// every declaration were marked `declare`, so `const` declarations may
+    /// omit their initializers.
+    TypeScriptDeclaration,
 }
 
 /// Parses one complete JavaScript expression into a span-precise arena.
@@ -118,11 +123,11 @@ pub fn parse_js_expression(
 /// syntactic grammar is supported, including sloppy mode and the Annex B
 /// web-compatibility grammar in scripts, and the ECMAScript early errors,
 /// which are checked with transient scopes. [`JsDialect::Jsx`] adds the JSX
-/// grammar in either goal; [`JsDialect::TypeScript`] and [`JsDialect::Tsx`]
-/// add the TypeScript type, declaration, and expression grammar without type
-/// checking and report no redeclaration early errors, because TypeScript
-/// declares overloads and merges declarations while a genuine duplicate is a
-/// checker diagnostic. A leading hashbang comment is retained, also after
+/// grammar in either goal; [`JsDialect::TypeScript`], [`JsDialect::Tsx`], and
+/// [`JsDialect::TypeScriptDeclaration`] add the TypeScript type, declaration,
+/// and expression grammar without type checking and report no redeclaration
+/// early errors, because TypeScript declares overloads and merges
+/// declarations while a genuine duplicate is a checker diagnostic. A leading hashbang comment is retained, also after
 /// a byte order mark. Any error returns no tree, so a file with a syntax error
 /// is never partially transformed. Parsing is deterministic and bounded by
 /// `limits`.
@@ -334,11 +339,16 @@ impl<'source> Parser<'source> {
             limits,
             goal,
             jsx: match dialect {
-                JsDialect::JavaScript | JsDialect::TypeScript => false,
+                JsDialect::JavaScript
+                | JsDialect::TypeScript
+                | JsDialect::TypeScriptDeclaration => false,
                 JsDialect::Jsx | JsDialect::Tsx => true,
             },
-            typescript: matches!(dialect, JsDialect::TypeScript | JsDialect::Tsx),
-            ambient: false,
+            typescript: matches!(
+                dialect,
+                JsDialect::TypeScript | JsDialect::Tsx | JsDialect::TypeScriptDeclaration
+            ),
+            ambient: dialect == JsDialect::TypeScriptDeclaration,
             ts_work: 0,
             ts_disallow_conditional: false,
             cursor: 0,

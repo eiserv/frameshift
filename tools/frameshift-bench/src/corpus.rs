@@ -142,6 +142,8 @@ impl Corpus {
                 (SourceGoal::Module, JsDialect::TypeScript) => b"T",
                 (SourceGoal::Script, JsDialect::Tsx) => b"x",
                 (SourceGoal::Module, JsDialect::Tsx) => b"Y",
+                (SourceGoal::Script, JsDialect::TypeScriptDeclaration) => b"d",
+                (SourceGoal::Module, JsDialect::TypeScriptDeclaration) => b"D",
             });
             feed(&(file.text.len() as u64).to_le_bytes());
             feed(file.text.as_bytes());
