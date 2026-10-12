@@ -56,7 +56,7 @@ These instructions are binding for every agent working on Frameshift, whatever t
   - Release Please derives versions and changelogs from these messages (`docs/RELEASES.md`).
 - **Small commits.** As soon as a step stands on its own (a fix with its test, a rule with its fixtures, a documentation update), commit it with its own message. Do not collect a large change into one commit. Each commit should pass the relevant checks.
 - **Pull requests and squash merges.**
-  - Changes normally reach `main` through pull requests, merged by squash. The owner-authorized direct commit and push exceptions for the template, `D-036`, `D-037`, bounded expression-parser, `D-038`, and `D-039` increments are recorded in `D-010`. Direct pushes to `main` are otherwise prohibited.
+  - Changes normally reach `main` through pull requests, merged by squash. The owner-authorized direct commit and push exceptions for the template, `D-036`, `D-037`, bounded expression-parser, `D-038`, `D-039`, and `D-040` increments are recorded in `D-010`. Direct pushes to `main` are otherwise prohibited.
   - The squash commit uses the pull request title, so the title must be a valid Conventional Commit, including `!` for breaking changes.
   - Keep unrelated changes in separate branches and pull requests.
   - Push branches, open pull requests, or create issues only when the task calls for it or the user authorizes it.
