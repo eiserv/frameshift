@@ -1,22 +1,32 @@
-//! Development-only measurement harness for experiment E1 (`D-040`).
+//! Development-only measurement harness for experiment E1 (`D-040`, `D-043`).
 //!
 //! It generates deterministic corpora of fictional JavaScript and JSX,
 //! parses them through the engine facade, and reports parser throughput and peak heap
 //! memory against the E1 budgets in `docs/ENGINEERING.md` (section 4.1).
-//! Timing depends on the machine, and budgets are judged on the reference
-//! hardware. The tool reads no files, starts no processes, and performs no
-//! network access. No product crate depends on it.
+//! With `--dir`, it reads the JavaScript and TypeScript files of a directory
+//! instead and also reports which of them parse. Timing depends on the
+//! machine, and budgets are judged on the reference hardware. The tool writes
+//! no files, starts no processes, and performs no network access. No product
+//! crate depends on it.
 
 mod alloc;
 mod corpus;
+mod directory;
 mod measure;
 
-use std::{env, process::ExitCode, time::Duration};
+use std::{
+    collections::BTreeMap,
+    env,
+    path::{Path, PathBuf},
+    process::ExitCode,
+    time::Duration,
+};
 
 use frameshift_engine::{ParseLimits, SourceGoal};
 
 use crate::{
-    corpus::{Corpus, DEFAULT_SEED, GENERATOR_VERSION, generate_file},
+    corpus::{Corpus, CorpusFile, DEFAULT_SEED, GENERATOR_VERSION, generate_file},
+    directory::{Extension, Failure, Outcome, Sample},
     measure::{FileMemory, Timing},
 };
 
@@ -35,6 +45,7 @@ const DEFAULT_ITERATIONS: usize = 5;
 const SCALING_KIB: [usize; 7] = [1, 4, 16, 64, 256, 1_024, 4_096];
 
 const USAGE: &str = "usage: frameshift-bench [--seed <n>] [--files <n>] [--iterations <n>]\n       \
+                     frameshift-bench --dir <path> [--iterations <n>]\n       \
                      frameshift-bench --print <index> [--seed <n>] [--files <n>]\n       \
                      frameshift-bench --print-component <index> [--seed <n>] [--files <n>]";
 
@@ -44,6 +55,7 @@ struct Options {
     iterations: usize,
     print: Option<usize>,
     print_component: Option<usize>,
+    directory: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
@@ -55,6 +67,19 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if let Some(root) = &options.directory {
+        if cfg!(debug_assertions) {
+            eprintln!("frameshift-bench: measurements require an optimized build (--release)");
+            return ExitCode::from(2);
+        }
+        return match run_directory(root, options.iterations) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("frameshift-bench: {message}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let corpus = Corpus::mixed(options.seed, options.files);
     let components = Corpus::components(options.seed, options.files);
     let printed = match (options.print, options.print_component) {
@@ -95,11 +120,16 @@ fn parse_options(mut args: impl Iterator<Item = String>) -> Result<Options, Stri
         iterations: DEFAULT_ITERATIONS,
         print: None,
         print_component: None,
+        directory: None,
     };
     while let Some(flag) = args.next() {
         let value = args
             .next()
             .ok_or_else(|| format!("{flag} requires a value"))?;
+        if flag == "--dir" {
+            options.directory = Some(PathBuf::from(value));
+            continue;
+        }
         let number = parse_number(&value).ok_or_else(|| format!("invalid number {value:?}"))?;
         let count = || usize::try_from(number).map_err(|_| format!("{value} is too large"));
         match flag.as_str() {
@@ -181,15 +211,19 @@ fn run(options: &Options, corpus: &Corpus, components: &Corpus) -> Result<(), St
 }
 
 fn measure_corpus(label: &str, corpus: &Corpus, iterations: usize) -> Result<(), String> {
-    let bytes = corpus.bytes();
-    let throughput = measure::throughput(&corpus.files, ParseLimits::default(), iterations)
+    measure_files(label, &corpus.files, iterations)
+}
+
+fn measure_files(label: &str, files: &[CorpusFile], iterations: usize) -> Result<(), String> {
+    let bytes: usize = files.iter().map(|file| file.text.len()).sum();
+    let throughput = measure::throughput(files, ParseLimits::default(), iterations)
         .map_err(|error| format!("{label}, {error}"))?;
     print_timing("text and parse", bytes, &throughput.text_and_parse, false);
     print_timing("parse", bytes, &throughput.parse, true);
-    let files = measure::file_memory(&corpus.files, ParseLimits::default())
+    let memory = measure::file_memory(files, ParseLimits::default())
         .map_err(|error| format!("{label}, {error}"))?;
-    print_file_memory(&files);
-    let all = measure::corpus_memory(&corpus.files, ParseLimits::default())
+    print_file_memory(&memory);
+    let all = measure::corpus_memory(files, ParseLimits::default())
         .map_err(|error| format!("{label}, {error}"))?;
     let retained = all.source + all.indexes + all.trees;
     println!(
@@ -202,6 +236,180 @@ fn measure_corpus(label: &str, corpus: &Corpus, iterations: usize) -> Result<(),
         ratio(all.peak, all.source)
     );
     Ok(())
+}
+
+// Counts of files by outcome.
+#[derive(Default)]
+struct Tally {
+    files: usize,
+    bytes: usize,
+    accepted: usize,
+    beyond_limits: usize,
+    script_only: usize,
+    rejected: usize,
+    text: usize,
+}
+
+impl Tally {
+    fn add(&mut self, bytes: usize, outcome: &Outcome) {
+        self.files += 1;
+        self.bytes += bytes;
+        match outcome {
+            Outcome::Accepted(_) => self.accepted += 1,
+            Outcome::BeyondLimits(_) => self.beyond_limits += 1,
+            Outcome::ScriptOnly(_) => self.script_only += 1,
+            Outcome::Rejected(_) => self.rejected += 1,
+            Outcome::Text(_) | Outcome::Unreadable => self.text += 1,
+        }
+    }
+
+    // Files that parse in a goal and dialect that fit them, with limits
+    // raised where the defaults stopped them.
+    fn parsed(&self) -> usize {
+        self.accepted + self.beyond_limits + self.script_only
+    }
+
+    fn row(&self, label: &str) {
+        println!(
+            "  {label:<36} {:>6} {:>12} {:>8} {:>6} {:>6} {:>8} {:>5}  {:>7}",
+            grouped(self.files),
+            grouped(self.bytes),
+            grouped(self.accepted),
+            grouped(self.beyond_limits),
+            grouped(self.script_only),
+            grouped(self.rejected),
+            grouped(self.text),
+            percent(self.parsed(), self.files)
+        );
+    }
+}
+
+fn run_directory(root: &Path, iterations: usize) -> Result<(), String> {
+    let sample = Sample::read(root)?;
+    println!("frameshift-bench: E1 directory measurement (D-043)");
+    println!("root: {}", root.display());
+    let skipped = &sample.skipped;
+    println!(
+        "walk: {} files selected; not followed: {} symbolic links; skipped: {} ignored and {} unvisited directories, {} other files",
+        grouped(sample.files.len()),
+        grouped(skipped.links),
+        grouped(skipped.ignored_directories),
+        grouped(skipped.unvisited_directories),
+        grouped(skipped.other_files)
+    );
+    println!(
+        "mapping: .js and .jsx as JSX modules (as scripts if only that parses), .mjs as modules, .cjs as scripts, .ts, .mts, and .cts as TypeScript modules, .tsx as TSX modules"
+    );
+
+    let mut total = Tally::default();
+    let mut by_extension: BTreeMap<Extension, Tally> = BTreeMap::new();
+    let mut by_project: BTreeMap<&str, Tally> = BTreeMap::new();
+    let mut by_kind: BTreeMap<String, usize> = BTreeMap::new();
+    for file in &sample.files {
+        total.add(file.bytes, &file.outcome);
+        by_extension
+            .entry(file.extension)
+            .or_default()
+            .add(file.bytes, &file.outcome);
+        let project = file.path.split('/').next().unwrap_or_default();
+        by_project
+            .entry(project)
+            .or_default()
+            .add(file.bytes, &file.outcome);
+        if let Outcome::Rejected(failure) = &file.outcome {
+            *by_kind
+                .entry(format!("{:?}", failure.error.kind))
+                .or_default() += 1;
+        }
+    }
+
+    println!();
+    println!(
+        "  {:<36} {:>6} {:>12} {:>8} {:>6} {:>6} {:>8} {:>5}  {:>7}",
+        "", "files", "bytes", "accepted", "limits", "script", "rejected", "text", "parsed"
+    );
+    for extension in Extension::ALL {
+        if let Some(tally) = by_extension.get(&extension) {
+            tally.row(extension.spelling());
+        }
+    }
+    total.row("all files");
+    println!();
+    for (project, tally) in &by_project {
+        tally.row(project);
+    }
+    println!();
+    println!(
+        "  accepted: default limits and mapped goal; limits: parsed only with raised node, token, and lexical limits; script: .js or .jsx parsed only as a script; text: not UTF-8, too large, or unreadable"
+    );
+
+    if !by_kind.is_empty() {
+        println!();
+        println!("Rejections by error kind");
+        let mut kinds: Vec<(&String, &usize)> = by_kind.iter().collect();
+        kinds.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+        for (kind, count) in kinds {
+            println!("  {count:>6}  {kind}");
+        }
+    }
+
+    let listed: Vec<_> = sample
+        .files
+        .iter()
+        .filter(|file| !matches!(file.outcome, Outcome::Accepted(_)))
+        .collect();
+    if !listed.is_empty() {
+        println!();
+        println!("Files not accepted with the default limits");
+        for file in listed {
+            let (label, detail) = match &file.outcome {
+                Outcome::BeyondLimits(failure) => ("limits", describe(failure)),
+                Outcome::ScriptOnly(failure) => ("script", describe(failure)),
+                Outcome::Rejected(failure) => ("rejected", describe(failure)),
+                Outcome::Text(error) => ("text", format!("  {error:?}")),
+                Outcome::Unreadable => ("text", "  unreadable".to_owned()),
+                Outcome::Accepted(_) => continue,
+            };
+            println!("  {label:<8}  {}{detail}", file.path);
+        }
+    }
+
+    let accepted: Vec<CorpusFile> = sample
+        .files
+        .into_iter()
+        .filter_map(|file| match file.outcome {
+            Outcome::Accepted(file) => Some(file),
+            Outcome::BeyondLimits(_)
+            | Outcome::ScriptOnly(_)
+            | Outcome::Rejected(_)
+            | Outcome::Text(_)
+            | Outcome::Unreadable => None,
+        })
+        .collect();
+    if accepted.is_empty() {
+        return Ok(());
+    }
+    println!();
+    println!(
+        "Accepted files, default parse limits; one warm-up and {iterations} measured passes on one thread; MB = 10^6 bytes"
+    );
+    measure_files("directory", &accepted, iterations)
+}
+
+fn describe(failure: &Failure) -> String {
+    format!(
+        ":{}:{}  {:?}",
+        failure.position.line, failure.position.column, failure.error.kind
+    )
+}
+
+fn percent(part: usize, whole: usize) -> String {
+    if whole == 0 {
+        return "-".to_owned();
+    }
+    // Truncated, so a rate never appears higher than it is.
+    let hundredths = part * 10_000 / whole;
+    format!("{}.{:02}%", hundredths / 100, hundredths % 100)
 }
 
 fn print_timing(label: &str, bytes: usize, timing: &Timing, budget: bool) {

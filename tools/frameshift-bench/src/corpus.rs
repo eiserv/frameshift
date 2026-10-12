@@ -57,11 +57,12 @@ impl Rng {
     }
 }
 
-/// One generated source file and the goal and dialect it must be parsed with.
-pub struct GeneratedFile {
-    /// Script for CommonJS-style files, Module otherwise.
+/// One source file, generated or read from a directory, and the goal and
+/// dialect it must be parsed with.
+pub struct CorpusFile {
+    /// The source goal: Script for CommonJS-style files, Module otherwise.
     pub goal: SourceGoal,
-    /// JSX for component modules, JavaScript otherwise.
+    /// The dialect that the generator or the file name selects.
     pub dialect: JsDialect,
     /// The complete source text.
     pub text: String,
@@ -70,7 +71,7 @@ pub struct GeneratedFile {
 /// A generated corpus in a fixed order.
 pub struct Corpus {
     /// The files, in generation order.
-    pub files: Vec<GeneratedFile>,
+    pub files: Vec<CorpusFile>,
 }
 
 impl Corpus {
@@ -165,10 +166,10 @@ pub fn mixed_file_size(rng: &mut Rng) -> usize {
 
 /// Generates one file of at least `target` bytes. It exceeds the target by
 /// at most one top-level item.
-pub fn generate_file(seed: u64, goal: SourceGoal, target: usize) -> GeneratedFile {
+pub fn generate_file(seed: u64, goal: SourceGoal, target: usize) -> CorpusFile {
     let mut emitter = Emitter::new(seed, goal, false);
     emitter.file(target);
-    GeneratedFile {
+    CorpusFile {
         goal,
         dialect: JsDialect::JavaScript,
         text: emitter.out,
@@ -177,10 +178,10 @@ pub fn generate_file(seed: u64, goal: SourceGoal, target: usize) -> GeneratedFil
 
 /// Generates one JSX component module of at least `target` bytes. It exceeds
 /// the target by at most one top-level item.
-pub fn generate_component_file(seed: u64, target: usize) -> GeneratedFile {
+pub fn generate_component_file(seed: u64, target: usize) -> CorpusFile {
     let mut emitter = Emitter::new(seed, SourceGoal::Module, true);
     emitter.file(target);
-    GeneratedFile {
+    CorpusFile {
         goal: SourceGoal::Module,
         dialect: JsDialect::Jsx,
         text: emitter.out,

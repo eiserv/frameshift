@@ -11,7 +11,7 @@ use std::{
 
 use frameshift_engine::{ParseLimits, SourceText, TextLimits, parse_js_program};
 
-use crate::{ALLOCATOR, corpus::GeneratedFile};
+use crate::{ALLOCATOR, corpus::CorpusFile};
 
 /// Minimum and median of repeated measurements.
 pub struct Timing {
@@ -42,7 +42,7 @@ pub struct Throughput {
 /// Parses every file once untimed, then `iterations` times timed. Each file's
 /// tree is dropped after its timing ends, so drops are not measured.
 pub fn throughput(
-    files: &[GeneratedFile],
+    files: &[CorpusFile],
     limits: ParseLimits,
     iterations: usize,
 ) -> Result<Throughput, String> {
@@ -91,10 +91,7 @@ pub struct FileMemory {
 }
 
 /// Measures each file separately, in order.
-pub fn file_memory(
-    files: &[GeneratedFile],
-    limits: ParseLimits,
-) -> Result<Vec<FileMemory>, String> {
+pub fn file_memory(files: &[CorpusFile], limits: ParseLimits) -> Result<Vec<FileMemory>, String> {
     let counters = ALLOCATOR.counters();
     let mut results = Vec::with_capacity(files.len());
     for (index, file) in files.iter().enumerate() {
@@ -135,7 +132,7 @@ pub struct CorpusMemory {
 }
 
 /// Builds all source texts, then parses all files while keeping every tree.
-pub fn corpus_memory(files: &[GeneratedFile], limits: ParseLimits) -> Result<CorpusMemory, String> {
+pub fn corpus_memory(files: &[CorpusFile], limits: ParseLimits) -> Result<CorpusMemory, String> {
     let counters = ALLOCATOR.counters();
     let texts: Vec<String> = files.iter().map(|file| file.text.clone()).collect();
     let source: usize = texts.iter().map(String::len).sum();
