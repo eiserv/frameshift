@@ -210,7 +210,7 @@ cargo run -p frameshift-bench --offline --locked -- --print <index>
 | Syntax nodes | 1,388,794, 0.134 per byte | |
 | Scaling series, 1 KiB to 4 MiB | 6.8 to 13.1 MB/s, peak 6.9x to 11.9x | |
 
-This machine is not the reference hardware, and its hybrid cores make timings noisy, so these figures are evidence rather than a budget verdict. Throughput stays in the same range across three orders of magnitude of file size, so parsing is linear, but it misses the budget by a factor of about 2.6. The parser has no token buffer and rescans trivia and the next token for each peek; the throughput increment that `D-040` places before JSX addresses this. Trees hold about 62 bytes per node, although a node is at most 40 bytes, mainly because of vector growth reserve. The default limit of 100,000 nodes corresponds to about 744 KB of this mix, much less than the 16 MiB source limit.
+This machine is not the reference hardware, and its hybrid cores make timings noisy, so these figures are evidence rather than a budget verdict. Throughput stays in the same range across three orders of magnitude of file size, so parsing is linear, but it misses the budget by a factor of about 2.6. At the baseline, the parser rescanned trivia and the next token for each peek; the throughput increment below addresses this. Trees hold about 62 bytes per node, although a node is at most 40 bytes, mainly because of vector growth reserve. The default limit of 100,000 nodes corresponds to about 744 KB of this mix, much less than the 16 MiB source limit.
 
 **Throughput increment (`D-040`).** Counting scanner calls on the default corpus showed 2.2 punctuator scans per consumed token, each comparing all 57 spellings, 4.9 trivia scans, and 0.7 identifier scans per token. Every step below keeps the public API and produces identical trees and errors. Before each step was committed, a development-time comparison parsed the same inputs with the parser before the increment and the new parser, and compared node arenas, child order, comments, consumed spans, and errors byte for byte. The inputs were the 3,000 files of two generated corpora, 40,000 mutations of 1,000 of them (byte ranges deleted, fragments inserted, ranges duplicated), and, from the second step on, all 99,499 sequences of up to three tokens over a 46-token alphabet with line breaks, HTML-like comment spellings, regular-expression and template delimiters, and contextual keywords, plus 200,000 random sequences of four to eight such tokens. Each input was parsed as a script, as a module, and as an expression: 1,027,497 outcomes with 38,954 trees and errors of about 40 kinds. The comparison is not part of the repository. Measurements use the machine and corpus of the baseline:
 
@@ -222,3 +222,16 @@ This machine is not the reference hardware, and its hybrid cores make timings no
 | Byte-level trivia and ASCII identifier scanning, sorted reserved-word keys (sections 4.1 and 4.6) | 59.9 MB/s (58.9 MB/s) |
 | Reused child-list buffers (section 4.12) | 63.4 MB/s (63.2 MB/s) |
 | Inlined check for already skipped trivia (section 4.12) | 68.7 MB/s (68.5 MB/s) |
+
+Reusing the hash maps of transient scopes and inlining the cached identifier and punctuator peeks were measured as well. They gave no gain, and the reused maps raised peak memory, so neither was kept.
+
+**Result after the increment (2026-10-12).** Same machine and corpus, ten passes:
+
+| Measurement | Result | E1 budget |
+| --- | --- | --- |
+| Parse throughput, minimum (median) | 68.4 MB/s (66.2 MB/s) | at least 30 MB/s per core: met on this machine |
+| Peak heap per file, median (maximum) | 9.9x (15.0x, a 1.7 KB file) | at most 20x: met |
+| All source texts and trees retained | 99.8 MB for 10.3 MB of source (9.7x): 3.1 MB indexes, 86.4 MB trees | at most 20x: met |
+| Scaling series, 1 KiB to 4 MiB | 58.8 to 83.7 MB/s, peak 6.9x to 11.9x | |
+
+Throughput rose by a factor of 5.3 with identical trees and errors, and it stays in the same range across file sizes. Peak memory is unchanged within 0.1x of the source size. This desktop is faster per core than the reference laptop of section 4.1 of [ENGINEERING.md](ENGINEERING.md), so the result shows a margin of about a factor of two here rather than a verdict on the budget, which is checked on reference hardware. Scanning the corpus with the same public scanners outside the parser takes about two fifths of the parse time; the rest is grammar logic, which still peeks at the next token several times through the cached lookups. A token buffer that scans each token once would be the next structural step if JSX or TypeScript consume the margin.
