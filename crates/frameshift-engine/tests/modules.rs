@@ -2,8 +2,8 @@
 //! fictional text.
 
 use frameshift_engine::{
-    MethodKind, NodeId, ParseErrorKind, ParseLimits, SourceGoal, SourceText, SyntaxNodeKind,
-    SyntaxTree, TextLimits, VariableKind, parse_js_program,
+    JsDialect, MethodKind, NodeId, ParseErrorKind, ParseLimits, SourceGoal, SourceText,
+    SyntaxNodeKind, SyntaxTree, TextLimits, VariableKind, parse_js_program,
 };
 
 fn source(text: &str) -> SourceText {
@@ -11,7 +11,7 @@ fn source(text: &str) -> SourceText {
 }
 
 fn parse(goal: SourceGoal, input: &SourceText) -> SyntaxTree<'_> {
-    match parse_js_program(input, goal, ParseLimits::default()) {
+    match parse_js_program(input, goal, JsDialect::JavaScript, ParseLimits::default()) {
         Ok(tree) => {
             assert_reachable_and_nested(input, &tree);
             tree
@@ -69,7 +69,9 @@ fn assert_valid(goal: SourceGoal, cases: &[&str]) {
 fn assert_failures(goal: SourceGoal, cases: &[(&str, usize, ParseErrorKind)]) {
     for (text, offset, expected) in cases {
         let input = source(text);
-        let Err(error) = parse_js_program(&input, goal, ParseLimits::default()) else {
+        let Err(error) =
+            parse_js_program(&input, goal, JsDialect::JavaScript, ParseLimits::default())
+        else {
             panic!("expected {text:?} to fail as {goal:?}");
         };
         assert_eq!(

@@ -3,6 +3,7 @@
 
 mod ast;
 mod identifier;
+mod jsx;
 mod lexical;
 mod numeric;
 mod parser;
@@ -24,13 +25,15 @@ pub use ast::{
 pub use identifier::{
     IdentifierKind, IdentifierToken, ReservedWord, ReservedWordClass, scan_js_identifier,
 };
+pub use jsx::{JsxStringToken, scan_jsx_identifier, scan_jsx_string, scan_jsx_text};
 pub use lexical::{
     Comment, CommentKind, LegacyOctal, LexicalError, LexicalErrorKind, LexicalLimits, SourceGoal,
     StringToken, Trivia, scan_js_string, scan_js_trivia,
 };
 pub use numeric::{NumericBase, NumericKind, NumericLiteral, scan_js_number};
 pub use parser::{
-    ParseError, ParseErrorKind, ParseLimits, StrictModeError, parse_js_expression, parse_js_program,
+    JsDialect, ParseError, ParseErrorKind, ParseLimits, StrictModeError, parse_js_expression,
+    parse_js_program,
 };
 pub use punctuator::{
     GreaterThanMode, JsLexicalGoal, Punctuator, PunctuatorContext, PunctuatorToken,

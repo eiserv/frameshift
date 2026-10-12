@@ -10,6 +10,7 @@ mod class;
 mod error;
 mod expression;
 mod function;
+mod jsx;
 mod module;
 mod names;
 mod pattern;
@@ -44,7 +45,8 @@ pub struct ParseLimits {
     pub max_nodes: usize,
     /// Maximum consumed lexical tokens, default 200,000.
     pub max_tokens: usize,
-    /// Maximum nested expression, statement, function, and class calls, default 256.
+    /// Maximum nested expression, statement, function, class, and JSX element
+    /// calls, default 256.
     pub max_nesting_depth: usize,
 }
 
@@ -59,6 +61,18 @@ impl Default for ParseLimits {
     }
 }
 
+/// The JavaScript language variant that source text is parsed as.
+///
+/// The caller selects the dialect, for example from the file name and the
+/// project configuration. The parser never infers it from the content.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JsDialect {
+    /// ECMAScript without syntax extensions.
+    JavaScript,
+    /// ECMAScript with JSX elements and fragments as primary expressions.
+    Jsx,
+}
+
 /// Parses one complete JavaScript expression into a span-precise arena.
 ///
 /// The expression is parsed as if it were outside any function, class, or
@@ -68,15 +82,18 @@ impl Default for ParseLimits {
 /// `...RequiresContext` error: reserved words that only strict code reserves,
 /// `await` and `yield` outside async functions and generators,
 /// strict-mode-dependent forms, HTML-like comments and `import.meta`,
-/// `new.target`, `super`, and private names outside a class. Leading and
-/// trailing trivia is consumed and comments are retained in source order.
-/// Any error returns no tree. Parsing is deterministic and bounded by `limits`.
+/// `new.target`, `super`, and private names outside a class. With
+/// [`JsDialect::Jsx`], JSX elements and fragments are primary expressions.
+/// Leading and trailing trivia is consumed and comments are retained in
+/// source order. Any error returns no tree. Parsing is deterministic and
+/// bounded by `limits`.
 pub fn parse_js_expression(
     source: &SourceText,
     offset: usize,
+    dialect: JsDialect,
     limits: ParseLimits,
 ) -> Result<SyntaxTree<'_>, ParseError> {
-    let mut parser = Parser::new(source, Goal::Unknown, limits);
+    let mut parser = Parser::new(source, Goal::Unknown, dialect, limits);
     parser.skip_trivia_at(offset)?;
     let root = parser.parse_expression(0)?;
     parser.check_expression_only_errors()?;
@@ -90,19 +107,21 @@ pub fn parse_js_expression(
 /// Parses complete Script or Module source text into a span-precise arena.
 ///
 /// The root is a [`SyntaxNodeKind::Program`] node. The complete ECMAScript
-/// syntactic grammar is supported except JSX and TypeScript, including sloppy
-/// mode and the Annex B web-compatibility grammar in scripts, and all early
-/// errors, which are checked with transient scopes. A leading hashbang comment
-/// is retained, also after a byte order mark. Any error returns no tree, so a
-/// file with a syntax error is never partially transformed. Parsing is
-/// deterministic and bounded by `limits`.
+/// syntactic grammar is supported except TypeScript, including sloppy mode and
+/// the Annex B web-compatibility grammar in scripts, and all early errors,
+/// which are checked with transient scopes. [`JsDialect::Jsx`] adds the JSX
+/// grammar in either goal. A leading hashbang comment is retained, also after
+/// a byte order mark. Any error returns no tree, so a file with a syntax error
+/// is never partially transformed. Parsing is deterministic and bounded by
+/// `limits`.
 pub fn parse_js_program(
     source: &SourceText,
     goal: SourceGoal,
+    dialect: JsDialect,
     limits: ParseLimits,
 ) -> Result<SyntaxTree<'_>, ParseError> {
-    let mut parser = Parser::new(source, Goal::from(goal), limits);
-    let root = parser.parse_program(goal)?;
+    let mut parser = Parser::new(source, Goal::from(goal), dialect, limits);
+    let root = parser.parse_program(goal, dialect)?;
     parser.check_expression_only_errors()?;
     parser.finish(0, root)
 }
@@ -208,6 +227,8 @@ struct Parser<'source> {
     text: &'source str,
     limits: ParseLimits,
     goal: Goal,
+    // Whether `<` at the start of a primary expression begins JSX.
+    jsx: bool,
     cursor: usize,
     // End of the last consumed token, before any trivia that a peek skipped.
     last_end: usize,
@@ -256,7 +277,12 @@ struct Checkpoint {
 }
 
 impl<'source> Parser<'source> {
-    fn new(source: &'source SourceText, goal: Goal, limits: ParseLimits) -> Self {
+    fn new(
+        source: &'source SourceText,
+        goal: Goal,
+        dialect: JsDialect,
+        limits: ParseLimits,
+    ) -> Self {
         let unknown = goal == Goal::Unknown;
         let context = Context {
             strict: match goal {
@@ -291,6 +317,10 @@ impl<'source> Parser<'source> {
             text: source.as_str(),
             limits,
             goal,
+            jsx: match dialect {
+                JsDialect::JavaScript => false,
+                JsDialect::Jsx => true,
+            },
             cursor: 0,
             last_end: 0,
             depth: 0,

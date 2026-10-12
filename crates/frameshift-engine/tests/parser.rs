@@ -1,7 +1,7 @@
 //! Expression parsing contracts through the public facade, using fictional text.
 
 use frameshift_engine::{
-    BinaryOperator, LexicalErrorKind, LexicalLimits, NodeId, ParseError, ParseErrorKind,
+    BinaryOperator, JsDialect, LexicalErrorKind, LexicalLimits, NodeId, ParseError, ParseErrorKind,
     ParseLimits, RegExpFlag, SourceText, SyntaxNodeKind, TemplateKind, TemplatePart, TextLimits,
     parse_js_expression,
 };
@@ -11,7 +11,7 @@ fn source(text: &str) -> SourceText {
 }
 
 fn failure(source: &SourceText, offset: usize, limits: ParseLimits) -> ParseError {
-    match parse_js_expression(source, offset, limits) {
+    match parse_js_expression(source, offset, JsDialect::JavaScript, limits) {
         Ok(_) => panic!(
             "expected expression parsing to fail for {:?} at {offset}",
             source.as_str()
@@ -32,7 +32,8 @@ fn text<'a>(
 fn arena_nodes_preserve_precedence_spans_and_comments() {
     let source_text = "/* lead */ answer + 2 * (scale - 1) // tail";
     let input = source(source_text);
-    let tree = parse_js_expression(&input, 0, ParseLimits::default()).unwrap();
+    let tree =
+        parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()).unwrap();
     assert_eq!(tree.nodes().len(), 8);
     assert_eq!(tree.comments().len(), 2);
     assert_eq!(input.slice(tree.consumed_span()).unwrap(), source_text);
@@ -70,7 +71,8 @@ fn arena_nodes_preserve_precedence_spans_and_comments() {
 #[test]
 fn exponentiation_is_right_associative_and_division_is_context_selected() {
     let input = source("a + b * c ** d ** e");
-    let tree = parse_js_expression(&input, 0, ParseLimits::default()).unwrap();
+    let tree =
+        parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()).unwrap();
     let SyntaxNodeKind::Binary {
         operator: BinaryOperator::Add,
         right,
@@ -105,10 +107,24 @@ fn exponentiation_is_right_associative_and_division_is_context_selected() {
     assert_eq!(text(&input, &tree, tree.root()), "a + b * c ** d ** e");
 
     let unary_right = source("2 ** -2");
-    assert!(parse_js_expression(&unary_right, 0, ParseLimits::default()).is_ok());
+    assert!(
+        parse_js_expression(
+            &unary_right,
+            0,
+            JsDialect::JavaScript,
+            ParseLimits::default()
+        )
+        .is_ok()
+    );
 
     let relational = source("a == b in c");
-    let relational_tree = parse_js_expression(&relational, 0, ParseLimits::default()).unwrap();
+    let relational_tree = parse_js_expression(
+        &relational,
+        0,
+        JsDialect::JavaScript,
+        ParseLimits::default(),
+    )
+    .unwrap();
     let SyntaxNodeKind::Binary {
         operator: BinaryOperator::Equal,
         right,
@@ -126,7 +142,13 @@ fn exponentiation_is_right_associative_and_division_is_context_selected() {
     ));
 
     let division_input = source("42 / 6 / 2");
-    let division = parse_js_expression(&division_input, 0, ParseLimits::default()).unwrap();
+    let division = parse_js_expression(
+        &division_input,
+        0,
+        JsDialect::JavaScript,
+        ParseLimits::default(),
+    )
+    .unwrap();
     let SyntaxNodeKind::Binary {
         operator: BinaryOperator::Divide,
         left,
@@ -144,7 +166,13 @@ fn exponentiation_is_right_associative_and_division_is_context_selected() {
     ));
 
     let regexp_input = source("/a+/gu + 1");
-    let regexp = parse_js_expression(&regexp_input, 0, ParseLimits::default()).unwrap();
+    let regexp = parse_js_expression(
+        &regexp_input,
+        0,
+        JsDialect::JavaScript,
+        ParseLimits::default(),
+    )
+    .unwrap();
     let SyntaxNodeKind::Binary { left, .. } = regexp.node(regexp.root()).unwrap().kind() else {
         panic!("expected a binary expression");
     };
@@ -158,7 +186,8 @@ fn exponentiation_is_right_associative_and_division_is_context_selected() {
 #[test]
 fn calls_optional_members_and_computed_members_use_arena_child_ranges() {
     let input = source("getRecord()?.items[index](first, second,)");
-    let tree = parse_js_expression(&input, 0, ParseLimits::default()).unwrap();
+    let tree =
+        parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()).unwrap();
     let SyntaxNodeKind::Call {
         callee,
         arguments,
@@ -190,7 +219,8 @@ fn calls_optional_members_and_computed_members_use_arena_child_ranges() {
 #[test]
 fn tagged_templates_keep_segments_and_substitutions_in_source_order() {
     let input = source("tag`head${value + 1}tail`");
-    let tree = parse_js_expression(&input, 0, ParseLimits::default()).unwrap();
+    let tree =
+        parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()).unwrap();
     let SyntaxNodeKind::TaggedTemplate { tag, template } = tree.node(tree.root()).unwrap().kind()
     else {
         panic!("expected a tagged template");
@@ -237,9 +267,10 @@ fn unary_exponent_and_nullish_grammar_errors_fail_closed() {
         assert_eq!((error.offset, error.kind), (offset, kind), "{source_text}");
     }
     let input = source("f({ value() {} })");
-    assert!(parse_js_expression(&input, 0, ParseLimits::default()).is_ok());
+    assert!(parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()).is_ok());
     let input = source("a ?? (b || c)");
-    let tree = parse_js_expression(&input, 0, ParseLimits::default()).unwrap();
+    let tree =
+        parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()).unwrap();
     assert_eq!(input.slice(tree.consumed_span()).unwrap(), "a ?? (b || c)");
 }
 

@@ -6,6 +6,7 @@ use crate::{
     identifier::ReservedWord,
     lexical::SourceGoal,
     numeric::{NumericBase, NumericKind},
+    parser::JsDialect,
     regexp::RegExpFlags,
     template::TemplateToken,
 };
@@ -302,6 +303,8 @@ pub enum SyntaxNodeKind {
     Program {
         /// The goal symbol the source was parsed with.
         goal: SourceGoal,
+        /// The language variant the source was parsed as.
+        dialect: JsDialect,
         /// Directives, statements, declarations, and module items, in source order.
         body: ChildList,
         /// Whether the top-level code is strict: always for modules, and for
@@ -879,6 +882,93 @@ pub enum SyntaxNodeKind {
         /// Declaration or expression.
         declaration: NodeId,
     },
+    /// A JSX element `<name ...>children</name>` or `<name ... />`.
+    JsxElement {
+        /// The [`SyntaxNodeKind::JsxOpeningElement`] node.
+        opening: NodeId,
+        /// Text, element, fragment, expression container, and spread child
+        /// nodes, in source order. Empty for a self-closing element.
+        children: ChildList,
+        /// The [`SyntaxNodeKind::JsxClosingElement`] node, absent for a
+        /// self-closing element.
+        closing: Option<NodeId>,
+    },
+    /// The opening tag `<name ...>` or `<name ... />` of a JSX element.
+    JsxOpeningElement {
+        /// A JSX identifier, namespaced name, or member expression.
+        name: NodeId,
+        /// Attributes and spread attributes, in source order.
+        attributes: ChildList,
+        /// Whether the tag ends with `/>`.
+        self_closing: bool,
+    },
+    /// The closing tag `</name>` of a JSX element.
+    JsxClosingElement {
+        /// A JSX identifier, namespaced name, or member expression with the
+        /// same structure and spellings as the opening tag's name.
+        name: NodeId,
+    },
+    /// A JSX fragment `<>children</>`.
+    JsxFragment {
+        /// The [`SyntaxNodeKind::JsxOpeningFragment`] node.
+        opening: NodeId,
+        /// Text, element, fragment, expression container, and spread child
+        /// nodes, in source order.
+        children: ChildList,
+        /// The [`SyntaxNodeKind::JsxClosingFragment`] node.
+        closing: NodeId,
+    },
+    /// The `<>` tag of a JSX fragment.
+    JsxOpeningFragment,
+    /// The `</>` tag of a JSX fragment.
+    JsxClosingFragment,
+    /// A JSX element or attribute name part, such as `div` or `aria-label`.
+    /// Its span is its exact spelling; JSX names have no escapes.
+    JsxIdentifier,
+    /// A namespaced JSX name `namespace:name`.
+    JsxNamespacedName {
+        /// The [`SyntaxNodeKind::JsxIdentifier`] before the colon.
+        namespace: NodeId,
+        /// The [`SyntaxNodeKind::JsxIdentifier`] after the colon.
+        name: NodeId,
+    },
+    /// A JSX element name `object.property`, such as `Menu.Item`.
+    JsxMemberExpression {
+        /// A JSX identifier or member expression.
+        object: NodeId,
+        /// The [`SyntaxNodeKind::JsxIdentifier`] after the dot.
+        property: NodeId,
+    },
+    /// A JSX attribute `name`, `name="value"`, `name={expression}`, or
+    /// `name=<element />`.
+    JsxAttribute {
+        /// A JSX identifier or namespaced name.
+        name: NodeId,
+        /// A JSX string, expression container, element, or fragment, if present.
+        value: Option<NodeId>,
+    },
+    /// A JSX spread attribute `{...expression}`.
+    JsxSpreadAttribute {
+        /// Spread expression.
+        argument: NodeId,
+    },
+    /// A JSX expression container `{expression}`, or a child container `{}`
+    /// that holds only trivia.
+    JsxExpressionContainer {
+        /// Contained expression, absent for an empty child container.
+        expression: Option<NodeId>,
+    },
+    /// A JSX spread child `{...expression}`.
+    JsxSpreadChild {
+        /// Spread expression.
+        expression: NodeId,
+    },
+    /// JSX text between tags and containers, represented by its original
+    /// span without decoding character references or trimming whitespace.
+    JsxText,
+    /// A quoted JSX attribute string, represented by its original span. JSX
+    /// strings have no escapes; character references are not decoded.
+    JsxStringLiteral,
 }
 
 /// One node in a syntax tree arena.
@@ -973,7 +1063,12 @@ impl<'source> SyntaxTree<'source> {
             | SyntaxNodeKind::Super
             | SyntaxNodeKind::MetaProperty { .. }
             | SyntaxNodeKind::Elision
-            | SyntaxNodeKind::BindingIdentifier { .. } => {}
+            | SyntaxNodeKind::BindingIdentifier { .. }
+            | SyntaxNodeKind::JsxOpeningFragment
+            | SyntaxNodeKind::JsxClosingFragment
+            | SyntaxNodeKind::JsxIdentifier
+            | SyntaxNodeKind::JsxText
+            | SyntaxNodeKind::JsxStringLiteral => {}
             SyntaxNodeKind::Program { body, .. }
             | SyntaxNodeKind::BlockStatement { body }
             | SyntaxNodeKind::FunctionBody { body, .. }
@@ -1169,6 +1264,49 @@ impl<'source> SyntaxTree<'source> {
                 source,
                 attributes,
             } => children.prefix = [exported, Some(source), attributes, None],
+            SyntaxNodeKind::JsxElement {
+                opening,
+                children: elements,
+                closing,
+            } => {
+                children.prefix[0] = Some(opening);
+                children.list = list(elements);
+                children.suffix[0] = closing;
+            }
+            SyntaxNodeKind::JsxFragment {
+                opening,
+                children: elements,
+                closing,
+            } => {
+                children.prefix[0] = Some(opening);
+                children.list = list(elements);
+                children.suffix[0] = Some(closing);
+            }
+            SyntaxNodeKind::JsxOpeningElement {
+                name, attributes, ..
+            } => {
+                children.prefix[0] = Some(name);
+                children.list = list(attributes);
+            }
+            SyntaxNodeKind::JsxClosingElement { name } => children.prefix[0] = Some(name),
+            SyntaxNodeKind::JsxNamespacedName { namespace, name } => {
+                children.prefix = [Some(namespace), Some(name), None, None];
+            }
+            SyntaxNodeKind::JsxMemberExpression { object, property } => {
+                children.prefix = [Some(object), Some(property), None, None];
+            }
+            SyntaxNodeKind::JsxAttribute { name, value } => {
+                children.prefix = [Some(name), value, None, None];
+            }
+            SyntaxNodeKind::JsxSpreadAttribute {
+                argument: expression,
+            }
+            | SyntaxNodeKind::JsxSpreadChild { expression } => {
+                children.prefix[0] = Some(expression);
+            }
+            SyntaxNodeKind::JsxExpressionContainer { expression } => {
+                children.prefix[0] = expression;
+            }
         }
         Some(children)
     }

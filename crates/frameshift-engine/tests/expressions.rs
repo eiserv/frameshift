@@ -2,7 +2,7 @@
 //! through the public facade, using fictional text.
 
 use frameshift_engine::{
-    AssignmentOperator, BinaryOperator, NodeId, ParseError, ParseErrorKind, ParseLimits,
+    AssignmentOperator, BinaryOperator, JsDialect, NodeId, ParseError, ParseErrorKind, ParseLimits,
     SourceText, SyntaxNodeKind, SyntaxTree, TextLimits, UpdateOperator, parse_js_expression,
 };
 
@@ -11,7 +11,7 @@ fn source(text: &str) -> SourceText {
 }
 
 fn parse(input: &SourceText) -> SyntaxTree<'_> {
-    match parse_js_expression(input, 0, ParseLimits::default()) {
+    match parse_js_expression(input, 0, JsDialect::JavaScript, ParseLimits::default()) {
         Ok(tree) => {
             assert_tree_invariants(input, &tree);
             tree
@@ -22,7 +22,7 @@ fn parse(input: &SourceText) -> SyntaxTree<'_> {
 
 fn failure(text: &str) -> ParseError {
     let input = source(text);
-    match parse_js_expression(&input, 0, ParseLimits::default()) {
+    match parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()) {
         Ok(_) => panic!("expected expression parsing to fail for {text:?}"),
         Err(error) => error,
     }
@@ -63,7 +63,8 @@ fn assert_tree_invariants(input: &SourceText, tree: &SyntaxTree<'_>) {
         }
     }
     assert!(seen.iter().all(|&reached| reached), "unreachable node");
-    let again = parse_js_expression(input, 0, ParseLimits::default()).unwrap();
+    let again =
+        parse_js_expression(input, 0, JsDialect::JavaScript, ParseLimits::default()).unwrap();
     assert_eq!(again.nodes(), tree.nodes());
     assert_eq!(again.root(), tree.root());
 }
@@ -708,7 +709,7 @@ fn generated_short_inputs_never_return_inconsistent_trees() {
                 index /= ALPHABET.len();
             }
             let input = source(&buffer);
-            match parse_js_expression(&input, 0, ParseLimits::default()) {
+            match parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()) {
                 Ok(tree) => {
                     assert_tree_invariants(&input, &tree);
                     accepted += 1;

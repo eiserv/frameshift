@@ -1,7 +1,7 @@
 //! Source files, statement lists, statements, and variable declarations.
 
 use super::{
-    Label, ParseError, ParseErrorKind, Parser, StrictModeError, Strictness,
+    JsDialect, Label, ParseError, ParseErrorKind, Parser, StrictModeError, Strictness,
     class::ClassPlacement,
     function::FunctionPlacement,
     pattern::TargetMode,
@@ -42,7 +42,11 @@ enum Position {
 }
 
 impl<'source> Parser<'source> {
-    pub(super) fn parse_program(&mut self, goal: SourceGoal) -> Result<NodeId, ParseError> {
+    pub(super) fn parse_program(
+        &mut self,
+        goal: SourceGoal,
+        dialect: JsDialect,
+    ) -> Result<NodeId, ParseError> {
         self.skip_hashbang()?;
         let (scope, list) = match goal {
             SourceGoal::Script => (ScopeKind::Function, ListKind::Script),
@@ -65,6 +69,7 @@ impl<'source> Parser<'source> {
         self.add_node(
             SyntaxNodeKind::Program {
                 goal,
+                dialect,
                 body,
                 strict: self.context.strict == Strictness::Strict,
             },

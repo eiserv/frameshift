@@ -1597,7 +1597,7 @@ fn capitalize(word: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use frameshift_engine::{ParseLimits, SourceText, TextLimits, parse_js_program};
+    use frameshift_engine::{JsDialect, ParseLimits, SourceText, TextLimits, parse_js_program};
 
     #[test]
     fn rng_matches_the_splitmix64_reference_sequence() {
@@ -1654,7 +1654,12 @@ mod tests {
             for (index, file) in corpus.files.iter().enumerate() {
                 let source = SourceText::new(file.text.clone(), TextLimits::default())
                     .expect("generated text is within the default limits");
-                if let Err(error) = parse_js_program(&source, file.goal, ParseLimits::default()) {
+                if let Err(error) = parse_js_program(
+                    &source,
+                    file.goal,
+                    JsDialect::JavaScript,
+                    ParseLimits::default(),
+                ) {
                     let start = error.offset.saturating_sub(80);
                     let end = (error.offset + 80).min(file.text.len());
                     panic!(

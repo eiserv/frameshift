@@ -20,6 +20,8 @@ pub struct LexicalLimits {
     /// Maximum bytes in one regular-expression literal, including both
     /// slashes and the flags, default 1 MiB.
     pub max_regexp_bytes: usize,
+    /// Maximum bytes in one run of JSX text between tags, default 1 MiB.
+    pub max_jsx_text_bytes: usize,
 }
 
 impl Default for LexicalLimits {
@@ -31,6 +33,7 @@ impl Default for LexicalLimits {
             max_template_bytes: 1024 * 1024,
             max_identifier_bytes: 1024 * 1024,
             max_regexp_bytes: 1024 * 1024,
+            max_jsx_text_bytes: 1024 * 1024,
         }
     }
 }
@@ -161,6 +164,11 @@ pub enum LexicalErrorKind {
     InvalidRegExpPattern(RegExpPatternError),
     /// The regular-expression scan would consume more than the allowed number of bytes.
     RegExpLimit,
+    /// JSX text contains `>` or `}`, which must be written as an expression
+    /// container or a character reference.
+    InvalidJsxTextCharacter,
+    /// The JSX text scan would consume more than the allowed number of bytes.
+    JsxTextLimit,
     /// Scanner storage could not be reserved.
     AllocationFailed,
     /// A scanner produced an invalid range, indicating an internal defect.
@@ -220,6 +228,8 @@ impl fmt::Display for LexicalError {
                 );
             }
             LexicalErrorKind::RegExpLimit => "regular expression size exceeds lexical limit",
+            LexicalErrorKind::InvalidJsxTextCharacter => "JSX text cannot contain `>` or `}`",
+            LexicalErrorKind::JsxTextLimit => "JSX text size exceeds lexical limit",
             LexicalErrorKind::AllocationFailed => "could not allocate lexical storage",
             LexicalErrorKind::InternalInvariant(error) => {
                 return write!(f, "internal lexical error at {}: {error}", self.offset);
@@ -264,6 +274,8 @@ impl std::error::Error for LexicalError {
             | LexicalErrorKind::IncompatibleRegExpFlags
             | LexicalErrorKind::InvalidRegExpPattern(_)
             | LexicalErrorKind::RegExpLimit
+            | LexicalErrorKind::InvalidJsxTextCharacter
+            | LexicalErrorKind::JsxTextLimit
             | LexicalErrorKind::AllocationFailed => None,
         }
     }

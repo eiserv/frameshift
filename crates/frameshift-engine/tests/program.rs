@@ -2,8 +2,8 @@
 //! declarations, functions, strictness, and early errors, using fictional text.
 
 use frameshift_engine::{
-    CommentKind, FunctionKind, NodeId, ParseError, ParseErrorKind, ParseLimits, SourceGoal,
-    SourceText, StrictModeError, SyntaxNodeKind, SyntaxTree, TextLimits, VariableKind,
+    CommentKind, FunctionKind, JsDialect, NodeId, ParseError, ParseErrorKind, ParseLimits,
+    SourceGoal, SourceText, StrictModeError, SyntaxNodeKind, SyntaxTree, TextLimits, VariableKind,
     parse_js_program,
 };
 
@@ -12,7 +12,7 @@ fn source(text: &str) -> SourceText {
 }
 
 fn parse(goal: SourceGoal, input: &SourceText) -> SyntaxTree<'_> {
-    match parse_js_program(input, goal, ParseLimits::default()) {
+    match parse_js_program(input, goal, JsDialect::JavaScript, ParseLimits::default()) {
         Ok(tree) => {
             assert_tree_invariants(input, goal, &tree);
             tree
@@ -26,7 +26,7 @@ fn parse(goal: SourceGoal, input: &SourceText) -> SyntaxTree<'_> {
 
 fn failure(goal: SourceGoal, text: &str) -> ParseError {
     let input = source(text);
-    match parse_js_program(&input, goal, ParseLimits::default()) {
+    match parse_js_program(&input, goal, JsDialect::JavaScript, ParseLimits::default()) {
         Ok(_) => panic!("expected {text:?} to fail as {goal:?}"),
         Err(error) => error,
     }
@@ -70,7 +70,8 @@ fn assert_tree_invariants(input: &SourceText, goal: SourceGoal, tree: &SyntaxTre
         }
     }
     assert!(seen.iter().all(|&reached| reached), "unreachable node");
-    let again = parse_js_program(input, goal, ParseLimits::default()).unwrap();
+    let again =
+        parse_js_program(input, goal, JsDialect::JavaScript, ParseLimits::default()).unwrap();
     assert_eq!(again.nodes(), tree.nodes());
     assert_eq!(again.comments(), tree.comments());
 }
@@ -876,6 +877,7 @@ fn check_nesting_token_and_node_limits() {
     let error = parse_js_program(
         &input,
         SCRIPT,
+        JsDialect::JavaScript,
         ParseLimits {
             max_tokens: 4,
             ..ParseLimits::default()
@@ -890,6 +892,7 @@ fn check_nesting_token_and_node_limits() {
     let error = parse_js_program(
         &input,
         SCRIPT,
+        JsDialect::JavaScript,
         ParseLimits {
             max_nodes: 3,
             ..ParseLimits::default()
@@ -916,7 +919,8 @@ fn generated_short_programs_never_return_inconsistent_trees() {
             }
             let input = source(&text);
             for goal in [SCRIPT, MODULE] {
-                match parse_js_program(&input, goal, ParseLimits::default()) {
+                match parse_js_program(&input, goal, JsDialect::JavaScript, ParseLimits::default())
+                {
                     Ok(tree) => {
                         assert_tree_invariants(&input, goal, &tree);
                         accepted += 1;

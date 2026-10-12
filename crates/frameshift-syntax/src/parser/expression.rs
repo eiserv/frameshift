@@ -237,6 +237,9 @@ impl<'source> Parser<'source> {
     // Reports whether the next token can begin an expression, which decides
     // whether `yield` has an operand.
     fn can_start_expression(&mut self) -> Result<bool, ParseError> {
+        if self.jsx && self.at_char('<')? {
+            return Ok(true);
+        }
         let goal = self.goal_for_expression_start();
         if let Some(token) = self.peek_punctuator(goal)? {
             return Ok(matches!(
@@ -445,7 +448,22 @@ impl<'source> Parser<'source> {
             | SyntaxNodeKind::ExportNamed { .. }
             | SyntaxNodeKind::ExportSpecifier { .. }
             | SyntaxNodeKind::ExportAll { .. }
-            | SyntaxNodeKind::ExportDefault { .. } => Ok(()),
+            | SyntaxNodeKind::ExportDefault { .. }
+            | SyntaxNodeKind::JsxElement { .. }
+            | SyntaxNodeKind::JsxOpeningElement { .. }
+            | SyntaxNodeKind::JsxClosingElement { .. }
+            | SyntaxNodeKind::JsxFragment { .. }
+            | SyntaxNodeKind::JsxOpeningFragment
+            | SyntaxNodeKind::JsxClosingFragment
+            | SyntaxNodeKind::JsxIdentifier
+            | SyntaxNodeKind::JsxNamespacedName { .. }
+            | SyntaxNodeKind::JsxMemberExpression { .. }
+            | SyntaxNodeKind::JsxAttribute { .. }
+            | SyntaxNodeKind::JsxSpreadAttribute { .. }
+            | SyntaxNodeKind::JsxExpressionContainer { .. }
+            | SyntaxNodeKind::JsxSpreadChild { .. }
+            | SyntaxNodeKind::JsxText
+            | SyntaxNodeKind::JsxStringLiteral => Ok(()),
         }
     }
 
@@ -490,6 +508,7 @@ impl<'source> Parser<'source> {
             '(' => self.parse_parenthesized(arrow_allowed),
             '[' => self.parse_array(),
             '{' => self.parse_object(),
+            '<' if self.jsx => self.parse_jsx_expression(),
             _ => Err(self.error(offset, ParseErrorKind::ExpectedExpression)),
         }
     }

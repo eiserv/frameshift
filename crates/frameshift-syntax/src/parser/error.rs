@@ -221,6 +221,22 @@ pub enum ParseErrorKind {
     InvalidModuleExportName,
     /// An import attribute key occurs twice.
     DuplicateImportAttribute,
+    /// A JSX tag continues with something other than an attribute, `/>`, or `>`.
+    ExpectedJsxTagEnd,
+    /// A JSX attribute's `=` is not followed by a string, expression
+    /// container, element, or fragment.
+    ExpectedJsxAttributeValue,
+    /// A JSX attribute value is an empty expression container `{}`.
+    EmptyJsxAttributeValue,
+    /// A `<` token directly follows a JSX element or fragment expression, as
+    /// in adjacent elements without a wrapper.
+    AdjacentJsxElements,
+    /// A JSX element or fragment reaches EOF before its closing tag. The
+    /// offset is the opening `<`.
+    UnclosedJsxElement,
+    /// A closing tag does not match its opening tag's name or form. The
+    /// offset is the closing tag's `<`.
+    JsxClosingTagMismatch,
     /// The configured node, token, or nesting bound was reached.
     ResourceLimit,
     /// Parser storage could not be reserved.
@@ -376,6 +392,20 @@ impl fmt::Display for ParseError {
                 "module export name contains an unpaired surrogate"
             }
             ParseErrorKind::DuplicateImportAttribute => "duplicate import attribute key",
+            ParseErrorKind::ExpectedJsxTagEnd => "expected a JSX attribute, `/>`, or `>`",
+            ParseErrorKind::ExpectedJsxAttributeValue => {
+                "expected a JSX string, expression container, element, or fragment"
+            }
+            ParseErrorKind::EmptyJsxAttributeValue => {
+                "a JSX attribute value cannot be an empty expression container"
+            }
+            ParseErrorKind::AdjacentJsxElements => {
+                "adjacent JSX elements must be wrapped in an enclosing element or fragment"
+            }
+            ParseErrorKind::UnclosedJsxElement => "JSX element has no closing tag",
+            ParseErrorKind::JsxClosingTagMismatch => {
+                "JSX closing tag does not match its opening tag"
+            }
             ParseErrorKind::ResourceLimit => "parse limit exceeded",
             ParseErrorKind::AllocationFailed => "could not allocate syntax tree storage",
         };
