@@ -191,6 +191,11 @@ impl<'source> Parser<'source> {
     fn parse_statement_inner(&mut self, position: Position) -> Result<NodeId, ParseError> {
         self.skip_trivia()?;
         let start = self.cursor;
+        if self.typescript
+            && let Some(statement) = self.ts_declaration(matches!(position, Position::List(_)))?
+        {
+            return Ok(statement);
+        }
         let Some(ch) = self.peek_char()? else {
             return Err(self.error(start, ParseErrorKind::ExpectedExpression));
         };
@@ -275,13 +280,13 @@ impl<'source> Parser<'source> {
                 if expression {
                     return Ok(None);
                 }
-                if position != Position::List(ListKind::Module) {
+                if position != Position::List(ListKind::Module) && !self.typescript {
                     return Err(self.error(start, ParseErrorKind::ModuleDeclarationOutsideModule));
                 }
                 self.parse_import_declaration(start)?
             }
             Some(ReservedWord::Export) => {
-                if position != Position::List(ListKind::Module) {
+                if position != Position::List(ListKind::Module) && !self.typescript {
                     return Err(self.error(start, ParseErrorKind::ModuleDeclarationOutsideModule));
                 }
                 self.parse_export_declaration(start)?
@@ -594,7 +599,7 @@ impl<'source> Parser<'source> {
             self.skip_trivia()?;
             let start = self.cursor;
             let mark = self.bound_names.len();
-            let target = self.parse_binding_target(matches!(
+            let mut target = self.parse_binding_target(matches!(
                 kind,
                 VariableKind::Var | VariableKind::Let | VariableKind::Const
             ))?;
@@ -608,13 +613,19 @@ impl<'source> Parser<'source> {
             let declared = self.declare_bound_names(mark, declaration, lexical);
             self.bound_names.truncate(mark);
             declared?;
+            if self.typescript {
+                target = self.ts_typed_binding(target, false, true)?;
+            }
             let init = if self
                 .consume_punctuator(Punctuator::Assign, self.goal_after_expression())?
                 .is_some()
             {
                 Some(self.parse_expression(2)?)
             } else {
-                if !for_head && self.requires_initializer(kind, target) {
+                if !self.ambient
+                    && !for_head
+                    && self.requires_initializer(kind, self.ts_unwrap_binding(target))
+                {
                     return Err(self.error(self.cursor, ParseErrorKind::MissingInitializer));
                 }
                 None
@@ -1180,6 +1191,11 @@ impl<'source> Parser<'source> {
                 self.bound_names.truncate(mark);
                 return Err(error);
             }
+        };
+        let parameter = if self.typescript {
+            self.ts_typed_binding(parameter, false, false)?
+        } else {
+            parameter
         };
         let simple_parameter = matches!(
             self.node_kind(parameter),

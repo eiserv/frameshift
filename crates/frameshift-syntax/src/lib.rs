@@ -1,5 +1,5 @@
-//! Framework-independent JavaScript scanners and parser for the E1 parser
-//! experiment. A parsed tree does not authorize transformations.
+//! Framework-independent JavaScript and TypeScript scanners and parsers for
+//! the E1 parser experiment. A parsed tree does not authorize transformations.
 
 mod ast;
 mod identifier;
@@ -13,6 +13,7 @@ mod regexp;
 mod regexp_pattern;
 mod regexp_property;
 mod template;
+mod typescript;
 mod unicode;
 mod value;
 #[rustfmt::skip]
@@ -53,5 +54,6 @@ pub use regexp_pattern::RegExpPatternError;
 pub use template::{
     TemplateContext, TemplateKind, TemplateMode, TemplatePosition, TemplateToken, scan_js_template,
 };
+pub use typescript::TypeScriptKind;
 pub use unicode::{is_js_identifier_part, is_js_identifier_start};
 pub use unicode_tables::UNICODE_VERSION;

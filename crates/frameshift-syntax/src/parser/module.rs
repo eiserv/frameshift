@@ -35,6 +35,9 @@ struct ExportName {
 impl<'source> Parser<'source> {
     // After the module body: every `export { name }` names a top-level binding.
     pub(super) fn check_exported_bindings(&self) -> Result<(), ParseError> {
+        if self.typescript {
+            return Ok(());
+        }
         let undeclared = self
             .module
             .exported_bindings
@@ -50,6 +53,10 @@ impl<'source> Parser<'source> {
 
     pub(super) fn parse_import_declaration(&mut self, start: usize) -> Result<NodeId, ParseError> {
         self.scan_identifier()?;
+        let type_only = self.typescript && self.ts_import_type_only()?;
+        if type_only {
+            self.scan_identifier()?;
+        }
         let mut specifiers = Vec::new();
         if !matches!(self.peek_char()?, Some('"' | '\'')) {
             let mut clause_needed = true;
@@ -96,14 +103,19 @@ impl<'source> Parser<'source> {
         self.consume_semicolon()?;
         let specifiers = self.append_children(&specifiers)?;
         let span = self.span_from(start)?;
-        self.add_node(
+        let declaration = self.add_node(
             SyntaxNodeKind::ImportDeclaration {
                 specifiers,
                 source,
                 attributes,
             },
             span,
-        )
+        )?;
+        if type_only {
+            self.ts_node(crate::TypeScriptKind::TypeOnly, start, &[declaration])
+        } else {
+            Ok(declaration)
+        }
     }
 
     fn parse_named_imports(&mut self, specifiers: &mut Vec<NodeId>) -> Result<(), ParseError> {
@@ -114,6 +126,10 @@ impl<'source> Parser<'source> {
             }
             self.skip_trivia()?;
             let start = self.cursor;
+            let type_only = self.typescript && self.ts_specifier_type_only()?;
+            if type_only {
+                self.scan_identifier()?;
+            }
             let specifier = if self.next_named_import_has_alias()? {
                 let imported = self.parse_module_export_name()?;
                 if self.consume_word("as")?.is_none() {
@@ -141,6 +157,11 @@ impl<'source> Parser<'source> {
                     },
                     span,
                 )?
+            };
+            let specifier = if type_only {
+                self.ts_node(crate::TypeScriptKind::TypeOnly, start, &[specifier])?
+            } else {
+                specifier
             };
             self.push_child(specifiers, specifier)?;
             if self
@@ -310,6 +331,9 @@ impl<'source> Parser<'source> {
     }
 
     fn register_export(&mut self, name: String, offset: usize) -> Result<(), ParseError> {
+        if self.typescript {
+            return Ok(());
+        }
         if self.module.exported_names.contains_key(&name) {
             return Err(self.error(offset, ParseErrorKind::DuplicateExport));
         }
@@ -319,6 +343,39 @@ impl<'source> Parser<'source> {
 
     pub(super) fn parse_export_declaration(&mut self, start: usize) -> Result<NodeId, ParseError> {
         self.scan_identifier()?;
+        if self.typescript {
+            if self.ts_symbol('=')? {
+                let expression = self.parse_assignment_with_in()?;
+                self.consume_semicolon()?;
+                return self.ts_node(
+                    crate::TypeScriptKind::ExportAssignment,
+                    start,
+                    &[expression],
+                );
+            }
+            if self.consume_word("as")?.is_some() {
+                if self.consume_word("namespace")?.is_none() {
+                    return Err(self.error(self.cursor, ParseErrorKind::InvalidTypeScriptSyntax));
+                }
+                let name = self.ts_name(true)?;
+                self.consume_semicolon()?;
+                return self.ts_node(crate::TypeScriptKind::NamespaceExport, start, &[name]);
+            }
+            if self.at_word("type")?
+                && self.lookahead(|parser| {
+                    parser.scan_identifier()?;
+                    Ok(parser.at_char('{')? || parser.at_char('*')?)
+                })?
+            {
+                self.scan_identifier()?;
+                let declaration = if self.ts_symbol('*')? {
+                    self.parse_export_all(start)?
+                } else {
+                    self.parse_export_named(start)?
+                };
+                return self.ts_node(crate::TypeScriptKind::TypeOnly, start, &[declaration]);
+            }
+        }
         if self
             .consume_punctuator(Punctuator::Star, self.goal_after_expression())?
             .is_some()
@@ -384,6 +441,10 @@ impl<'source> Parser<'source> {
                 }
                 parser.skip_trivia()?;
                 let specifier_start = parser.cursor;
+                let type_only = parser.typescript && parser.ts_specifier_type_only()?;
+                if type_only {
+                    parser.scan_identifier()?;
+                }
                 let local = parser.parse_module_export_name()?;
                 let exported = if parser.consume_word("as")?.is_some() {
                     Some(parser.parse_module_export_name()?)
@@ -398,6 +459,15 @@ impl<'source> Parser<'source> {
                     },
                     span,
                 )?;
+                let specifier = if type_only {
+                    parser.ts_node(
+                        crate::TypeScriptKind::TypeOnly,
+                        specifier_start,
+                        &[specifier],
+                    )?
+                } else {
+                    specifier
+                };
                 parser.push_child(&mut specifiers, specifier)?;
                 locals
                     .try_reserve(1)
@@ -489,6 +559,11 @@ impl<'source> Parser<'source> {
     // `export default` followed by a function or class declaration, or an
     // AssignmentExpression and a semicolon.
     fn parse_export_default(&mut self) -> Result<NodeId, ParseError> {
+        if self.typescript
+            && let Some(declaration) = self.ts_declaration(true)?
+        {
+            return Ok(declaration);
+        }
         self.skip_trivia()?;
         let start = self.cursor;
         if self.consume_word("function")?.is_some() {
@@ -533,6 +608,11 @@ impl<'source> Parser<'source> {
 
     // `export` followed by `var`, `let`, `const`, a function, or a class.
     fn parse_exported_declaration(&mut self, start: usize) -> Result<NodeId, ParseError> {
+        if self.typescript
+            && let Some(declaration) = self.ts_declaration(true)?
+        {
+            return Ok(declaration);
+        }
         let Some(token) = self.peek_name()? else {
             return Err(self.error(start, ParseErrorKind::ExpectedExpression));
         };

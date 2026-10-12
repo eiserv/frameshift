@@ -45,6 +45,13 @@ impl StrictModeError {
 /// Why the parser could not produce a complete tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParseErrorKind {
+    /// A TypeScript type was required at this offset.
+    ExpectedType,
+    /// The TypeScript production is malformed.
+    InvalidTypeScriptSyntax,
+    /// A property access directly follows an instantiation expression, whose
+    /// type arguments must be parenthesized first.
+    InstantiationPropertyAccess,
     /// A lower-level lexical scanner rejected the source.
     Lexical(LexicalErrorKind),
     /// No expression can start at this offset.
@@ -405,6 +412,11 @@ impl fmt::Display for ParseError {
             ParseErrorKind::UnclosedJsxElement => "JSX element has no closing tag",
             ParseErrorKind::JsxClosingTagMismatch => {
                 "JSX closing tag does not match its opening tag"
+            }
+            ParseErrorKind::ExpectedType => "expected a TypeScript type",
+            ParseErrorKind::InvalidTypeScriptSyntax => "invalid TypeScript syntax",
+            ParseErrorKind::InstantiationPropertyAccess => {
+                "a property access cannot directly follow an instantiation expression"
             }
             ParseErrorKind::ResourceLimit => "parse limit exceeded",
             ParseErrorKind::AllocationFailed => "could not allocate syntax tree storage",

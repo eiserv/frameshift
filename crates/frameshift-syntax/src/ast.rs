@@ -299,6 +299,13 @@ pub enum TemplatePart {
 /// source. Children are listed in source order by [`SyntaxTree::child_nodes`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SyntaxNodeKind {
+    /// A structured TypeScript production with constituents in source order.
+    TypeScript {
+        /// The grammar production and its syntactic flags.
+        kind: crate::TypeScriptKind,
+        /// Direct constituents in source order.
+        children: ChildList,
+    },
     /// A complete Script or Module.
     Program {
         /// The goal symbol the source was parsed with.
@@ -1048,6 +1055,9 @@ impl<'source> SyntaxTree<'source> {
         let list = |list: ChildList| self.children(list).unwrap_or_default();
         let mut children = ChildNodes::default();
         match kind {
+            SyntaxNodeKind::TypeScript {
+                children: items, ..
+            } => children.list = list(items),
             SyntaxNodeKind::EmptyStatement
             | SyntaxNodeKind::DebuggerStatement
             | SyntaxNodeKind::LabelIdentifier { .. }

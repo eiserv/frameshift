@@ -261,19 +261,62 @@ impl<'source> Parser<'source> {
         name: Option<Span>,
         rules: ParameterRules,
     ) -> Result<(NodeId, NodeId), ParseError> {
-        let parameters = self.parse_formal_parameters(rules)?;
+        let generics = if self.typescript {
+            self.ts_type_parameters()?
+        } else {
+            None
+        };
+        let mut parameters = self.parse_formal_parameters(rules)?;
+        if let Some(generics) = generics {
+            parameters.node = self.ts_node(
+                crate::TypeScriptKind::GenericDeclaration,
+                self.node_span(generics).start(),
+                &[generics, parameters.node],
+            )?;
+        }
+        let annotation = if self.typescript {
+            self.ts_annotation()?
+        } else {
+            None
+        };
         self.context.in_parameters = false;
+        if self.typescript && !self.at_char('{')? {
+            let start = annotation.map_or(self.last_end, |id| self.node_span(id).start());
+            self.consume_semicolon()?;
+            self.bound_names.truncate(parameters.mark);
+            let items = annotation.into_iter().collect::<Vec<_>>();
+            let body = self.ts_node(crate::TypeScriptKind::BodylessFunction, start, &items)?;
+            return Ok((parameters.node, body));
+        }
         if !self.at_punctuator(Punctuator::LeftBrace)? {
             return Err(self.error(
                 self.cursor,
                 ParseErrorKind::ExpectedPunctuator(Punctuator::LeftBrace),
             ));
         }
-        let body = self.parse_function_body(name, &parameters)?;
+        let mut body = self.parse_function_body(name, &parameters)?;
+        if let Some(annotation) = annotation {
+            body = self.ts_node(
+                crate::TypeScriptKind::GenericDeclaration,
+                self.node_span(annotation).start(),
+                &[annotation, body],
+            )?;
+        }
         Ok((parameters.node, body))
     }
 
     fn parse_formal_parameters(&mut self, rules: ParameterRules) -> Result<Parameters, ParseError> {
+        if self.typescript {
+            let mark = self.bound_names.len();
+            let node = self.ts_parameters(true)?;
+            self.declare_parameters(mark)?;
+            return Ok(Parameters {
+                node,
+                mark,
+                simple: true,
+                rules,
+            });
+        }
         let list = self.parse_cover_list(Punctuator::LeftParen)?;
         let valid_arity = match rules.accessor {
             Some(MethodKind::Getter) => list.elements.is_empty(),
@@ -384,7 +427,9 @@ impl<'source> Parser<'source> {
         for index in parameters.mark..self.bound_names.len() {
             self.check_binding_strictness(self.bound_names[index], strict)?;
         }
-        if let Some(offset) = self.first_duplicate_bound_name(parameters.mark)? {
+        if !self.typescript
+            && let Some(offset) = self.first_duplicate_bound_name(parameters.mark)?
+        {
             if !parameters.simple || parameters.rules.unique {
                 return Err(self.error(offset, ParseErrorKind::DuplicateParameter));
             }
@@ -412,6 +457,33 @@ impl<'source> Parser<'source> {
             in_parameters: false,
             ..self.context
         }
+    }
+
+    pub(super) fn parse_ts_arrow_body(
+        &mut self,
+        start: usize,
+        node: NodeId,
+        mark: usize,
+        is_async: bool,
+    ) -> Result<NodeId, ParseError> {
+        self.enter()?;
+        let frame = self.enter_function(self.arrow_context(is_async));
+        let result = self.with_arrow_scope(|parser| {
+            parser.declare_parameters(mark)?;
+            let parameters = Parameters {
+                node,
+                mark,
+                simple: true,
+                rules: ParameterRules {
+                    unique: true,
+                    accessor: None,
+                },
+            };
+            parser.parse_arrow_body(start, &parameters, is_async)
+        });
+        self.exit_function(frame);
+        self.leave();
+        result
     }
 
     // `x => body` or `async x => body`, with the name already consumed.

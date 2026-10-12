@@ -106,13 +106,20 @@ impl<'source> Parser<'source> {
 
     // Records a declaration of `name` at `offset` in the innermost scope, or
     // for `var` in every scope up to the enclosing function, and reports the
-    // redeclaration early errors.
+    // redeclaration early errors of the JavaScript dialects.
     pub(super) fn declare(
         &mut self,
         name: Name<'source>,
         offset: usize,
         declaration: Declaration,
     ) -> Result<(), ParseError> {
+        // TypeScript declares overloads, merges interfaces, namespaces, and
+        // enums, and allows ambient redeclaration, so these dialects report
+        // no redeclaration errors and record no bindings: a genuine duplicate
+        // is a checker diagnostic, not a grammar error.
+        if self.typescript {
+            return Ok(());
+        }
         let strict = self.context.strict;
         let duplicate = self.error(offset, ParseErrorKind::DuplicateDeclaration);
         let requires_context = self.error(offset, ParseErrorKind::StrictModeRequiresContext);

@@ -65,7 +65,18 @@ impl<'source> Parser<'source> {
                 self.span_from(start)?,
             );
         }
-        let name = self.parse_jsx_element_name()?;
+        let mut name = self.parse_jsx_element_name()?;
+        if self.typescript && self.at_char('<')? {
+            if self.text[self.cursor..].starts_with("<<") {
+                return Err(self.error(self.cursor, ParseErrorKind::InvalidTypeScriptSyntax));
+            }
+            let args = self.ts_type_arguments()?;
+            name = self.ts_node(
+                crate::TypeScriptKind::Instantiation,
+                self.node_span(name).start(),
+                &[name, args],
+            )?;
+        }
         let attributes = self.parse_jsx_attributes()?;
         let self_closing = self.eat_jsx_byte(b'/')?;
         if !self.eat_jsx_byte(b'>')? {
@@ -84,7 +95,18 @@ impl<'source> Parser<'source> {
         } else {
             let (children, closing_start) = self.parse_jsx_children(start)?;
             let (closing, closing_name) = self.parse_jsx_closing(closing_start)?;
-            if !closing_name.is_some_and(|closing_name| self.jsx_names_match(name, closing_name)) {
+            let match_name = if let SyntaxNodeKind::TypeScript {
+                kind: crate::TypeScriptKind::Instantiation,
+                children,
+            } = self.node_kind(name)
+            {
+                self.children[children.range().start]
+            } else {
+                name
+            };
+            if !closing_name
+                .is_some_and(|closing_name| self.jsx_names_match(match_name, closing_name))
+            {
                 return Err(self.error(closing_start, ParseErrorKind::JsxClosingTagMismatch));
             }
             (children, Some(closing))

@@ -97,6 +97,27 @@ impl<'source> Parser<'source> {
                     | SyntaxNodeKind::Conditional { .. }
                     | SyntaxNodeKind::Assignment { .. }
             );
+            if self.typescript
+                && !complete
+                && minimum <= 10
+                && !self.line_break_before_next()?
+                && (self.at_word("as")? || self.at_word("satisfies")?)
+            {
+                let kind = if self.at_word("as")? {
+                    crate::TypeScriptKind::As
+                } else {
+                    crate::TypeScriptKind::Satisfies
+                };
+                self.scan_identifier()?;
+                let ty = if self.at_word("const")? {
+                    let token = self.scan_identifier()?;
+                    self.ts_node(crate::TypeScriptKind::Keyword, token.span.start(), &[])?
+                } else {
+                    self.ts_type(true)?
+                };
+                left = self.ts_node(kind, self.node_span(left).start(), &[left, ty])?;
+                continue;
+            }
             if assignment_level
                 && !complete
                 && let Some(token) = self.peek_punctuator(self.goal_after_expression())?
@@ -235,8 +256,9 @@ impl<'source> Parser<'source> {
     }
 
     // Reports whether the next token can begin an expression, which decides
-    // whether `yield` has an operand.
-    fn can_start_expression(&mut self) -> Result<bool, ParseError> {
+    // whether `yield` has an operand and whether a TypeScript type argument
+    // list keeps the instantiation reading.
+    pub(super) fn can_start_expression(&mut self) -> Result<bool, ParseError> {
         if self.jsx && self.at_char('<')? {
             return Ok(true);
         }
@@ -365,7 +387,8 @@ impl<'source> Parser<'source> {
             {
                 Err(self.error(offset, ParseErrorKind::DeletePrivateName))
             }
-            SyntaxNodeKind::Program { .. }
+            SyntaxNodeKind::TypeScript { .. }
+            | SyntaxNodeKind::Program { .. }
             | SyntaxNodeKind::Directive { .. }
             | SyntaxNodeKind::ExpressionStatement { .. }
             | SyntaxNodeKind::BlockStatement { .. }
@@ -482,6 +505,14 @@ impl<'source> Parser<'source> {
     pub(super) fn parse_primary(&mut self, arrow_allowed: bool) -> Result<NodeId, ParseError> {
         self.skip_trivia()?;
         let offset = self.cursor;
+        if self.typescript && (self.at_char('(')? || self.at_char('<')?) {
+            if let Some(arrow) = self.ts_try_arrow(offset, false, arrow_allowed)? {
+                return Ok(arrow);
+            }
+            if !self.jsx && self.at_char('<')? {
+                return self.ts_assertion();
+            }
+        }
         let Some(ch) = self.text[offset..].chars().next() else {
             return Err(self.error(offset, ParseErrorKind::ExpectedExpression));
         };
@@ -671,6 +702,13 @@ impl<'source> Parser<'source> {
         arrow_allowed: bool,
     ) -> Result<Option<NodeId>, ParseError> {
         let start = token.span.start();
+        if self.typescript
+            && !self.line_break_before_next()?
+            && (self.at_char('(')? || self.at_char('<')?)
+            && let Some(arrow) = self.ts_try_arrow(start, true, arrow_allowed)?
+        {
+            return Ok(Some(arrow));
+        }
         let line_break = self.line_break_before_next()?;
         if !line_break && self.at_word("function")? {
             self.scan_identifier()?;
@@ -934,6 +972,25 @@ impl<'source> Parser<'source> {
         mode: PostfixMode,
     ) -> Result<NodeId, ParseError> {
         loop {
+            if self.typescript
+                && !self.line_break_before_next()?
+                && self.at_punctuator(Punctuator::Bang)?
+            {
+                self.expect_punctuator(Punctuator::Bang, self.goal_after_expression())?;
+                expression = self.ts_node(
+                    crate::TypeScriptKind::NonNull,
+                    self.node_span(expression).start(),
+                    &[expression],
+                )?;
+                continue;
+            }
+            if self.typescript
+                && self.at_char('<')?
+                && let Some(instantiation) = self.ts_instantiation(expression, false)?
+            {
+                expression = instantiation;
+                continue;
+            }
             let goal = self.goal_after_expression();
             let Some(token) = self.peek_punctuator(goal)? else {
                 self.skip_trivia()?;
@@ -959,6 +1016,7 @@ impl<'source> Parser<'source> {
             };
             match token.kind {
                 Punctuator::Dot => {
+                    self.ts_check_property_access(expression, token.span.start())?;
                     self.consume_token(token.span)?;
                     let property = self.parse_member_name()?;
                     expression = self.add_member(expression, property, false, false)?;
@@ -971,11 +1029,19 @@ impl<'source> Parser<'source> {
                     }
                     self.consume_token(token.span)?;
                     self.skip_trivia()?;
+                    if self.typescript && self.at_char('<')? {
+                        expression = self.ts_instantiation(expression, true)?.ok_or_else(|| {
+                            self.error(self.cursor, ParseErrorKind::InvalidTypeScriptSyntax)
+                        })?;
+                        expression = self.parse_call(expression, true)?;
+                        continue;
+                    }
                     if self.text[self.cursor..].starts_with('[') {
                         expression = self.parse_computed_member(expression, true)?;
                     } else if self.text[self.cursor..].starts_with('(') {
                         expression = self.parse_call(expression, true)?;
                     } else {
+                        self.ts_check_property_access(expression, token.span.start())?;
                         let property = self.parse_member_name()?;
                         expression = self.add_member(expression, property, false, true)?;
                     }
@@ -1502,7 +1568,9 @@ impl<'source> Parser<'source> {
         let Some(token) = self.peek_punctuator(self.goal_after_expression())? else {
             return Err(self.error(self.cursor, ParseErrorKind::InvalidPropertyDefinition));
         };
-        if token.kind == Punctuator::LeftParen {
+        if token.kind == Punctuator::LeftParen
+            || (self.typescript && token.kind == Punctuator::LessThan)
+        {
             return self.parse_method(start, key, MethodKind::Method, false, None);
         }
         if token.kind != Punctuator::Colon {
@@ -1541,7 +1609,9 @@ impl<'source> Parser<'source> {
     ) -> Result<NodeId, ParseError> {
         let next = self.peek_punctuator(self.goal_after_expression())?;
         let next_kind = next.map(|next| next.kind);
-        if matches!(next_kind, Some(Punctuator::Colon | Punctuator::LeftParen)) {
+        if matches!(next_kind, Some(Punctuator::Colon | Punctuator::LeftParen))
+            || (self.typescript && next_kind == Some(Punctuator::LessThan))
+        {
             let node = self.add_node(
                 SyntaxNodeKind::IdentifierName {
                     has_escape: token.has_escape,
@@ -1648,6 +1718,12 @@ impl<'source> Parser<'source> {
         .map_err(parse_lexical_error)?;
         self.consume_token(token.span)?;
         Ok(token)
+    }
+
+    // Reports whether the next token is a binary operator, including the
+    // word operators `in` and `instanceof`.
+    pub(super) fn at_binary_operator(&mut self) -> Result<bool, ParseError> {
+        Ok(self.peek_binary_operator()?.is_some())
     }
 
     fn peek_binary_operator(&mut self) -> Result<Option<BinaryCandidate>, ParseError> {

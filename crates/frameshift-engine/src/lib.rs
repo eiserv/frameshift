@@ -1,11 +1,12 @@
 //! Public facade for Frameshift's implemented, in-memory text operations.
 //!
 //! This M0 API exposes source positions, lexical primitives, a JavaScript
-//! parser for Script and Module source text with an optional JSX dialect,
-//! regular-expression validation, pinned Unicode identifier classification,
-//! character reference decoding with pinned tables, and span rewriting. It contains no project inspection, TypeScript parser,
-//! migration, or verification pipeline. Future CLI code must depend on this
-//! facade rather than lower layers.
+//! parser for Script and Module source text with explicit JSX, TypeScript,
+//! and TSX dialects, regular-expression validation, pinned Unicode identifier
+//! classification, character reference decoding with pinned tables, and span
+//! rewriting. It contains no project inspection, migration, or verification
+//! pipeline. Future CLI code must depend on this facade rather than lower
+//! layers.
 
 pub use frameshift_core::{Position, SourceText, Span, TextError, TextLimits};
 pub use frameshift_syntax::{
@@ -18,7 +19,7 @@ pub use frameshift_syntax::{
     RegExpLiteral, RegExpPatternError, RegExpToken, ReservedWord, ReservedWordClass, SourceGoal,
     StrictModeError, StringToken, SyntaxNode, SyntaxNodeKind, SyntaxTree, TemplateContext,
     TemplateKind, TemplateMode, TemplatePart, TemplatePartList, TemplatePosition, TemplateToken,
-    Trivia, UNICODE_VERSION, UnaryOperator, UpdateOperator, VariableKind,
+    Trivia, TypeScriptKind, UNICODE_VERSION, UnaryOperator, UpdateOperator, VariableKind,
     decode_html_character_reference, decode_jsx_character_reference, is_js_identifier_part,
     is_js_identifier_start, parse_js_expression, parse_js_program, scan_js_identifier,
     scan_js_number, scan_js_punctuator, scan_js_regexp, scan_js_string, scan_js_template,

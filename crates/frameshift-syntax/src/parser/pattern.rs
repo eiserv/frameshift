@@ -76,7 +76,7 @@ impl<'source> Parser<'source> {
         id: NodeId,
         web_compat: bool,
     ) -> Result<(), ParseError> {
-        let mut current = id;
+        let mut current = self.ts_unwrap_binding(id);
         while let SyntaxNodeKind::Parenthesized { expression } = self.node_kind(current) {
             current = expression;
         }
@@ -443,6 +443,12 @@ impl<'source> Parser<'source> {
                     return true;
                 }
                 current = callee;
+            } else if let SyntaxNodeKind::TypeScript {
+                kind: crate::TypeScriptKind::NonNull | crate::TypeScriptKind::Instantiation,
+                children,
+            } = kind
+            {
+                current = self.children[children.range().start];
             } else {
                 return false;
             }

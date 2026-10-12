@@ -3,7 +3,8 @@
 //! `expression` holds the operator-precedence grammar, `pattern` the cover
 //! grammar reinterpretation, `function` and `class` the function-like forms,
 //! `statement` and `module` the source-file grammar, `names` the
-//! context-dependent identifier rules, and `scope` the transient declaration
+//! context-dependent identifier rules, `typescript` the TypeScript grammar
+//! of the TypeScript and TSX dialects, and `scope` the transient declaration
 //! scopes behind early errors. Context and scopes live only for one parse.
 
 mod class;
@@ -16,6 +17,7 @@ mod names;
 mod pattern;
 mod scope;
 mod statement;
+mod typescript;
 
 use frameshift_core::{SourceText, Span};
 
@@ -71,6 +73,10 @@ pub enum JsDialect {
     JavaScript,
     /// ECMAScript with JSX elements and fragments as primary expressions.
     Jsx,
+    /// TypeScript, including angle-bracket assertions, without JSX.
+    TypeScript,
+    /// TypeScript with JSX and the TSX generic-arrow disambiguation rules.
+    Tsx,
 }
 
 /// Parses one complete JavaScript expression into a span-precise arena.
@@ -84,6 +90,8 @@ pub enum JsDialect {
 /// strict-mode-dependent forms, HTML-like comments and `import.meta`,
 /// `new.target`, `super`, and private names outside a class. With
 /// [`JsDialect::Jsx`], JSX elements and fragments are primary expressions.
+/// The TypeScript dialects add type annotations, `as` and `satisfies`
+/// expressions, assertions, and instantiation expressions.
 /// Leading and trailing trivia is consumed and comments are retained in
 /// source order. Any error returns no tree. Parsing is deterministic and
 /// bounded by `limits`.
@@ -107,10 +115,14 @@ pub fn parse_js_expression(
 /// Parses complete Script or Module source text into a span-precise arena.
 ///
 /// The root is a [`SyntaxNodeKind::Program`] node. The complete ECMAScript
-/// syntactic grammar is supported except TypeScript, including sloppy mode and
-/// the Annex B web-compatibility grammar in scripts, and all early errors,
+/// syntactic grammar is supported, including sloppy mode and the Annex B
+/// web-compatibility grammar in scripts, and the ECMAScript early errors,
 /// which are checked with transient scopes. [`JsDialect::Jsx`] adds the JSX
-/// grammar in either goal. A leading hashbang comment is retained, also after
+/// grammar in either goal; [`JsDialect::TypeScript`] and [`JsDialect::Tsx`]
+/// add the TypeScript type, declaration, and expression grammar without type
+/// checking and report no redeclaration early errors, because TypeScript
+/// declares overloads and merges declarations while a genuine duplicate is a
+/// checker diagnostic. A leading hashbang comment is retained, also after
 /// a byte order mark. Any error returns no tree, so a file with a syntax error
 /// is never partially transformed. Parsing is deterministic and bounded by
 /// `limits`.
@@ -229,6 +241,10 @@ struct Parser<'source> {
     goal: Goal,
     // Whether `<` at the start of a primary expression begins JSX.
     jsx: bool,
+    typescript: bool,
+    ambient: bool,
+    ts_work: usize,
+    ts_disallow_conditional: bool,
     cursor: usize,
     // End of the last consumed token, before any trivia that a peek skipped.
     last_end: usize,
@@ -318,9 +334,13 @@ impl<'source> Parser<'source> {
             limits,
             goal,
             jsx: match dialect {
-                JsDialect::JavaScript => false,
-                JsDialect::Jsx => true,
+                JsDialect::JavaScript | JsDialect::TypeScript => false,
+                JsDialect::Jsx | JsDialect::Tsx => true,
             },
+            typescript: matches!(dialect, JsDialect::TypeScript | JsDialect::Tsx),
+            ambient: false,
+            ts_work: 0,
+            ts_disallow_conditional: false,
             cursor: 0,
             last_end: 0,
             depth: 0,
@@ -527,6 +547,12 @@ impl<'source> Parser<'source> {
     }
 
     fn consume_token(&mut self, span: Span) -> Result<(), ParseError> {
+        if self.typescript {
+            if self.ts_work >= self.limits.max_tokens {
+                return Err(self.error(span.start(), ParseErrorKind::ResourceLimit));
+            }
+            self.ts_work += 1;
+        }
         if self.token_count >= self.limits.max_tokens {
             return Err(self.error(span.start(), ParseErrorKind::ResourceLimit));
         }

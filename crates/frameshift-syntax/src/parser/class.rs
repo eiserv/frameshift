@@ -50,7 +50,7 @@ struct PrivateDeclaration {
 #[derive(Default)]
 pub(super) struct ClassScope<'source> {
     declared: HashMap<Name<'source>, PrivateDeclaration>,
-    references: Vec<(Name<'source>, usize)>,
+    pub(super) references: Vec<(Name<'source>, usize)>,
 }
 
 impl<'source> Parser<'source> {
@@ -93,7 +93,7 @@ impl<'source> Parser<'source> {
         start: usize,
         placement: ClassPlacement,
     ) -> Result<NodeId, ParseError> {
-        let name = match self.peek_name()? {
+        let mut name = match self.peek_name()? {
             Some(token)
                 if token.kind == IdentifierKind::Name && !self.is_unescaped(token, "extends") =>
             {
@@ -118,13 +118,43 @@ impl<'source> Parser<'source> {
                 None
             }
         };
-        let super_class = if self.consume_word("extends")?.is_some() {
+        if self.typescript
+            && let Some(parameters) = self.ts_type_parameters()?
+        {
+            let start = name.map_or(self.node_span(parameters).start(), |id| {
+                self.node_span(id).start()
+            });
+            let mut items = self.take_list();
+            if let Some(name) = name {
+                self.push_child(&mut items, name)?;
+            }
+            self.push_child(&mut items, parameters)?;
+            name = Some(self.ts_node(crate::TypeScriptKind::GenericDeclaration, start, &items)?);
+            self.recycle_list(items);
+        }
+        let mut super_class = if self.consume_word("extends")?.is_some() {
             let heritage = self.parse_primary(false)?;
-            Some(self.parse_postfix(heritage, PostfixMode::Full)?)
+            let heritage = self.parse_postfix(heritage, PostfixMode::Full)?;
+            Some(self.ts_heritage_arguments(heritage)?)
         } else {
             None
         };
         let derived = super_class.is_some();
+        if self.typescript
+            && let Some(implements) = self.ts_heritage("implements")?
+        {
+            let start = super_class.map_or(self.node_span(implements).start(), |id| {
+                self.node_span(id).start()
+            });
+            let mut items = self.take_list();
+            if let Some(base) = super_class {
+                self.push_child(&mut items, base)?;
+            }
+            self.push_child(&mut items, implements)?;
+            super_class =
+                Some(self.ts_node(crate::TypeScriptKind::GenericDeclaration, start, &items)?);
+            self.recycle_list(items);
+        }
         if !self.at_char('{')? {
             return Err(self.error(
                 self.cursor,
@@ -221,6 +251,34 @@ impl<'source> Parser<'source> {
     ) -> Result<Option<NodeId>, ParseError> {
         self.skip_trivia()?;
         let start = self.cursor;
+        if self.typescript {
+            let mut modifiers = self.take_list();
+            while self.at_char('@')? {
+                let decorator = self.ts_decorator()?;
+                self.push_child(&mut modifiers, decorator)?;
+            }
+            self.ts_class_modifiers(&mut modifiers)?;
+            if !modifiers.is_empty() {
+                self.enter()?;
+                let element = self.parse_class_element(derived, constructor_seen);
+                self.leave();
+                let element = element?.ok_or_else(|| {
+                    self.error(self.cursor, ParseErrorKind::InvalidTypeScriptSyntax)
+                })?;
+                self.push_child(&mut modifiers, element)?;
+                let result = self.ts_node(
+                    crate::TypeScriptKind::ModifiedDeclaration,
+                    start,
+                    &modifiers,
+                );
+                self.recycle_list(modifiers);
+                return result.map(Some);
+            }
+            self.recycle_list(modifiers);
+            if self.ts_is_index_signature()? {
+                return self.ts_type_member().map(Some);
+            }
+        }
         if self
             .consume_punctuator(Punctuator::Semicolon, self.goal_after_expression())?
             .is_some()
@@ -268,7 +326,7 @@ impl<'source> Parser<'source> {
                 kind = MethodKind::AsyncGenerator;
             }
         }
-        let key = self.parse_property_key(true)?;
+        let mut key = self.parse_property_key(true)?;
         let private = matches!(
             self.node_kind(key.node),
             SyntaxNodeKind::PrivateIdentifier { .. }
@@ -279,7 +337,10 @@ impl<'source> Parser<'source> {
                 ParseErrorKind::InvalidClassElementName,
             ));
         }
-        if self.at_punctuator(Punctuator::LeftParen)? {
+        if self.typescript {
+            key.node = self.ts_typed_binding(key.node, true, true)?;
+        }
+        if self.at_punctuator(Punctuator::LeftParen)? || (self.typescript && self.at_char('<')?) {
             if !is_static && self.public_key_is(key, "constructor") {
                 if kind != MethodKind::Method {
                     return Err(self.error(
@@ -287,7 +348,7 @@ impl<'source> Parser<'source> {
                         ParseErrorKind::InvalidConstructor,
                     ));
                 }
-                if *constructor_seen {
+                if *constructor_seen && !self.typescript {
                     return Err(self.error(
                         self.node_span(key.node).start(),
                         ParseErrorKind::DuplicateConstructor,
@@ -366,8 +427,9 @@ impl<'source> Parser<'source> {
         if key.computed {
             return false;
         }
-        let spelling = self.slice(self.node_span(key.node));
-        let kind = self.node_kind(key.node);
+        let node = self.ts_unwrap_binding(key.node);
+        let spelling = self.slice(self.node_span(node));
+        let kind = self.node_kind(node);
         if matches!(kind, SyntaxNodeKind::IdentifierName { .. }) {
             return identifier_equals(spelling, name);
         }
@@ -375,7 +437,7 @@ impl<'source> Parser<'source> {
     }
 
     fn private_key_is(&self, key: PropertyKey, name: &str) -> bool {
-        let spelling = self.slice(self.node_span(key.node));
+        let spelling = self.slice(self.node_span(self.ts_unwrap_binding(key.node)));
         spelling
             .strip_prefix('#')
             .is_some_and(|spelling| identifier_equals(spelling, name))
@@ -387,7 +449,7 @@ impl<'source> Parser<'source> {
         kind: PrivateKind,
         is_static: bool,
     ) -> Result<(), ParseError> {
-        let span = self.node_span(key.node);
+        let span = self.node_span(self.ts_unwrap_binding(key.node));
         let offset = span.start();
         let name = self.name_of(
             frameshift_core::Span::new(span.start() + 1, span.end())
