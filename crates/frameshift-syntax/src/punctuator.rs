@@ -117,6 +117,22 @@ define_punctuators! {
     RightBrace => "}",
 }
 
+// The candidate list grouped by first byte, derived from the same table at
+// compile time: bit `i` of entry `b` is set when `PUNCTUATORS[i]` starts with
+// byte `b`. A scan compares only these few candidates instead of every
+// spelling, which dominated parser time before (`D-040`).
+const _: () = assert!(PUNCTUATORS.len() <= u64::BITS as usize);
+const CANDIDATES_BY_FIRST_BYTE: [u64; 128] = {
+    let mut table = [0u64; 128];
+    let mut index = 0;
+    while index < PUNCTUATORS.len() {
+        let first = PUNCTUATORS[index].spelling().as_bytes()[0];
+        table[first as usize] |= 1 << index;
+        index += 1;
+    }
+    table
+};
+
 /// A classified punctuation token with its exact original-source span.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PunctuatorToken {
@@ -164,9 +180,17 @@ pub fn scan_js_punctuator(
         }
         GreaterThanMode::Single | GreaterThanMode::LongestMatch => {}
     }
+    let mut candidates = rest
+        .as_bytes()
+        .first()
+        .and_then(|&first| CANDIDATES_BY_FIRST_BYTE.get(usize::from(first)))
+        .copied()
+        .unwrap_or(0);
     let mut best = None;
     let mut best_length = 0;
-    for &kind in PUNCTUATORS {
+    while candidates != 0 {
+        let kind = PUNCTUATORS[candidates.trailing_zeros() as usize];
+        candidates &= candidates - 1;
         if kind == Punctuator::OptionalChain
             && rest.as_bytes().get(2).is_some_and(u8::is_ascii_digit)
         {
