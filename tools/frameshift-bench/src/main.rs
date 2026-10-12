@@ -36,7 +36,7 @@ static ALLOCATOR: alloc::CountingAllocator = alloc::CountingAllocator::new();
 
 /// E1 throughput budget, in decimal megabytes per second on one core.
 const THROUGHPUT_BUDGET: f64 = 30.0;
-/// E1 peak memory budget, as a multiple of the source size.
+/// E1 peak memory budget for a whole corpus with all trees retained (`D-045`).
 const MEMORY_BUDGET: f64 = 20.0;
 /// Files in the default corpus, like the 1,000 modules of the `analyze`
 /// budget in `docs/ENGINEERING.md`.
@@ -251,8 +251,21 @@ fn measure_files(label: &str, files: &[CorpusFile], iterations: usize) -> Result
     let all = measure::corpus_memory(files, ParseLimits::default())
         .map_err(|error| format!("{label}, {error}"))?;
     let retained = all.source + all.indexes + all.trees;
+    if all.source == 0 {
+        println!(
+            "  all trees retained   {} heap, peak {}; not comparable: no source bytes",
+            grouped(retained),
+            grouped(all.peak)
+        );
+        return Ok(());
+    }
+    let verdict = if ratio(all.peak, all.source) <= MEMORY_BUDGET {
+        format!("meets {MEMORY_BUDGET}x")
+    } else {
+        format!("misses {MEMORY_BUDGET}x")
+    };
     println!(
-        "  all trees retained   {} source + {} indexes + {} trees = {} ({:.1}x), peak {:.1}x",
+        "  all trees retained   {} source + {} indexes + {} trees = {} ({:.1}x), peak {:.1}x  {verdict}",
         megabytes(all.source),
         megabytes(all.indexes),
         megabytes(all.trees),
@@ -491,14 +504,10 @@ fn print_file_memory(files: &[FileMemory]) {
     peaks.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     let (median, _) = peaks[peaks.len() / 2];
     let (worst, index) = peaks[peaks.len() - 1];
-    let verdict = if worst <= MEMORY_BUDGET {
-        "meets"
-    } else {
-        "misses"
-    };
     println!(
-        "  peak per file        median {median:.1}x, max {worst:.1}x (file {index}, {} bytes)  {verdict} {MEMORY_BUDGET}x",
-        grouped(files[index].bytes)
+        "  peak per file        median {median:.1}x, max {worst:.1}x (file {index}, {} bytes, {} heap), diagnostic only",
+        grouped(files[index].bytes),
+        grouped(files[index].peak)
     );
     let mut retained: Vec<f64> = files
         .iter()

@@ -259,6 +259,8 @@ cargo run -p frameshift-bench --release --offline --locked -- --dir <path> [--it
 
 **Component corpus.** `Corpus::components` generates JSX modules for the JSX dialect with the same seed, sizes, and generator, from a separately salted random sequence, so the mixed corpus keeps its bytes. About half of the top-level items are function components with destructured props that return multi-line JSX: intrinsic, component, member, and void elements, fragments, string, expression, arrow, spread, boolean, and style attributes, text with character references, expression and comment containers, `map` callbacks, and conditional elements; JSX also appears in other expressions. The default component corpus has 1,000 modules: 10,065,738 bytes, fingerprint `3b5b6cd23fac9fdb`, pinned by a unit test. Every generated component file must parse; before committing, `@babel/parser` 8.0.7 accepted 150 of them (1.4 MB) with identical JSX nodes and spans. The baseline and the throughput increment below measured the JavaScript and JSX corpora; the TypeScript corpus follows.
 
+**Memory budget (`D-045`).** The 20x E1 gate applies to peak heap demand of the whole corpus with every source text and tree retained, not to each file. The harness reports its verdict on that peak; per-file ratios and the largest file peak remain diagnostics. The historical retained figures below do not record the whole-corpus peak separately. An all-empty corpus reports absolute demand without a ratio or verdict.
+
 **Measurements.** `src/measure.rs` times `SourceText::new` plus `parse_js_program` in each file's dialect, and the parse alone, after one warm-up pass, and reports the minimum and median of the measured passes. Per-file memory is the source size plus the largest heap growth while building the source text and parsing, with the tree alive. A second pass keeps every source text and tree alive at once. A scaling series parses single modules from 1 KiB to 4 MiB with unbounded node and token counts. `src/alloc.rs` is the only unsafe code: a global allocator that forwards to the system allocator and counts requested bytes with relaxed atomics. It does not observe allocator overhead, fragmentation, or the old block of a moving reallocation, so figures are heap demand rather than resident memory.
 
 **Baseline (2026-10-12).** Intel Core i9-14900K desktop, Windows 11, Rust 1.98.0, release build, default corpus, five passes:
@@ -266,8 +268,8 @@ cargo run -p frameshift-bench --release --offline --locked -- --dir <path> [--it
 | Measurement | Result | E1 budget |
 | --- | --- | --- |
 | Parse throughput, minimum (median) | 11.5 MB/s (9.7 MB/s) | at least 30 MB/s per core: missed |
-| Peak heap per file, median (maximum) | 9.9x (14.9x, a 1.7 KB file) | at most 20x: met |
-| All source texts and trees retained | 99.8 MB for 10.3 MB of source (9.7x): 3.1 MB indexes, 86.4 MB trees | at most 20x: met |
+| Peak heap per file, median (maximum) | 9.9x (14.9x, a 1.7 KB file) | diagnostic only (`D-045`) |
+| All source texts and trees retained | 99.8 MB for 10.3 MB of source (9.7x): 3.1 MB indexes, 86.4 MB trees | retained ratio only; peak not recorded |
 | Syntax nodes | 1,388,794, 0.134 per byte | |
 | Scaling series, 1 KiB to 4 MiB | 6.8 to 13.1 MB/s, peak 6.9x to 11.9x | |
 
@@ -291,8 +293,8 @@ Reusing the hash maps of transient scopes and inlining the cached identifier and
 | Measurement | Result | E1 budget |
 | --- | --- | --- |
 | Parse throughput, minimum (median) | 68.4 MB/s (66.2 MB/s) | at least 30 MB/s per core: met on this machine |
-| Peak heap per file, median (maximum) | 9.9x (15.0x, a 1.7 KB file) | at most 20x: met |
-| All source texts and trees retained | 99.8 MB for 10.3 MB of source (9.7x): 3.1 MB indexes, 86.4 MB trees | at most 20x: met |
+| Peak heap per file, median (maximum) | 9.9x (15.0x, a 1.7 KB file) | diagnostic only (`D-045`) |
+| All source texts and trees retained | 99.8 MB for 10.3 MB of source (9.7x): 3.1 MB indexes, 86.4 MB trees | retained ratio only; peak not recorded |
 | Scaling series, 1 KiB to 4 MiB | 58.8 to 83.7 MB/s, peak 6.9x to 11.9x | |
 
 Throughput rose by a factor of 5.3 with identical trees and errors, and it stays in the same range across file sizes. Peak memory is unchanged within 0.1x of the source size. This desktop is faster per core than the reference laptop of section 4.1 of [ENGINEERING.md](ENGINEERING.md), so the result shows a margin of about a factor of two here rather than a verdict on the budget, which is checked on reference hardware. Scanning the corpus with the same public scanners outside the parser takes about two fifths of the parse time; the rest is grammar logic, which still peeks at the next token several times through the cached lookups. A token buffer that scans each token once would be the next structural step if JSX or TypeScript consume the margin.
@@ -302,8 +304,8 @@ Throughput rose by a factor of 5.3 with identical trees and errors, and it stays
 | Measurement | Mixed corpus | Component corpus (JSX) | E1 budget |
 | --- | --- | --- | --- |
 | Parse throughput, minimum (median) | 69.5 MB/s (66.4 MB/s) | 70.9 MB/s (69.5 MB/s) | at least 30 MB/s per core: met on this machine |
-| Peak heap per file, median (maximum) | 9.9x (15.0x, a 1.7 KB file) | 11.1x (17.1x, a 1.4 KB file) | at most 20x: met |
-| All source texts and trees retained | 99.8 MB for 10.3 MB (9.7x) | 106.1 MB for 10.1 MB (10.5x) | at most 20x: met |
+| Peak heap per file, median (maximum) | 9.9x (15.0x, a 1.7 KB file) | 11.1x (17.1x, a 1.4 KB file) | diagnostic only (`D-045`) |
+| All source texts and trees retained | 99.8 MB for 10.3 MB (9.7x) | 106.1 MB for 10.1 MB (10.5x) | retained ratio only; peak not recorded |
 | Syntax nodes | 1,388,794, 0.134 per byte | 1,484,692, 0.147 per byte | |
 
 JSX parses as fast as JavaScript but produces about ten percent more nodes per byte, so its trees take more memory. The largest per-file peaks belong to the smallest files, whose fixed allocations weigh most.
@@ -320,18 +322,18 @@ JSX parses as fast as JavaScript but produces about ten percent more nodes per b
 | Parsed | 13,282 (99.92 percent): 13,281 with the default limits, 1 (a 2.2 MB bundled `yarn` release) only with raised limits | at least 99 percent: met |
 | Rejected | 10, all explained: 6 compiled MDX function bodies with a top-level `return` (test fixtures of fumadocs), 1 Flow-typed file, 1 file with Babel `do` expressions, 1 file with legacy JavaScript decorators, all rejected by the oracles too; and 1 test fixture named `html--empty-expression.tsx` with `className={}`, which the JSX grammar and Babel reject while the compiler's parser defers it to its checker (`TS17000`) | every failure explained: met |
 | Parse throughput, minimum (median), accepted files | 93.5 MB/s (93.0 MB/s) | at least 30 MB/s per core: met on this machine |
-| All source texts and trees retained | 298.1 MB for 34.4 MB (8.7x) | at most 20x: met |
-| Peak heap per file, median (maximum) | 10.1x (54.6x, a 10-byte file) | see below |
+| All source texts and trees retained | 298.1 MB for 34.4 MB (8.7x) | retained ratio only; peak not recorded |
+| Peak heap per file, median (maximum) | 10.1x (54.6x, a 10-byte file) | diagnostic only (`D-045`) |
 
-The median file and the whole sample stay far within the memory budget, but the 20x ratio does not hold for every tiny file: a tree has fixed allocations of a few hundred bytes, which dominate files of a few dozen bytes, such as a file that only re-exports a name. Whether the budget applies per file or to the retained whole needs a decision before E1 can pass.
+The median file and the whole sample stay far within the memory budget, but the 20x ratio does not hold for every tiny file: a tree has fixed allocations of a few hundred bytes, which dominate files of a few dozen bytes, such as a file that only re-exports a name. The project owner resolved this in `D-045`: the 20x budget applies to peak heap demand during whole-corpus retention. Per-file peaks remain diagnostics, including the worst file's absolute heap demand; an all-empty corpus receives no ratio or budget verdict.
 
 **After the TypeScript corpus (`D-043`, 2026-10-13).** Same machine, default corpora, five passes. The mixed and component corpora keep their fingerprints and figures:
 
 | Measurement | TypeScript corpus | E1 budget |
 | --- | --- | --- |
 | Parse throughput, minimum (median) | 49.0 MB/s (48.8 MB/s) | at least 30 MB/s per core: met on this machine |
-| Peak heap per file, median (maximum) | 12.5x (18.1x, a 2.6 KB file) | at most 20x: met |
-| All source texts and trees retained | 128.7 MB for 10.4 MB (12.4x) | at most 20x: met |
+| Peak heap per file, median (maximum) | 12.5x (18.1x, a 2.6 KB file) | diagnostic only (`D-045`) |
+| All source texts and trees retained | 128.7 MB for 10.4 MB (12.4x) | retained ratio only; peak not recorded |
 | Syntax nodes | 1,812,415, 0.174 per byte | |
 
 The generated TypeScript is denser than real code, with 0.174 nodes per byte against 0.121 in the real-world sample, because nearly every binding carries a structured type. It parses at about 70 percent of the speed of the JavaScript corpora; the difference was not profiled. On real files, which are mostly TypeScript and TSX, throughput is higher than on any generated corpus.

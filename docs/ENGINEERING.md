@@ -163,7 +163,7 @@ The language is decided. Two experiments validate the core techniques before mil
   - Every failure is explained by syntax not yet implemented, never by a design flaw.
   - Span correctness is checked by slicing tests.
   - Throughput of at least 30 MB/s per core.
-  - Peak memory of at most 20 times the source size with full tree retention.
+  - Peak heap demand of at most 20 times the total source bytes of each corpus with every source text and tree retained (`D-045`). Per-file peaks remain diagnostics; an all-empty corpus has no comparable ratio.
   - Fuzzing for a fixed CPU budget finds no crashes or hangs.
   - A documented review concludes that the arena, visitor, and pattern-matching design is maintainable and extensible to further languages.
 - Thresholds are set to expose design problems, not to win benchmarks.
@@ -287,7 +287,7 @@ Reference machine: an 8-core x86_64 or ARM64 laptop from 2023 or later, with an 
 | `analyze` on a project with 1,000 modules (about 8 MB of source) | under 2 s | under 500 MB |
 | `analyze` on 10,000 modules (about 80 MB of source; V2 target) | under 15 s | under 3 GB |
 | `migrate` without external verification | under 2 times the `analyze` time | comparable to `analyze` |
-| Parser throughput (E1) | at least 30 MB/s per core | at most 20 times the source size with full retention |
+| Parser throughput (E1) | at least 30 MB/s per core | peak heap demand at most 20 times total corpus source bytes with full retention (`D-045`) |
 
 ### 4.2 Practices
 
