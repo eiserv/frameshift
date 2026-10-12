@@ -520,10 +520,17 @@ impl<'source> Parser<'source> {
         self.skip_trivia()
     }
 
+    // Most calls find the trivia already skipped, so only that check is inlined.
+    #[inline]
     fn skip_trivia(&mut self) -> Result<(), ParseError> {
         if self.trivia_end == Some(self.cursor) {
             return Ok(());
         }
+        self.scan_trivia()
+    }
+
+    #[inline(never)]
+    fn scan_trivia(&mut self) -> Result<(), ParseError> {
         let remaining = self
             .limits
             .lexical
