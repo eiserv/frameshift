@@ -638,8 +638,22 @@ impl Parser<'_> {
         if negative {
             return Err(self.error(self.cursor, ParseErrorKind::ExpectedType));
         }
-        if self.at_word("true")? || self.at_word("false")? || self.at_word("null")? {
-            let literal = self.parse_primary(false)?;
+        // A literal type is a single token. The expression parser would read a
+        // following `=>` as an arrow with an invalid parameter, but after a
+        // return type, as in `(): T | null => value`, it belongs to the
+        // enclosing arrow function.
+        let literal = if self.at_word("null")? {
+            Some(SyntaxNodeKind::NullLiteral)
+        } else if self.at_word("true")? {
+            Some(SyntaxNodeKind::BooleanLiteral(true))
+        } else if self.at_word("false")? {
+            Some(SyntaxNodeKind::BooleanLiteral(false))
+        } else {
+            None
+        };
+        if let Some(kind) = literal {
+            let token = self.scan_identifier()?;
+            let literal = self.add_node(kind, token.span)?;
             return self.ts_node(Ts::Literal, start, &[literal]);
         }
         if !self.identifier_can_start_here()? {

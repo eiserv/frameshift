@@ -150,6 +150,59 @@ fn namespaces_ambient_declarations_and_enums_keep_runtime_syntax() {
 }
 
 #[test]
+fn literal_types_can_end_an_arrow_return_type() {
+    // Regression: `null`, `true`, or `false` at the end of an arrow
+    // function's return type was read as an invalid arrow parameter, so the
+    // common `(): T | null => value` failed. Found in the E1 real-world sample.
+    ts("const find = (id: string): Item | null => { return null; };");
+    ts("const a = (): null => null; const b = (): true => true; const c = (): false | 0 => 0;");
+    ts("const pick = flag ? (value): Item | null => value : fallback;");
+    check(
+        "export const View = (): JSX.Element | null => <main />;",
+        JsDialect::Tsx,
+    );
+    check(
+        "const first = <T,>(items: T[]): T | null => items[0] ?? null;",
+        JsDialect::Tsx,
+    );
+    let source = input("const a = (): null => null;");
+    let tree = parse_js_program(
+        &source,
+        SourceGoal::Module,
+        JsDialect::TypeScript,
+        ParseLimits::default(),
+    )
+    .unwrap();
+    let literal = tree
+        .nodes()
+        .iter()
+        .find(|node| {
+            matches!(
+                node.kind(),
+                SyntaxNodeKind::TypeScript {
+                    kind: Ts::Literal,
+                    ..
+                }
+            )
+        })
+        .unwrap();
+    assert_eq!(source.slice(literal.span()).unwrap(), "null");
+    // In an expression, a literal before `=>` is still no arrow parameter.
+    let error = parse_js_program(
+        &input("const a = null => null;"),
+        SourceGoal::Module,
+        JsDialect::TypeScript,
+        ParseLimits::default(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(
+        error.kind,
+        frameshift_engine::ParseErrorKind::InvalidArrowParameters
+    );
+}
+
+#[test]
 fn redeclaration_early_errors_do_not_apply_to_the_typescript_dialects() {
     // TypeScript declares overloads, merges interfaces, namespaces, and
     // enums, and allows ambient redeclaration, so these dialects report no
