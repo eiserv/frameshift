@@ -49,7 +49,7 @@ impl<'source> Parser<'source> {
             SourceGoal::Module => (ScopeKind::Module, ListKind::Module),
         };
         self.push_scope(scope)?;
-        let mut items = Vec::new();
+        let mut items = self.take_list();
         let result = self.parse_program_items(list, &mut items);
         let module_result = if result.is_ok() && goal == SourceGoal::Module {
             self.check_exported_bindings()
@@ -59,7 +59,7 @@ impl<'source> Parser<'source> {
         self.pop_scope();
         result?;
         module_result?;
-        let body = self.append_children(&items)?;
+        let body = self.finish_list(items)?;
         let span = self.source_span(0, self.text.len())?;
         self.cursor = self.text.len();
         self.add_node(
@@ -544,10 +544,10 @@ impl<'source> Parser<'source> {
         self.within_braces(|parser| {
             let open = parser
                 .expect_punctuator(Punctuator::LeftBrace, parser.goal_for_expression_start())?;
-            let mut items = Vec::new();
+            let mut items = parser.take_list();
             parser.parse_statement_list(ListKind::Block, &mut items)?;
             parser.expect_punctuator(Punctuator::RightBrace, parser.goal_after_expression())?;
-            let body = parser.append_children(&items)?;
+            let body = parser.finish_list(items)?;
             let span = parser.span_from(open.span.start())?;
             parser.add_node(SyntaxNodeKind::BlockStatement { body }, span)
         })
@@ -561,7 +561,7 @@ impl<'source> Parser<'source> {
         self.consume_declaration_keyword(kind)?;
         let declarators = self.parse_declarators(kind, false)?;
         self.consume_semicolon()?;
-        let declarators = self.append_children(&declarators)?;
+        let declarators = self.finish_list(declarators)?;
         let span = self.span_from(start)?;
         self.add_node(
             SyntaxNodeKind::VariableDeclaration { kind, declarators },
@@ -584,7 +584,7 @@ impl<'source> Parser<'source> {
         kind: VariableKind,
         for_head: bool,
     ) -> Result<Vec<NodeId>, ParseError> {
-        let mut declarators = Vec::new();
+        let mut declarators = self.take_list();
         loop {
             self.skip_trivia()?;
             let start = self.cursor;
@@ -1083,7 +1083,7 @@ impl<'source> Parser<'source> {
 
     fn parse_case_block(&mut self) -> Result<crate::ast::ChildList, ParseError> {
         self.expect_punctuator(Punctuator::LeftBrace, self.goal_after_expression())?;
-        let mut cases = Vec::new();
+        let mut cases = self.take_list();
         let mut default_seen = false;
         loop {
             self.skip_trivia()?;
@@ -1100,15 +1100,15 @@ impl<'source> Parser<'source> {
                 break;
             };
             self.expect_punctuator(Punctuator::Colon, self.goal_after_expression())?;
-            let mut consequent = Vec::new();
+            let mut consequent = self.take_list();
             self.parse_statement_list(ListKind::SwitchCase, &mut consequent)?;
-            let consequent = self.append_children(&consequent)?;
+            let consequent = self.finish_list(consequent)?;
             let span = self.span_from(case_start)?;
             let case = self.add_node(SyntaxNodeKind::SwitchCase { test, consequent }, span)?;
             self.push_child(&mut cases, case)?;
         }
         self.expect_punctuator(Punctuator::RightBrace, self.goal_after_expression())?;
-        self.append_children(&cases)
+        self.finish_list(cases)
     }
 
     fn parse_try(&mut self, start: usize) -> Result<NodeId, ParseError> {

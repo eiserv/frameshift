@@ -195,7 +195,7 @@ impl<'source> Parser<'source> {
 
     fn parse_class_body(&mut self, derived: bool) -> Result<NodeId, ParseError> {
         let open = self.expect_punctuator(Punctuator::LeftBrace, self.goal_after_expression())?;
-        let mut elements = Vec::new();
+        let mut elements = self.take_list();
         let mut constructor_seen = false;
         loop {
             if self.at_char('}')? {
@@ -209,7 +209,7 @@ impl<'source> Parser<'source> {
             }
         }
         let close = self.expect_punctuator(Punctuator::RightBrace, self.goal_after_expression())?;
-        let elements = self.append_children(&elements)?;
+        let elements = self.finish_list(elements)?;
         let span = self.source_span(open.span.start(), close.span.end())?;
         self.add_node(SyntaxNodeKind::ClassBody { elements }, span)
     }
@@ -485,10 +485,10 @@ impl<'source> Parser<'source> {
         self.push_scope(ScopeKind::StaticBlock)?;
         let result = self.within_braces(|parser| {
             parser.expect_punctuator(Punctuator::LeftBrace, parser.goal_after_expression())?;
-            let mut items = Vec::new();
+            let mut items = parser.take_list();
             parser.parse_statement_list(ListKind::StaticBlock, &mut items)?;
             parser.expect_punctuator(Punctuator::RightBrace, parser.goal_after_expression())?;
-            parser.append_children(&items)
+            parser.finish_list(items)
         });
         self.pop_scope();
         self.exit_function(frame);

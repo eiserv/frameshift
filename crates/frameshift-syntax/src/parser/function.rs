@@ -297,7 +297,9 @@ impl<'source> Parser<'source> {
         if !valid_arity {
             return Err(self.error(list.open.start(), ParseErrorKind::InvalidAccessorParameters));
         }
-        self.finish_parameters(&list, TargetMode::Binding, rules)
+        let parameters = self.finish_parameters(&list, TargetMode::Binding, rules);
+        self.recycle_list(list.elements);
+        parameters
     }
 
     // Converts a cover list to parameters, adds the node, and declares the names.
@@ -346,7 +348,7 @@ impl<'source> Parser<'source> {
         self.within_braces(|parser| {
             let open = parser
                 .expect_punctuator(Punctuator::LeftBrace, parser.goal_for_expression_start())?;
-            let mut items = Vec::new();
+            let mut items = parser.take_list();
             let use_strict = parser.parse_directive_prologue(&mut items)?;
             if let Some(offset) = use_strict
                 && !parameters.simple
@@ -357,7 +359,7 @@ impl<'source> Parser<'source> {
             parser.parse_statement_list(super::statement::ListKind::FunctionBody, &mut items)?;
             let close =
                 parser.expect_punctuator(Punctuator::RightBrace, parser.goal_after_expression())?;
-            let body = parser.append_children(&items)?;
+            let body = parser.finish_list(items)?;
             let span = parser.source_span(open.span.start(), close.span.end())?;
             parser.add_node(
                 SyntaxNodeKind::FunctionBody {
@@ -463,7 +465,7 @@ impl<'source> Parser<'source> {
     ) -> Result<NodeId, ParseError> {
         self.enter()?;
         let frame = self.enter_function(self.arrow_context(is_async));
-        let result = self.with_arrow_scope(|parser| {
+        let result = self.with_arrow_scope(move |parser| {
             let parameters = parser.finish_parameters(
                 &list,
                 TargetMode::ArrowParameters,
@@ -471,8 +473,9 @@ impl<'source> Parser<'source> {
                     unique: true,
                     accessor: None,
                 },
-            )?;
-            parser.parse_arrow_body(start, &parameters, is_async)
+            );
+            parser.recycle_list(list.elements);
+            parser.parse_arrow_body(start, &parameters?, is_async)
         });
         self.exit_function(frame);
         self.leave();

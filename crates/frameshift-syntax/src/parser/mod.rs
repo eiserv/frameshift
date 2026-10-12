@@ -236,6 +236,10 @@ struct Parser<'source> {
     children: Vec<NodeId>,
     template_parts: Vec<TemplatePart>,
     comments: Vec<Comment>,
+    // Emptied buffers for child lists. A list is collected in a buffer before
+    // it is appended to the child arena; reusing the buffers saves an
+    // allocation per list.
+    list_buffers: Vec<Vec<NodeId>>,
     // Names declared by the parameter list or pattern being converted.
     bound_names: Vec<Span>,
     // Errors that apply only if the object literal stays an expression.
@@ -307,6 +311,7 @@ impl<'source> Parser<'source> {
             children: Vec::new(),
             template_parts: Vec::new(),
             comments: Vec::new(),
+            list_buffers: Vec::new(),
             bound_names: Vec::new(),
             expression_only_errors: Vec::new(),
         }
@@ -441,6 +446,25 @@ impl<'source> Parser<'source> {
             .map_err(|_| self.error(self.cursor, ParseErrorKind::AllocationFailed))?;
         items.push(item);
         Ok(())
+    }
+
+    // An empty buffer for collecting a child list.
+    fn take_list(&mut self) -> Vec<NodeId> {
+        self.list_buffers.pop().unwrap_or_default()
+    }
+
+    fn recycle_list(&mut self, mut items: Vec<NodeId>) {
+        items.clear();
+        if self.list_buffers.try_reserve(1).is_ok() {
+            self.list_buffers.push(items);
+        }
+    }
+
+    // Appends a collected list to the child arena and recycles its buffer.
+    fn finish_list(&mut self, items: Vec<NodeId>) -> Result<ChildList, ParseError> {
+        let list = self.append_children(&items);
+        self.recycle_list(items);
+        list
     }
 
     fn append_children(&mut self, items: &[NodeId]) -> Result<ChildList, ParseError> {

@@ -709,7 +709,7 @@ impl<'source> Parser<'source> {
         self.cover = self.cover.merge(marks);
         // The callee follows its arguments in the arena; only spans are ordered.
         let callee = self.identifier_reference(token)?;
-        let arguments = self.append_children(&list.elements)?;
+        let arguments = self.finish_list(list.elements)?;
         let span = self.source_span(start, list.close.end())?;
         let call = self.add_node(
             SyntaxNodeKind::Call {
@@ -801,7 +801,7 @@ impl<'source> Parser<'source> {
         let callee = self.parse_postfix(callee, PostfixMode::NewCallee)?;
         if self.at_punctuator(Punctuator::LeftParen)? {
             let list = self.parse_cover_list(Punctuator::LeftParen)?;
-            let arguments = self.append_children(&list.elements)?;
+            let arguments = self.finish_list(list.elements)?;
             let span = self.source_span(start, list.close.end())?;
             return self.add_node(
                 SyntaxNodeKind::New {
@@ -1101,7 +1101,7 @@ impl<'source> Parser<'source> {
 
     fn parse_call(&mut self, callee: NodeId, optional: bool) -> Result<NodeId, ParseError> {
         let list = self.parse_cover_list(Punctuator::LeftParen)?;
-        let arguments = self.append_children(&list.elements)?;
+        let arguments = self.finish_list(list.elements)?;
         let span = self.source_span(self.node_span(callee).start(), list.close.end())?;
         self.add_node(
             SyntaxNodeKind::Call {
@@ -1119,7 +1119,7 @@ impl<'source> Parser<'source> {
     pub(super) fn parse_cover_list(&mut self, open: Punctuator) -> Result<CoverList, ParseError> {
         self.with_in(false, |parser| {
             let open_token = parser.expect_punctuator(open, parser.goal_for_expression_start())?;
-            let mut elements = Vec::new();
+            let mut elements = parser.take_list();
             let mut trailing_comma = false;
             loop {
                 if parser.at_char(')')? {
@@ -1219,6 +1219,7 @@ impl<'source> Parser<'source> {
             )?;
         }
         let span = self.source_span(list.open.start(), list.close.end())?;
+        self.recycle_list(list.elements);
         self.add_node(SyntaxNodeKind::Parenthesized { expression }, span)
     }
 
@@ -1235,7 +1236,7 @@ impl<'source> Parser<'source> {
     fn parse_array_literal(&mut self) -> Result<NodeId, ParseError> {
         let open =
             self.expect_punctuator(Punctuator::LeftBracket, self.goal_for_expression_start())?;
-        let mut elements = Vec::new();
+        let mut elements = self.take_list();
         let mut trailing_comma = false;
         loop {
             let token = self.peek_punctuator(self.goal_for_expression_start())?;
@@ -1266,7 +1267,7 @@ impl<'source> Parser<'source> {
         }
         let close =
             self.expect_punctuator(Punctuator::RightBracket, self.goal_after_expression())?;
-        let elements = self.append_children(&elements)?;
+        let elements = self.finish_list(elements)?;
         let span = self.source_span(open.span.start(), close.span.end())?;
         self.add_node(
             SyntaxNodeKind::ArrayExpression {
@@ -1284,7 +1285,7 @@ impl<'source> Parser<'source> {
     fn parse_object_literal(&mut self) -> Result<NodeId, ParseError> {
         let open =
             self.expect_punctuator(Punctuator::LeftBrace, self.goal_for_expression_start())?;
-        let mut properties = Vec::new();
+        let mut properties = self.take_list();
         let mut trailing_comma = false;
         let mut state = ObjectState::default();
         loop {
@@ -1306,7 +1307,7 @@ impl<'source> Parser<'source> {
             trailing_comma = true;
         }
         let close = self.expect_punctuator(Punctuator::RightBrace, self.goal_after_expression())?;
-        let properties = self.append_children(&properties)?;
+        let properties = self.finish_list(properties)?;
         let span = self.source_span(open.span.start(), close.span.end())?;
         let object = self.add_node(
             SyntaxNodeKind::ObjectExpression {
