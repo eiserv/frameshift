@@ -131,6 +131,7 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Fifth one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-038` expression-completion increment and its documentation, once the agent is satisfied with the work. This exception has the same limits as the first one.
 - **Sixth one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-039` complete-grammar increment and its documentation, once the agent is satisfied with the work. This exception has the same limits as the first one.
 - **Seventh one-run exception (2026-10-12):** Through the Claude Code chat, the project owner explicitly authorized committing and pushing directly to `main` for the `D-040` measurement-harness and throughput increments and their documentation, once the agent is satisfied with the work. This exception has the same limits as the first one.
+- **Eighth one-run exception (2026-10-12):** In a separate, later run, the project owner again explicitly authorized through the Claude Code chat committing and pushing directly to `main` once the agent is satisfied with the work. The run implements the `D-040` throughput increment and its documentation. This exception has the same limits as the first one.
 
 ### D-011: Release management with Release Please
 
@@ -341,7 +342,7 @@ Statuses change through an edit to this file under the integration workflow in D
 
 ### D-040: Built measurement harness with a counting allocator, then a throughput increment before JSX
 
-- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Claude Code question interface. Refines the increment order of `D-039`.
+- **Status:** Accepted (2026-10-12), confirmed by the project owner through the Claude Code question interface. Refines the increment order of `D-039`. Confirmed again on the same day in a second interview of a later run, which began before the harness was visible to it: the project owner chose the same counting allocator, built harness, and generated corpus, and directed that the run optimize the parser until it meets the throughput budget with margin.
 - **Context:** `D-039` selected a measurement harness for throughput and peak memory on generated fictional source files as the next E1 increment. How to measure peak memory, where the corpus comes from, and whether to build or adopt a benchmark harness were open. A rough preliminary measurement outside the repository, on an Intel Core i9-14900K, parsed module code at about 9.4 MB/s from 16 KB to 4 MB per file: linear in size, but about a third of the E1 budget of 30 MB/s per core.
 - **Decision:**
   - A development-only binary, `tools/frameshift-bench`, measures parser throughput and peak heap memory through the engine facade. It uses its own small harness on the standard library: a warm-up round, fixed iteration counts, minimum and median times, and a scaling series over file sizes. Statistics-based benchmark libraries such as criterion are not adopted now; benchmark tooling is evaluated again for the M11 benchmarks.
