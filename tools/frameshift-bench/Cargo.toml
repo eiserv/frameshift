@@ -1,0 +1,20 @@
+[package]
+name = "frameshift-bench"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+frameshift-engine = { path = "../../crates/frameshift-engine" }
+
+# The counting allocator implements `GlobalAlloc`, which requires unsafe code,
+# so this development tool cannot inherit the workspace's `forbid`. It repeats
+# the other workspace lints unchanged and confines unsafe code to one module
+# (D-040).
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+wildcard_enum_match_arm = "deny"
+undocumented_unsafe_blocks = "deny"

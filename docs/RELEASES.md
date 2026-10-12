@@ -144,7 +144,7 @@ jobs:
 ### 6.2 CI
 
 - Formatting and linting with the language's standard tools.
-- Static analysis: Clippy with the project's lint configuration (including the ban on wildcard arms over closed enumerations and on `unsafe` code), dependency boundary checks between crates, dependency audits and vulnerability scanning.
+- Static analysis: Clippy with the project's lint configuration (including the ban on wildcard arms over closed enumerations and on `unsafe` code outside the allocator module of the development-only measurement harness, `D-040`), dependency boundary checks between crates, dependency audits and vulnerability scanning.
 - Unit, fixture, golden, classification, negative, safety, determinism, and CLI end-to-end tests.
 - Cross-platform test matrix (Linux, Windows, macOS, and ARM64 runners where available), scaled by the tiers in [TESTING.md](TESTING.md) to respect the Actions minutes available to private repositories.
 - Cross-builds for every release target, to catch platform-specific build breaks early.

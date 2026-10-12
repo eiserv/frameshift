@@ -262,7 +262,7 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | tree-sitter runtime and grammars | Runtime (V2 or later) | Evaluate when multi-language support starts (`D-019`) | C code compiled into the binary. Needs fuzzing and sanitizer runs. |
 | Unit and integration tests | Development | Standard toolchain | |
 | Golden-file and snapshot testing | Development | Build | Small, and the update workflow must match [TESTING.md](TESTING.md) |
-| Benchmarks | Development | Evaluate a statistics-based harness (for example criterion) against a small built harness | The standard benchmark attribute is not stable |
+| Benchmarks | Development | Build: a small standard-library harness with a counting allocator (`D-040`, implemented as `tools/frameshift-bench`). Statistics-based tools are evaluated again for M11. | The standard benchmark attribute is not stable, and criterion does not measure memory |
 | Fuzzing | Development | Evaluate coverage-guided fuzzing tools (for example cargo-fuzz) | Mandatory for every parser of untrusted input |
 | Formatting and linting | Development | rustfmt and Clippy (part of the toolchain) | Lints are configured, not just defaults |
 | Dependency audits and vulnerability scanning | Development | Evaluate cargo-audit and cargo-deny | Also checks licenses and duplicate dependencies |
