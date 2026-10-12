@@ -291,14 +291,33 @@ pub fn scan_js_trivia(
         SourceGoal::Script => true,
         SourceGoal::Module => false,
     };
+    let bytes = text.as_bytes();
     let mut cursor = offset;
     let mut comments = Vec::new();
     let mut has_line_terminator = false;
-    while let Some(ch) = text[cursor..].chars().next() {
-        if is_whitespace(ch) || is_line_terminator(ch) {
-            has_line_terminator |= is_line_terminator(ch);
-            cursor += ch.len_utf8();
-            continue;
+    while let Some(&byte) = bytes.get(cursor) {
+        // ASCII whitespace and line breaks, the common case, need no decoding.
+        match byte {
+            b'\t' | 0x0b | 0x0c | b' ' => {
+                cursor += 1;
+                continue;
+            }
+            b'\n' | b'\r' => {
+                has_line_terminator = true;
+                cursor += 1;
+                continue;
+            }
+            _ => {}
+        }
+        if !byte.is_ascii() {
+            match text[cursor..].chars().next() {
+                Some(ch) if is_whitespace(ch) || is_line_terminator(ch) => {
+                    has_line_terminator |= is_line_terminator(ch);
+                    cursor += ch.len_utf8();
+                    continue;
+                }
+                Some(_) | None => break,
+            }
         }
         let rest = &text[cursor..];
         let (kind, delimiter) = if rest.starts_with("//") {
@@ -322,16 +341,19 @@ pub fn scan_js_trivia(
             | CommentKind::HtmlOpen
             | CommentKind::HtmlClose
             | CommentKind::Hashbang => cursor = line_end(text, cursor),
+            // Byte steps cannot split a delimiter or a line break: `*`, `/`,
+            // CR, LF, and the lead byte of U+2028 and U+2029 never occur
+            // inside another UTF-8 sequence.
             CommentKind::Block => loop {
-                if text[cursor..].starts_with("*/") {
+                let Some(&byte) = bytes.get(cursor) else {
+                    return Err(error(start, LexicalErrorKind::UnterminatedComment));
+                };
+                if byte == b'*' && bytes.get(cursor + 1) == Some(&b'/') {
                     cursor += 2;
                     break;
                 }
-                let Some(ch) = text[cursor..].chars().next() else {
-                    return Err(error(start, LexicalErrorKind::UnterminatedComment));
-                };
-                has_line_terminator |= is_line_terminator(ch);
-                cursor += ch.len_utf8();
+                has_line_terminator |= line_terminator_at(bytes, cursor);
+                cursor += 1;
             },
         }
         comments
@@ -421,13 +443,24 @@ pub(crate) fn scan_hashbang(text: &str, offset: usize) -> Option<Comment> {
 }
 
 fn line_end(text: &str, mut cursor: usize) -> usize {
-    while let Some(ch) = text[cursor..].chars().next() {
-        if is_line_terminator(ch) {
-            break;
-        }
-        cursor += ch.len_utf8();
+    let bytes = text.as_bytes();
+    while cursor < bytes.len() && !line_terminator_at(bytes, cursor) {
+        cursor += 1;
     }
     cursor
+}
+
+// Whether a line terminator starts at byte `index`: CR, LF, or U+2028 and
+// U+2029, which UTF-8 encodes as E2 80 A8 and E2 80 A9. Matching bytes lets
+// comment scans step over other text without decoding it.
+fn line_terminator_at(bytes: &[u8], index: usize) -> bool {
+    match bytes.get(index) {
+        Some(b'\n' | b'\r') => true,
+        Some(0xe2) => {
+            bytes.get(index + 1) == Some(&0x80) && matches!(bytes.get(index + 2), Some(0xa8 | 0xa9))
+        }
+        Some(_) | None => false,
+    }
 }
 
 // Consumes one escape after its backslash and reports whether it is a legacy

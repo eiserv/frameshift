@@ -597,3 +597,137 @@ fn generated_short_inputs_have_deterministic_errors_and_valid_spans() {
         }
     }
 }
+
+// The trivia grammar transcribed over Unicode scalars, independent of the
+// scanner's byte-level paths: comment text and line breaks, including U+2028
+// and U+2029 inside comments, must be classified exactly as by scalar.
+type ReferenceTrivia = (usize, bool, Vec<(CommentKind, usize, usize)>);
+
+fn reference_trivia(
+    text: &str,
+    offset: usize,
+    goal: SourceGoal,
+    max_comments: usize,
+) -> Result<ReferenceTrivia, LexicalError> {
+    let is_whitespace = |ch: char| {
+        matches!(
+            ch,
+            '\t' | '\u{b}' | '\u{c}' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
+                ..='\u{200a}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}'
+        )
+    };
+    let is_line_terminator = |ch: char| matches!(ch, '\n' | '\r' | '\u{2028}' | '\u{2029}');
+    let html = goal == SourceGoal::Script;
+    let mut cursor = offset;
+    let mut line_break = false;
+    let mut comments = Vec::new();
+    while let Some(ch) = text[cursor..].chars().next() {
+        if is_whitespace(ch) || is_line_terminator(ch) {
+            line_break |= is_line_terminator(ch);
+            cursor += ch.len_utf8();
+            continue;
+        }
+        let rest = &text[cursor..];
+        let (kind, delimiter) = if rest.starts_with("//") {
+            (CommentKind::Line, 2)
+        } else if rest.starts_with("/*") {
+            (CommentKind::Block, 2)
+        } else if html && rest.starts_with("<!--") {
+            (CommentKind::HtmlOpen, 4)
+        } else if html && line_break && rest.starts_with("-->") {
+            (CommentKind::HtmlClose, 3)
+        } else {
+            break;
+        };
+        if comments.len() == max_comments {
+            return Err(error(cursor, LexicalErrorKind::CommentLimit));
+        }
+        let start = cursor;
+        cursor += delimiter;
+        if kind == CommentKind::Block {
+            loop {
+                if text[cursor..].starts_with("*/") {
+                    cursor += 2;
+                    break;
+                }
+                let Some(ch) = text[cursor..].chars().next() else {
+                    return Err(error(start, LexicalErrorKind::UnterminatedComment));
+                };
+                line_break |= is_line_terminator(ch);
+                cursor += ch.len_utf8();
+            }
+        } else {
+            while let Some(ch) = text[cursor..].chars().next() {
+                if is_line_terminator(ch) {
+                    break;
+                }
+                cursor += ch.len_utf8();
+            }
+        }
+        comments.push((kind, start, cursor));
+    }
+    Ok((cursor, line_break, comments))
+}
+
+#[test]
+fn trivia_scanning_agrees_with_a_scalar_reference_model() {
+    // U+2027, U+202A, and U+20AC share the UTF-8 lead byte of U+2028 and
+    // U+2029 but are not line terminators; U+180E is not whitespace.
+    let alphabet = [
+        ' ', '\t', '\n', '\r', '\u{2028}', '\u{2029}', '\u{2027}', '\u{202a}', '\u{20ac}',
+        '\u{a0}', '\u{3000}', '\u{180e}', '/', '*', '<', '!', '-', '>', 'x',
+    ];
+    let max_comments = 3;
+    let limits = LexicalLimits {
+        max_comments,
+        ..LexicalLimits::default()
+    };
+    let check = |text: &str| {
+        let source = make_source(text);
+        for offset in text
+            .char_indices()
+            .map(|(offset, _)| offset)
+            .chain([text.len()])
+        {
+            for goal in [SourceGoal::Script, SourceGoal::Module] {
+                let actual = scan_js_trivia(&source, offset, goal, limits).map(|trivia| {
+                    assert_eq!(trivia.span.start(), offset);
+                    let comments = trivia
+                        .comments
+                        .iter()
+                        .map(|comment| (comment.kind, comment.span.start(), comment.span.end()))
+                        .collect::<Vec<_>>();
+                    (trivia.span.end(), trivia.has_line_terminator, comments)
+                });
+                let expected = reference_trivia(text, offset, goal, max_comments);
+                assert_eq!(actual, expected, "{text:?} at {offset} in {goal:?}");
+            }
+        }
+    };
+    for length in 0..=3 {
+        for mut index in 0..alphabet.len().pow(length) {
+            let mut text = String::new();
+            for _ in 0..length {
+                text.push(alphabet[index % alphabet.len()]);
+                index /= alphabet.len();
+            }
+            check(&text);
+        }
+    }
+    // Longer inputs from a fixed SplitMix64 sequence.
+    let mut state: u64 = 0x7121_5EED;
+    let mut next = || {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut value = state;
+        value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        value ^ (value >> 31)
+    };
+    for _ in 0..20_000 {
+        let length = 4 + (next() % 9) as usize;
+        let text: String = (0..length)
+            .map(|_| alphabet[(next() % alphabet.len() as u64) as usize])
+            .collect();
+        check(&text);
+    }
+}

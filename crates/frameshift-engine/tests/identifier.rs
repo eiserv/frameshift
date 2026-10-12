@@ -231,6 +231,34 @@ fn reserved_words_follow_string_values_and_report_escapes() {
 }
 
 #[test]
+fn only_exact_spellings_are_reserved_words() {
+    let words = reserved_words();
+    let expected = |candidate: &str| {
+        words
+            .iter()
+            .find(|(spelling, _, _)| *spelling == candidate)
+            .map(|&(_, word, _)| word)
+    };
+    for (spelling, _, _) in &words {
+        let mut candidates = (1..=spelling.len())
+            .map(|end| spelling[..end].to_owned())
+            .collect::<Vec<_>>();
+        candidates.push(format!("{spelling}s"));
+        candidates.push(format!("_{spelling}"));
+        candidates.push(format!("{spelling}{spelling}"));
+        candidates.push(spelling.to_uppercase());
+        let mut capitalized = String::from(*spelling);
+        capitalized[..1].make_ascii_uppercase();
+        candidates.push(capitalized);
+        for candidate in candidates {
+            let token =
+                scan_js_identifier(&source(&candidate), 0, LexicalLimits::default()).unwrap();
+            assert_eq!(token.reserved_word, expected(&candidate), "{candidate}");
+        }
+    }
+}
+
+#[test]
 fn offsets_starts_and_byte_limits_are_checked_in_order() {
     for text in [
         "", " ", "1", "+", "-x", "'x'", "\u{200c}", "\u{301}", "€", "🦀",

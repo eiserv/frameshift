@@ -46,16 +46,9 @@ macro_rules! define_reserved_words {
                     $(Self::$kind => ReservedWordClass::$class,)+
                 }
             }
-
-            pub(crate) fn from_spelling(spelling: &str) -> Option<Self> {
-                match spelling {
-                    $($spelling => Some(Self::$kind),)+
-                    _ => None,
-                }
-            }
         }
 
-        const SPELLINGS: &[&str] = &[$($spelling,)+];
+        const WORDS: &[ReservedWord] = &[$(ReservedWord::$kind,)+];
     };
 }
 
@@ -113,14 +106,74 @@ define_reserved_words! {
 const MAX_RESERVED_WORD_BYTES: usize = {
     let mut max = 0;
     let mut index = 0;
-    while index < SPELLINGS.len() {
-        if SPELLINGS[index].len() > max {
-            max = SPELLINGS[index].len();
+    while index < WORDS.len() {
+        if WORDS[index].spelling().len() > max {
+            max = WORDS[index].spelling().len();
         }
         index += 1;
     }
     max
 };
+
+// Every reserved word is lowercase ASCII and at most 16 bytes long, so its
+// bytes packed big-endian into a `u128` form a unique key, and a candidate
+// name packs the same way while it is scanned. Sorting the keys at compile
+// time turns the lookup into a binary search instead of a comparison with
+// every spelling (`D-040`).
+const fn reserved_word_key(bytes: &[u8]) -> u128 {
+    let mut key = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        key = (key << 8) | bytes[index] as u128;
+        index += 1;
+    }
+    key
+}
+
+const RESERVED_WORD_KEYS: [(u128, ReservedWord); WORDS.len()] = {
+    assert!(MAX_RESERVED_WORD_BYTES <= 16);
+    let mut table = [(0, WORDS[0]); WORDS.len()];
+    let mut index = 0;
+    while index < WORDS.len() {
+        let spelling = WORDS[index].spelling().as_bytes();
+        let mut byte = 0;
+        while byte < spelling.len() {
+            assert!(spelling[byte].is_ascii_lowercase());
+            byte += 1;
+        }
+        let key = reserved_word_key(spelling);
+        let mut position = index;
+        while position > 0 && table[position - 1].0 > key {
+            table[position] = table[position - 1];
+            position -= 1;
+        }
+        table[position] = (key, WORDS[index]);
+        index += 1;
+    }
+    let mut position = 1;
+    while position < table.len() {
+        assert!(table[position - 1].0 < table[position].0);
+        position += 1;
+    }
+    table
+};
+
+fn reserved_word_for_key(key: u128) -> Option<ReservedWord> {
+    RESERVED_WORD_KEYS
+        .binary_search_by(|&(candidate, _)| candidate.cmp(&key))
+        .ok()
+        .map(|index| RESERVED_WORD_KEYS[index].1)
+}
+
+impl ReservedWord {
+    pub(crate) fn from_spelling(spelling: &str) -> Option<Self> {
+        let bytes = spelling.as_bytes();
+        if bytes.len() > MAX_RESERVED_WORD_BYTES || !bytes.iter().all(u8::is_ascii_lowercase) {
+            return None;
+        }
+        reserved_word_for_key(reserved_word_key(bytes))
+    }
+}
 
 /// One identifier name with its original spelling and lexical facts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,8 +223,28 @@ pub fn scan_js_identifier(
     let name_start = scan.cursor;
     let mut has_escape = false;
     let mut word = Word::default();
+    let bytes = scan.text.as_bytes();
     while let Some(ch) = scan.peek() {
         let first = scan.cursor == name_start;
+        // ASCII names, the common case, are classified without table lookups.
+        if let Some(&byte) = bytes.get(scan.cursor)
+            && byte.is_ascii()
+            && byte != b'\\'
+        {
+            let permitted = byte.is_ascii_alphabetic()
+                || byte == b'$'
+                || byte == b'_'
+                || (!first && byte.is_ascii_digit());
+            if !permitted {
+                if first {
+                    return Err(error(scan.cursor, LexicalErrorKind::ExpectedIdentifier));
+                }
+                break;
+            }
+            scan.advance(ch)?;
+            word.push(ch);
+            continue;
+        }
         let code_point = if ch == '\\' {
             let escape = scan.cursor;
             match scan.unicode_escape()? {
@@ -217,11 +290,11 @@ fn permitted(ch: char, first: bool) -> bool {
     }
 }
 
-// Every reserved word is lowercase ASCII and short, so a fixed buffer holds
-// any StringValue that could match one, even when spelled with escapes.
+// The key of the StringValue scanned so far, which can match a reserved word
+// even when spelled with escapes, or `other` once it cannot match any.
 #[derive(Default)]
 struct Word {
-    bytes: [u8; MAX_RESERVED_WORD_BYTES],
+    key: u128,
     len: usize,
     other: bool,
 }
@@ -229,8 +302,8 @@ struct Word {
 impl Word {
     fn push(&mut self, ch: char) {
         match u8::try_from(ch) {
-            Ok(byte) if byte.is_ascii_lowercase() && self.len < self.bytes.len() => {
-                self.bytes[self.len] = byte;
+            Ok(byte) if byte.is_ascii_lowercase() && self.len < MAX_RESERVED_WORD_BYTES => {
+                self.key = (self.key << 8) | u128::from(byte);
                 self.len += 1;
             }
             Ok(_) | Err(_) => self.other = true,
@@ -241,7 +314,7 @@ impl Word {
         if self.other {
             return None;
         }
-        ReservedWord::from_spelling(std::str::from_utf8(&self.bytes[..self.len]).ok()?)
+        reserved_word_for_key(self.key)
     }
 }
 
