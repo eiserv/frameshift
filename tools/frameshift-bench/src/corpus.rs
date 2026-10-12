@@ -9,6 +9,8 @@
 
 use frameshift_engine::{JsDialect, SourceGoal};
 
+mod typescript;
+
 /// Version of the generated output. Any change to the bytes produced for a
 /// seed requires a new version and a new pinned fingerprint.
 pub const GENERATOR_VERSION: u32 = 1;
@@ -109,6 +111,26 @@ impl Corpus {
         Self { files }
     }
 
+    /// Generates `count` TypeScript files whose sizes follow
+    /// [`mixed_file_size`]: about eleven in twenty are `.ts` modules, eight
+    /// in twenty `.tsx` component modules, and one in twenty declaration
+    /// files.
+    pub fn typescript(seed: u64, count: usize) -> Self {
+        let mut rng = Rng::new(seed ^ TYPESCRIPT_SALT);
+        let files = (0..count)
+            .map(|_| {
+                let target = mixed_file_size(&mut rng);
+                let dialect = match rng.below(20) {
+                    0 => JsDialect::TypeScriptDeclaration,
+                    1..=8 => JsDialect::Tsx,
+                    _ => JsDialect::TypeScript,
+                };
+                generate_typescript_file(rng.next_u64(), dialect, target)
+            })
+            .collect();
+        Self { files }
+    }
+
     /// Returns the total source size in bytes.
     pub fn bytes(&self) -> usize {
         self.files.iter().map(|file| file.text.len()).sum()
@@ -167,7 +189,7 @@ pub fn mixed_file_size(rng: &mut Rng) -> usize {
 /// Generates one file of at least `target` bytes. It exceeds the target by
 /// at most one top-level item.
 pub fn generate_file(seed: u64, goal: SourceGoal, target: usize) -> CorpusFile {
-    let mut emitter = Emitter::new(seed, goal, false);
+    let mut emitter = Emitter::new(seed, goal, false, false);
     emitter.file(target);
     CorpusFile {
         goal,
@@ -179,7 +201,7 @@ pub fn generate_file(seed: u64, goal: SourceGoal, target: usize) -> CorpusFile {
 /// Generates one JSX component module of at least `target` bytes. It exceeds
 /// the target by at most one top-level item.
 pub fn generate_component_file(seed: u64, target: usize) -> CorpusFile {
-    let mut emitter = Emitter::new(seed, SourceGoal::Module, true);
+    let mut emitter = Emitter::new(seed, SourceGoal::Module, true, false);
     emitter.file(target);
     CorpusFile {
         goal: SourceGoal::Module,
@@ -188,8 +210,25 @@ pub fn generate_component_file(seed: u64, target: usize) -> CorpusFile {
     }
 }
 
+/// Generates one TypeScript module, TSX component module, or declaration
+/// file of at least `target` bytes, as `dialect` selects. It exceeds the
+/// target by at most one top-level item.
+pub fn generate_typescript_file(seed: u64, dialect: JsDialect, target: usize) -> CorpusFile {
+    let mut emitter = Emitter::new(seed, SourceGoal::Module, dialect == JsDialect::Tsx, true);
+    emitter.declaration = dialect == JsDialect::TypeScriptDeclaration;
+    emitter.file(target);
+    CorpusFile {
+        goal: SourceGoal::Module,
+        dialect,
+        text: emitter.out,
+    }
+}
+
 // Separates the component corpus from the mixed corpus of the same seed.
 const COMPONENT_SALT: u64 = 0x4A53_5800_0000_0001;
+
+// Separates the TypeScript corpus from the other corpora of the same seed.
+const TYPESCRIPT_SALT: u64 = 0x5453_0000_0000_0001;
 
 const INTRINSIC_TAGS: [&str; 16] = [
     "div", "section", "article", "p", "span", "ul", "li", "a", "button", "header", "footer",
@@ -541,10 +580,21 @@ struct Emitter {
     jsx: bool,
     // Components declared so far, usable as element names.
     components: Vec<String>,
+    // Whether TypeScript syntax is generated, which only the TypeScript
+    // corpus does.
+    ts: bool,
+    // Whether the file is a declaration file with only ambient declarations.
+    declaration: bool,
+    // Type names declared or imported so far.
+    types: Vec<String>,
+    // Interfaces declared so far, for `extends` and `implements`.
+    interfaces: Vec<String>,
+    // Type parameters in scope, truncated when their declaration ends.
+    type_params: Vec<String>,
 }
 
 impl Emitter {
-    fn new(seed: u64, goal: SourceGoal, jsx: bool) -> Self {
+    fn new(seed: u64, goal: SourceGoal, jsx: bool, ts: bool) -> Self {
         let mut rng = Rng::new(seed);
         let newline = if rng.percent(10) { "\r\n" } else { "\n" };
         let indent_unit = rng.pick(&["  ", "  ", "  ", "    ", "\t"]);
@@ -566,10 +616,19 @@ impl Emitter {
             default_exported: false,
             jsx,
             components: Vec::new(),
+            ts,
+            declaration: false,
+            types: Vec::new(),
+            interfaces: Vec::new(),
+            type_params: Vec::new(),
         }
     }
 
     fn file(&mut self, target: usize) {
+        if self.declaration {
+            self.declaration_file(target);
+            return;
+        }
         match self.goal {
             SourceGoal::Module => self.imports(),
             SourceGoal::Script => self.script_prologue(),
@@ -682,6 +741,9 @@ impl Emitter {
             };
             self.line(&format!("{declaration}{}", self.semi()));
         }
+        if self.ts {
+            self.ts_imports();
+        }
         self.blank();
     }
 
@@ -734,12 +796,18 @@ impl Emitter {
             self.blank();
             return;
         }
+        if self.ts && self.rng.percent(35) {
+            self.ts_top_level_item();
+            self.blank();
+            return;
+        }
         if self.rng.percent(15) {
             self.comment();
         }
         match self.rng.below(20) {
             0..=4 => self.constant(),
             5..=10 => self.function_declaration(Frame::TOP, Export::Maybe, 2),
+            11..=13 if self.ts => self.ts_class_declaration(),
             11..=13 => self.class_declaration(),
             14 => self.destructuring(Frame::TOP, 2),
             15 if self.goal == SourceGoal::Module => self.export_list(),
@@ -821,7 +889,18 @@ impl Emitter {
         };
         let scope = self.locals.len();
         let mutable = self.mutable.len();
+        let type_scope = self.type_params.len();
+        let generics = if self.ts && self.rng.percent(20) {
+            self.type_parameters(false)
+        } else {
+            String::new()
+        };
         let parameters = self.parameters(frame);
+        let result = if self.ts {
+            self.return_annotation(is_async, generator)
+        } else {
+            String::new()
+        };
         if self.rng.percent(40) {
             let names: Vec<String> = self.locals[scope..].to_vec();
             self.jsdoc(&names);
@@ -831,11 +910,14 @@ impl Emitter {
             (false, true) => "function*",
             (false, false) => "function",
         };
-        self.line(&format!("{export}{keyword} {name}({parameters}) {{"));
+        self.line(&format!(
+            "{export}{keyword} {name}{generics}({parameters}){result} {{"
+        ));
         self.body(frame.function(is_async, generator), depth, true);
         self.line("}");
         self.locals.truncate(scope);
         self.mutable.truncate(mutable);
+        self.type_params.truncate(type_scope);
         self.declare(name);
     }
 
@@ -852,25 +934,42 @@ impl Emitter {
     // Formal parameters; their bindings join `locals` for the body.
     fn parameters(&mut self, frame: Frame) -> String {
         let mut parameters = Vec::new();
-        for index in 0..self.rng.below(4) {
+        let count = self.rng.below(4);
+        for index in 0..count {
+            let last = index + 1 == count;
             let parameter = match self.rng.below(8) {
                 0 if index > 0 => {
                     let name = self.fresh("options");
                     let key = self.rng.pick(&PROPERTIES);
                     let default = self.atom(frame);
                     self.locals.push(name.clone());
-                    format!("{{ {key}: {name} = {default} }} = {{}}")
+                    let annotation = if self.ts && self.rng.percent(60) {
+                        format!(": {{ {key}?: {} }}", self.ty(1))
+                    } else {
+                        String::new()
+                    };
+                    format!("{{ {key}: {name} = {default} }}{annotation} = {{}}")
                 }
                 1 => {
                     let name = self.fresh_noun();
                     let default = self.atom(frame);
                     self.locals.push(name.clone());
-                    format!("{name} = {default}")
+                    let annotation = if self.ts {
+                        self.parameter_annotation(last, true)
+                    } else {
+                        String::new()
+                    };
+                    format!("{name}{annotation} = {default}")
                 }
                 _ => {
                     let name = self.fresh_noun();
                     self.locals.push(name.clone());
-                    name
+                    let annotation = if self.ts {
+                        self.parameter_annotation(last, false)
+                    } else {
+                        String::new()
+                    };
+                    format!("{name}{annotation}")
                 }
             };
             parameters.push(parameter);
@@ -878,7 +977,12 @@ impl Emitter {
         if self.rng.percent(5) {
             let name = self.fresh("rest");
             self.locals.push(name.clone());
-            parameters.push(format!("...{name}"));
+            let annotation = if self.ts && self.rng.percent(70) {
+                format!(": {}[]", self.ty_atom(1))
+            } else {
+                String::new()
+            };
+            parameters.push(format!("...{name}{annotation}"));
         }
         parameters.join(", ")
     }
@@ -950,7 +1054,14 @@ impl Emitter {
             0 | 1 => self.destructuring(frame, depth),
             2 => {
                 let name = self.fresh_noun();
-                self.line(&format!("let {name}{}", self.semi()));
+                let annotation = if !self.ts {
+                    String::new()
+                } else if self.rng.percent(15) {
+                    format!("!: {}", self.ty(1))
+                } else {
+                    self.annotation(70)
+                };
+                self.line(&format!("let {name}{annotation}{}", self.semi()));
                 self.mutable.push(name.clone());
                 self.declare(name);
             }
@@ -961,8 +1072,16 @@ impl Emitter {
                     self.rng.pick(&["const", "const", "let"])
                 };
                 let name = self.fresh_noun();
+                let annotation = if self.ts {
+                    self.annotation(30)
+                } else {
+                    String::new()
+                };
                 let value = self.expression(frame, depth.clamp(1, 3));
-                self.line(&format!("{kind} {name} = {value}{}", self.semi()));
+                self.line(&format!(
+                    "{kind} {name}{annotation} = {value}{}",
+                    self.semi()
+                ));
                 if kind != "const" {
                     self.mutable.push(name.clone());
                 }
@@ -1014,7 +1133,15 @@ impl Emitter {
             }
             format!("[{}]", elements.join(", "))
         };
-        self.line(&format!("const {pattern} = {value}{}", self.semi()));
+        let annotation = if self.ts {
+            self.annotation(20)
+        } else {
+            String::new()
+        };
+        self.line(&format!(
+            "const {pattern}{annotation} = {value}{}",
+            self.semi()
+        ));
         for name in names {
             self.declare(name);
         }
@@ -1221,7 +1348,12 @@ impl Emitter {
             self.block(frame, depth - 1);
         } else {
             let error = self.fresh("error");
-            self.line(&format!("}} catch ({error}) {{"));
+            let annotation = if self.ts && self.rng.percent(30) {
+                self.rng.pick(&[": unknown", ": any"])
+            } else {
+                ""
+            };
+            self.line(&format!("}} catch ({error}{annotation}) {{"));
             self.locals.push(error);
             self.block(frame, depth - 1);
             self.locals.pop();
@@ -1392,6 +1524,9 @@ impl Emitter {
         if depth == 0 {
             return self.atom(frame);
         }
+        if self.ts && self.rng.percent(8) {
+            return self.ts_operand(frame, depth);
+        }
         match self.rng.below(16) {
             0..=3 => self.atom(frame),
             4..=6 => self.member_chain(frame, depth),
@@ -1410,6 +1545,9 @@ impl Emitter {
     fn expression(&mut self, frame: Frame, depth: u32) -> String {
         if depth == 0 {
             return self.atom(frame);
+        }
+        if self.ts && self.rng.percent(6) {
+            return self.ts_expression(frame, depth - 1);
         }
         if self.jsx && self.rng.percent(12) {
             return self.jsx_inline(frame, depth - 1);
@@ -1466,6 +1604,9 @@ impl Emitter {
             self.reference()
         };
         for _ in 0..=self.rng.below(3) {
+            if self.ts && self.rng.percent(6) {
+                chain.push('!');
+            }
             match self.rng.below(8) {
                 0..=2 => {
                     chain.push('.');
@@ -1502,8 +1643,13 @@ impl Emitter {
                 format!("{base}.{method}")
             }
         };
+        let type_arguments = if self.ts && self.rng.percent(10) {
+            format!("<{}>", self.ty(1))
+        } else {
+            String::new()
+        };
         let arguments = self.arguments(frame, depth.saturating_sub(1));
-        format!("{callee}({arguments})")
+        format!("{callee}{type_arguments}({arguments})")
     }
 
     fn arguments(&mut self, frame: Frame, depth: u32) -> String {
@@ -1622,17 +1768,25 @@ impl Emitter {
     fn arrow(&mut self, frame: Frame, depth: u32) -> String {
         let is_async = self.rng.percent(20);
         let scope = self.locals.len();
+        let type_scope = self.type_params.len();
+        let (generics, result) = if self.ts {
+            self.arrow_types()
+        } else {
+            (String::new(), String::new())
+        };
         let parameters = self.parameters(frame);
         let inner = frame.arrow(is_async);
         let head = if is_async {
-            format!("async ({parameters}) =>")
+            format!("async {generics}({parameters}){result} =>")
         } else if self.rng.percent(30)
+            && generics.is_empty()
+            && result.is_empty()
             && !parameters.is_empty()
-            && !parameters.contains([',', '=', '{', '.'])
+            && !parameters.contains([',', '=', '{', '.', ':', '?'])
         {
             format!("{parameters} =>")
         } else {
-            format!("({parameters}) =>")
+            format!("{generics}({parameters}){result} =>")
         };
         let arrow = if self.indent < MAX_NESTING && (is_async || self.rng.percent(30)) {
             let body = self.nested_block(inner, depth.min(2), true);
@@ -1649,6 +1803,7 @@ impl Emitter {
             }
         };
         self.locals.truncate(scope);
+        self.type_params.truncate(type_scope);
         arrow
     }
 
@@ -1680,13 +1835,27 @@ impl Emitter {
             self.locals.push(prop);
         }
         let frame = Frame::TOP.function(false, false);
+        let (props_type, result) = if self.ts {
+            let props_type = self.props_interface(&name, &props);
+            let result = if self.rng.percent(30) {
+                ": JSX.Element"
+            } else {
+                ""
+            };
+            (format!(": {props_type}"), result)
+        } else {
+            (String::new(), "")
+        };
         self.line(&format!(
-            "{export}function {name}({{ {} }}) {{",
+            "{export}function {name}({{ {} }}{props_type}){result} {{",
             props.join(", ")
         ));
         self.indent += 1;
         for _ in 0..self.rng.below(3) {
             self.variable(frame, 2);
+        }
+        if self.ts && self.rng.percent(30) {
+            self.state_hook(frame);
         }
         self.line("return (");
         self.indent += 1;
@@ -1714,8 +1883,17 @@ impl Emitter {
             ("<>".to_owned(), "</>".to_owned())
         } else {
             let tag = self.jsx_tag();
+            let type_arguments = if self.ts && self.components.contains(&tag) && self.rng.percent(8)
+            {
+                format!("<{}>", self.ty(1))
+            } else {
+                String::new()
+            };
             let attributes = self.jsx_attributes(frame, depth);
-            (format!("<{tag}{attributes}>"), format!("</{tag}>"))
+            (
+                format!("<{tag}{type_arguments}{attributes}>"),
+                format!("</{tag}>"),
+            )
         };
         self.line(&open);
         self.indent += 1;
@@ -1887,6 +2065,14 @@ mod tests {
         assert_eq!(corpus.fingerprint(), 0x3B5B_6CD2_3FAC_9FDB);
     }
 
+    // Pins the default TypeScript corpus in the same way.
+    #[test]
+    fn default_typescript_corpus_fingerprint_is_pinned() {
+        let corpus = Corpus::typescript(DEFAULT_SEED, 1_000);
+        assert_eq!(corpus.bytes(), 10_397_752);
+        assert_eq!(corpus.fingerprint(), 0x607A_5FF6_0744_ECD6);
+    }
+
     // The harness rejects a corpus with a syntax error; this keeps generator
     // changes from reaching it.
     #[test]
@@ -1894,6 +2080,7 @@ mod tests {
         for seed in 0..40 {
             let mut corpus = Corpus::mixed(seed, 6);
             corpus.files.extend(Corpus::components(seed, 6).files);
+            corpus.files.extend(Corpus::typescript(seed, 6).files);
             for (index, file) in corpus.files.iter().enumerate() {
                 let source = SourceText::new(file.text.clone(), TextLimits::default())
                     .expect("generated text is within the default limits");

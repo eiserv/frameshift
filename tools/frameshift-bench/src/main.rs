@@ -1,6 +1,7 @@
 //! Development-only measurement harness for experiment E1 (`D-040`, `D-043`).
 //!
-//! It generates deterministic corpora of fictional JavaScript and JSX,
+//! It generates deterministic corpora of fictional JavaScript, JSX, and
+//! TypeScript,
 //! parses them through the engine facade, and reports parser throughput and peak heap
 //! memory against the E1 budgets in `docs/ENGINEERING.md` (section 4.1).
 //! With `--dir`, it reads the JavaScript and TypeScript files of a directory
@@ -47,7 +48,8 @@ const SCALING_KIB: [usize; 7] = [1, 4, 16, 64, 256, 1_024, 4_096];
 const USAGE: &str = "usage: frameshift-bench [--seed <n>] [--files <n>] [--iterations <n>]\n       \
                      frameshift-bench --dir <path> [--iterations <n>]\n       \
                      frameshift-bench --print <index> [--seed <n>] [--files <n>]\n       \
-                     frameshift-bench --print-component <index> [--seed <n>] [--files <n>]";
+                     frameshift-bench --print-component <index> [--seed <n>] [--files <n>]\n       \
+                     frameshift-bench --print-typescript <index> [--seed <n>] [--files <n>]";
 
 struct Options {
     seed: u64,
@@ -55,6 +57,7 @@ struct Options {
     iterations: usize,
     print: Option<usize>,
     print_component: Option<usize>,
+    print_typescript: Option<usize>,
     directory: Option<PathBuf>,
 }
 
@@ -82,10 +85,16 @@ fn main() -> ExitCode {
     }
     let corpus = Corpus::mixed(options.seed, options.files);
     let components = Corpus::components(options.seed, options.files);
-    let printed = match (options.print, options.print_component) {
-        (Some(index), _) => Some((&corpus, index)),
-        (None, Some(index)) => Some((&components, index)),
-        (None, None) => None,
+    let typescript = Corpus::typescript(options.seed, options.files);
+    let printed = match (
+        options.print,
+        options.print_component,
+        options.print_typescript,
+    ) {
+        (Some(index), _, _) => Some((&corpus, index)),
+        (None, Some(index), _) => Some((&components, index)),
+        (None, None, Some(index)) => Some((&typescript, index)),
+        (None, None, None) => None,
     };
     if let Some((corpus, index)) = printed {
         let Some(file) = corpus.files.get(index) else {
@@ -104,7 +113,7 @@ fn main() -> ExitCode {
         eprintln!("frameshift-bench: measurements require an optimized build (--release)");
         return ExitCode::from(2);
     }
-    match run(&options, &corpus, &components) {
+    match run(&options, &corpus, &components, &typescript) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("frameshift-bench: {message}");
@@ -120,6 +129,7 @@ fn parse_options(mut args: impl Iterator<Item = String>) -> Result<Options, Stri
         iterations: DEFAULT_ITERATIONS,
         print: None,
         print_component: None,
+        print_typescript: None,
         directory: None,
     };
     while let Some(flag) = args.next() {
@@ -138,6 +148,7 @@ fn parse_options(mut args: impl Iterator<Item = String>) -> Result<Options, Stri
             "--iterations" => options.iterations = count()?,
             "--print" => options.print = Some(count()?),
             "--print-component" => options.print_component = Some(count()?),
+            "--print-typescript" => options.print_typescript = Some(count()?),
             _ => return Err(format!("unknown option {flag:?}")),
         }
     }
@@ -154,7 +165,12 @@ fn parse_number(text: &str) -> Option<u64> {
     }
 }
 
-fn run(options: &Options, corpus: &Corpus, components: &Corpus) -> Result<(), String> {
+fn run(
+    options: &Options,
+    corpus: &Corpus,
+    components: &Corpus,
+    typescript: &Corpus,
+) -> Result<(), String> {
     println!("frameshift-bench: E1 parser measurement (D-040)");
     println!(
         "corpus: generator v{GENERATOR_VERSION}, seed {:#x}, {} files ({} scripts), {} bytes, fingerprint {:016x}",
@@ -171,6 +187,12 @@ fn run(options: &Options, corpus: &Corpus, components: &Corpus) -> Result<(), St
         components.fingerprint()
     );
     println!(
+        "typescript: {} TypeScript, TSX, and declaration modules, {} bytes, fingerprint {:016x}",
+        grouped(typescript.files.len()),
+        grouped(typescript.bytes()),
+        typescript.fingerprint()
+    );
+    println!(
         "timing: one warm-up and {} measured passes on one thread; MB = 10^6 bytes",
         options.iterations
     );
@@ -181,6 +203,9 @@ fn run(options: &Options, corpus: &Corpus, components: &Corpus) -> Result<(), St
     println!();
     println!("Component corpus (JSX dialect), default parse limits");
     measure_corpus("component corpus", components, options.iterations)?;
+    println!();
+    println!("TypeScript corpus (TypeScript, TSX, and declaration dialects), default parse limits");
+    measure_corpus("TypeScript corpus", typescript, options.iterations)?;
 
     println!();
     println!("Scaling series, one module per size, unbounded node and token counts");
@@ -445,11 +470,24 @@ fn print_file_memory(files: &[FileMemory]) {
         grouped(default_nodes),
         grouped((default_nodes as f64 * bytes as f64 / nodes as f64 / 1_000.0) as usize)
     );
+    // An empty file has no meaningful ratio to its size; real directories
+    // contain some.
+    let empty = files.iter().filter(|file| file.bytes == 0).count();
+    if empty > 0 {
+        println!(
+            "  empty files          {} excluded from the ratios below",
+            grouped(empty)
+        );
+    }
     let mut peaks: Vec<(f64, usize)> = files
         .iter()
         .enumerate()
+        .filter(|(_, file)| file.bytes > 0)
         .map(|(index, file)| (ratio(file.peak, file.bytes), index))
         .collect();
+    if peaks.is_empty() {
+        return;
+    }
     peaks.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     let (median, _) = peaks[peaks.len() / 2];
     let (worst, index) = peaks[peaks.len() - 1];
@@ -464,6 +502,7 @@ fn print_file_memory(files: &[FileMemory]) {
     );
     let mut retained: Vec<f64> = files
         .iter()
+        .filter(|file| file.bytes > 0)
         .map(|file| ratio(file.retained, file.bytes))
         .collect();
     retained.sort_by(f64::total_cmp);
@@ -518,6 +557,13 @@ mod tests {
         assert_eq!(
             (component.print, component.print_component),
             (None, Some(4))
+        );
+        let typescript = options(&["--print-typescript", "5"]).expect("valid options");
+        assert_eq!(typescript.print_typescript, Some(5));
+        let directory = options(&["--dir", "corpus", "--iterations", "2"]).expect("valid");
+        assert_eq!(
+            (directory.directory, directory.iterations),
+            (Some(PathBuf::from("corpus")), 2)
         );
         let defaults = options(&[]).expect("no options");
         assert_eq!(
