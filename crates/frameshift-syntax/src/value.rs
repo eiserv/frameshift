@@ -81,6 +81,68 @@ pub(crate) fn string_literal_equals(literal: &str, target: &str) -> bool {
     expected.next().is_none()
 }
 
+/// Iterates the StringValue of a string literal accepted by `scan_js_string`,
+/// including its quotes, as UTF-16 code units. Unpaired surrogate escapes are
+/// preserved as single units.
+pub(crate) fn string_literal_units(literal: &str) -> StringUnits<'_> {
+    let content = literal
+        .get(1..literal.len().saturating_sub(1))
+        .unwrap_or_default();
+    StringUnits {
+        chars: content.chars(),
+        pending: None,
+    }
+}
+
+/// Lazy decoder returned by [`string_literal_units`].
+#[derive(Clone)]
+pub(crate) struct StringUnits<'a> {
+    chars: Chars<'a>,
+    // The low surrogate of an astral code point whose high surrogate was returned.
+    pending: Option<u16>,
+}
+
+impl Iterator for StringUnits<'_> {
+    type Item = u16;
+
+    fn next(&mut self) -> Option<u16> {
+        if let Some(unit) = self.pending.take() {
+            return Some(unit);
+        }
+        loop {
+            let ch = self.chars.next()?;
+            let value = if ch == '\\' {
+                match escape_unit(&mut self.chars) {
+                    Some(value) => value,
+                    None => continue,
+                }
+            } else {
+                u32::from(ch)
+            };
+            if value > 0xffff {
+                let offset = value - 0x1_0000;
+                self.pending = Some(0xdc00 + (offset & 0x3ff) as u16);
+                return Some(0xd800 + (offset >> 10) as u16);
+            }
+            return Some(value as u16);
+        }
+    }
+}
+
+/// Reports whether a string literal's StringValue contains no unpaired
+/// surrogate, as `IsStringWellFormedUnicode` requires of module export names.
+pub(crate) fn string_literal_is_well_formed(literal: &str) -> bool {
+    char::decode_utf16(string_literal_units(literal)).all(|unit| unit.is_ok())
+}
+
+/// Decodes a well-formed string literal's StringValue. Unpaired surrogates,
+/// which callers reject first, would become U+FFFD.
+pub(crate) fn string_literal_value(literal: &str) -> String {
+    char::decode_utf16(string_literal_units(literal))
+        .map(|unit| unit.unwrap_or(char::REPLACEMENT_CHARACTER))
+        .collect()
+}
+
 // Returns the code unit or code point of one escape after its backslash, or
 // `None` for a line continuation. Astral code points never match ASCII.
 fn escape_unit(chars: &mut Chars<'_>) -> Option<u32> {

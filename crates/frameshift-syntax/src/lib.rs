@@ -1,5 +1,5 @@
-//! Framework-independent syntax primitives for the E1 parser experiment.
-//! These scanners do not validate a file or authorize transformations.
+//! Framework-independent JavaScript scanners and parser for the E1 parser
+//! experiment. A parsed tree does not authorize transformations.
 
 mod ast;
 mod identifier;
@@ -17,8 +17,9 @@ mod value;
 mod unicode_tables;
 
 pub use ast::{
-    AssignmentOperator, BinaryOperator, ChildList, NodeId, SyntaxNode, SyntaxNodeKind, SyntaxTree,
-    TemplatePart, TemplatePartList, UnaryOperator, UpdateOperator,
+    AssignmentOperator, BinaryOperator, ChildList, ChildNodes, FunctionKind, MetaPropertyKind,
+    MethodKind, NodeId, SyntaxNode, SyntaxNodeKind, SyntaxTree, TemplatePart, TemplatePartList,
+    UnaryOperator, UpdateOperator, VariableKind,
 };
 pub use identifier::{
     IdentifierKind, IdentifierToken, ReservedWord, ReservedWordClass, scan_js_identifier,
@@ -28,7 +29,9 @@ pub use lexical::{
     StringToken, Trivia, scan_js_string, scan_js_trivia,
 };
 pub use numeric::{NumericBase, NumericKind, NumericLiteral, scan_js_number};
-pub use parser::{ParseError, ParseErrorKind, ParseLimits, parse_js_expression};
+pub use parser::{
+    ParseError, ParseErrorKind, ParseLimits, StrictModeError, parse_js_expression, parse_js_program,
+};
 pub use punctuator::{
     GreaterThanMode, JsLexicalGoal, Punctuator, PunctuatorContext, PunctuatorToken,
     scan_js_punctuator,

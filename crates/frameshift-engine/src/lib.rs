@@ -8,16 +8,17 @@
 
 pub use frameshift_core::{Position, SourceText, Span, TextError, TextLimits};
 pub use frameshift_syntax::{
-    AssignmentOperator, BinaryOperator, ChildList, Comment, CommentKind, GreaterThanMode,
-    IdentifierKind, IdentifierToken, JsLexicalGoal, LegacyOctal, LexicalError, LexicalErrorKind,
-    LexicalLimits, NodeId, NumericBase, NumericKind, NumericLiteral, ParseError, ParseErrorKind,
-    ParseLimits, Punctuator, PunctuatorContext, PunctuatorToken, RegExpFlag, RegExpFlags,
-    RegExpLiteral, RegExpPatternError, RegExpToken, ReservedWord, ReservedWordClass, SourceGoal,
-    StringToken, SyntaxNode, SyntaxNodeKind, SyntaxTree, TemplateContext, TemplateKind,
-    TemplateMode, TemplatePart, TemplatePartList, TemplatePosition, TemplateToken, Trivia,
-    UNICODE_VERSION, UnaryOperator, UpdateOperator, is_js_identifier_part, is_js_identifier_start,
-    parse_js_expression, scan_js_identifier, scan_js_number, scan_js_punctuator, scan_js_regexp,
-    scan_js_string, scan_js_template, scan_js_trivia, validate_js_regexp,
+    AssignmentOperator, BinaryOperator, ChildList, ChildNodes, Comment, CommentKind, FunctionKind,
+    GreaterThanMode, IdentifierKind, IdentifierToken, JsLexicalGoal, LegacyOctal, LexicalError,
+    LexicalErrorKind, LexicalLimits, MetaPropertyKind, MethodKind, NodeId, NumericBase,
+    NumericKind, NumericLiteral, ParseError, ParseErrorKind, ParseLimits, Punctuator,
+    PunctuatorContext, PunctuatorToken, RegExpFlag, RegExpFlags, RegExpLiteral, RegExpPatternError,
+    RegExpToken, ReservedWord, ReservedWordClass, SourceGoal, StrictModeError, StringToken,
+    SyntaxNode, SyntaxNodeKind, SyntaxTree, TemplateContext, TemplateKind, TemplateMode,
+    TemplatePart, TemplatePartList, TemplatePosition, TemplateToken, Trivia, UNICODE_VERSION,
+    UnaryOperator, UpdateOperator, VariableKind, is_js_identifier_part, is_js_identifier_start,
+    parse_js_expression, parse_js_program, scan_js_identifier, scan_js_number, scan_js_punctuator,
+    scan_js_regexp, scan_js_string, scan_js_template, scan_js_trivia, validate_js_regexp,
 };
 pub use frameshift_transform::{
     AppliedEdit, Edit, EditLimits, EditOrder, Origin, ProvenanceRegion, RewriteError,

@@ -70,6 +70,8 @@ pub enum CommentKind {
     /// An Annex B `-->` comment at the start of a script line, from `-->` to
     /// the end of the line, excluding the line break.
     HtmlClose,
+    /// A `#!` comment at the start of a source file, excluding its line break.
+    Hashbang,
 }
 
 /// An original-source comment, without copied content.
@@ -316,9 +318,10 @@ pub fn scan_js_trivia(
         let start = cursor;
         cursor += delimiter;
         match kind {
-            CommentKind::Line | CommentKind::HtmlOpen | CommentKind::HtmlClose => {
-                cursor = line_end(text, cursor);
-            }
+            CommentKind::Line
+            | CommentKind::HtmlOpen
+            | CommentKind::HtmlClose
+            | CommentKind::Hashbang => cursor = line_end(text, cursor),
             CommentKind::Block => loop {
                 if text[cursor..].starts_with("*/") {
                     cursor += 2;
@@ -402,6 +405,19 @@ pub fn scan_js_string(
         }
     }
     Err(error(offset, LexicalErrorKind::UnterminatedString))
+}
+
+/// Scans a `#!` hashbang comment if one starts at `offset`. Only the parser
+/// of a complete source file calls this, at its start.
+pub(crate) fn scan_hashbang(text: &str, offset: usize) -> Option<Comment> {
+    if !text.get(offset..)?.starts_with("#!") {
+        return None;
+    }
+    let end = line_end(text, offset + 2);
+    Some(Comment {
+        kind: CommentKind::Hashbang,
+        span: Span::new(offset, end).ok()?,
+    })
 }
 
 fn line_end(text: &str, mut cursor: usize) -> usize {

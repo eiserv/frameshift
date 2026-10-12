@@ -533,6 +533,7 @@ fn generated_html_like_comment_inputs_extend_module_trivia_deterministically() {
                             CommentKind::Block => "/*",
                             CommentKind::HtmlOpen => "<!--",
                             CommentKind::HtmlClose => "-->",
+                            CommentKind::Hashbang => "#!",
                         };
                         assert!(spelling.starts_with(prefix), "{text:?}");
                     }

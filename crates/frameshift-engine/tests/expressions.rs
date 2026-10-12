@@ -3,8 +3,7 @@
 
 use frameshift_engine::{
     AssignmentOperator, BinaryOperator, NodeId, ParseError, ParseErrorKind, ParseLimits,
-    SourceText, SyntaxNodeKind, SyntaxTree, TemplatePart, TextLimits, UpdateOperator,
-    parse_js_expression,
+    SourceText, SyntaxNodeKind, SyntaxTree, TextLimits, UpdateOperator, parse_js_expression,
 };
 
 fn source(text: &str) -> SourceText {
@@ -41,72 +40,6 @@ fn list(tree: &SyntaxTree<'_>, list: frameshift_engine::ChildList) -> Vec<NodeId
     tree.children(list).unwrap().to_vec()
 }
 
-// Children in source order. Every node kind is listed so that a new kind
-// forces this traversal to be reviewed.
-fn children(tree: &SyntaxTree<'_>, kind: SyntaxNodeKind) -> Vec<NodeId> {
-    match kind {
-        SyntaxNodeKind::Identifier { .. }
-        | SyntaxNodeKind::IdentifierName { .. }
-        | SyntaxNodeKind::NumberLiteral { .. }
-        | SyntaxNodeKind::StringLiteral
-        | SyntaxNodeKind::RegularExpression { .. }
-        | SyntaxNodeKind::BooleanLiteral(_)
-        | SyntaxNodeKind::NullLiteral
-        | SyntaxNodeKind::This
-        | SyntaxNodeKind::Elision
-        | SyntaxNodeKind::BindingIdentifier { .. } => Vec::new(),
-        SyntaxNodeKind::TemplateLiteral { parts } => tree
-            .template_parts(parts)
-            .unwrap()
-            .iter()
-            .filter_map(|part| match part {
-                TemplatePart::Expression(id) => Some(*id),
-                TemplatePart::Segment(_) => None,
-            })
-            .collect(),
-        SyntaxNodeKind::Parenthesized { expression } => vec![expression],
-        SyntaxNodeKind::Unary { operand, .. } | SyntaxNodeKind::Update { operand, .. } => {
-            vec![operand]
-        }
-        SyntaxNodeKind::Binary { left, right, .. } => vec![left, right],
-        SyntaxNodeKind::Conditional {
-            test,
-            consequent,
-            alternate,
-        } => vec![test, consequent, alternate],
-        SyntaxNodeKind::Member {
-            object, property, ..
-        } => vec![object, property],
-        SyntaxNodeKind::Call {
-            callee, arguments, ..
-        } => [vec![callee], list(tree, arguments)].concat(),
-        SyntaxNodeKind::TaggedTemplate { tag, template } => vec![tag, template],
-        SyntaxNodeKind::ArrayExpression { elements, .. }
-        | SyntaxNodeKind::ArrayPattern { elements, .. } => list(tree, elements),
-        SyntaxNodeKind::ObjectExpression { properties, .. }
-        | SyntaxNodeKind::ObjectPattern { properties, .. } => list(tree, properties),
-        SyntaxNodeKind::Spread { argument } | SyntaxNodeKind::RestElement { argument } => {
-            vec![argument]
-        }
-        SyntaxNodeKind::Property { key, value, .. }
-        | SyntaxNodeKind::PatternProperty { key, value, .. } => vec![key, value],
-        SyntaxNodeKind::ShorthandProperty { identifier } => vec![identifier],
-        SyntaxNodeKind::Assignment { target, value, .. } => vec![target, value],
-        SyntaxNodeKind::New { callee, arguments } => [
-            vec![callee],
-            arguments.map_or_else(Vec::new, |a| list(tree, a)),
-        ]
-        .concat(),
-        SyntaxNodeKind::ArrowFunction { parameters, body } => {
-            [list(tree, parameters), vec![body]].concat()
-        }
-        SyntaxNodeKind::ShorthandPatternProperty { target, default } => {
-            [vec![target], default.into_iter().collect()].concat()
-        }
-        SyntaxNodeKind::AssignmentPattern { target, default } => vec![target, default],
-    }
-}
-
 // Every node is reachable exactly once, child spans nest in source order,
 // and a second parse yields an identical arena.
 fn assert_tree_invariants(input: &SourceText, tree: &SyntaxTree<'_>) {
@@ -118,7 +51,7 @@ fn assert_tree_invariants(input: &SourceText, tree: &SyntaxTree<'_>) {
         let node = tree.node(id).unwrap();
         input.slice(node.span()).unwrap();
         let mut previous_end = node.span().start();
-        for child in children(tree, node.kind()) {
+        for child in tree.child_nodes(id).unwrap() {
             let span = tree.node(child).unwrap().span();
             assert!(
                 previous_end <= span.start() && span.end() <= node.span().end(),
@@ -485,10 +418,18 @@ fn duplicate_proto_properties_are_rejected_only_in_expressions() {
 fn arrow_functions_reinterpret_parameters_as_bindings() {
     let input = source("(a, b = 1, [c], { d }, ...e) => a + d");
     let tree = parse(&input);
-    let SyntaxNodeKind::ArrowFunction { parameters, body } = kind(&tree, tree.root()) else {
+    let SyntaxNodeKind::ArrowFunction {
+        parameters,
+        body,
+        is_async: false,
+    } = kind(&tree, tree.root())
+    else {
         panic!("expected an arrow function");
     };
     assert_eq!(text(&input, &tree, body), "a + d");
+    let SyntaxNodeKind::FormalParameters { parameters } = kind(&tree, parameters) else {
+        panic!("expected a parameter list");
+    };
     let parameters = list(&tree, parameters);
     assert_eq!(parameters.len(), 5);
     assert_eq!(
@@ -594,10 +535,18 @@ fn invalid_arrow_functions_fail_closed_with_exact_offsets() {
         ("()", 2, ParseErrorKind::ExpectedArrow),
         ("(a,)", 4, ParseErrorKind::ExpectedArrow),
         ("(...a)", 6, ParseErrorKind::ExpectedArrow),
-        ("a => {}", 5, ParseErrorKind::UnsupportedSyntax),
-        ("async x => x", 0, ParseErrorKind::UnsupportedSyntax),
-        ("async (x) => x", 0, ParseErrorKind::UnsupportedSyntax),
-        ("async function () {}", 0, ParseErrorKind::UnsupportedSyntax),
+        ("async\nx => x", 6, ParseErrorKind::TrailingInput),
+        (
+            "async\n(x) => x",
+            10,
+            ParseErrorKind::LineTerminatorBeforeArrow,
+        ),
+        (
+            "async (await) => 1",
+            7,
+            ParseErrorKind::ContextualKeywordRequiresContext,
+        ),
+        ("async await => 1", 6, ParseErrorKind::AwaitInParameters),
         ("let => 1", 0, ParseErrorKind::ReservedWordRequiresContext),
         (
             "await => 1",
@@ -691,14 +640,26 @@ fn strict_mode_dependent_and_unsupported_forms_fail_closed() {
         ("eval => 1", 0, ParseErrorKind::StrictModeRequiresContext),
         ("delete x", 0, ParseErrorKind::StrictModeRequiresContext),
         ("delete ((x))", 0, ParseErrorKind::StrictModeRequiresContext),
-        ("({ m() {} })", 4, ParseErrorKind::UnsupportedSyntax),
-        ("({ get x() {} })", 3, ParseErrorKind::UnsupportedSyntax),
-        ("({ *g() {} })", 3, ParseErrorKind::UnsupportedSyntax),
-        ("({ async m() {} })", 3, ParseErrorKind::UnsupportedSyntax),
-        ("({ 'k'() {} })", 6, ParseErrorKind::UnsupportedSyntax),
-        ("function () {}", 0, ParseErrorKind::UnsupportedSyntax),
-        ("class {}", 0, ParseErrorKind::UnsupportedSyntax),
-        ("import('x')", 0, ParseErrorKind::UnsupportedSyntax),
+        (
+            "function () { with (a) {} }",
+            14,
+            ParseErrorKind::StrictModeRequiresContext,
+        ),
+        (
+            "function (a, a) {}",
+            13,
+            ParseErrorKind::StrictModeRequiresContext,
+        ),
+        ("({ m() { super() } })", 9, ParseErrorKind::InvalidSuper),
+        ("super.x", 0, ParseErrorKind::SuperRequiresContext),
+        ("import.meta", 0, ParseErrorKind::SourceGoalRequiresContext),
+        ("a <!-- b", 2, ParseErrorKind::SourceGoalRequiresContext),
+        ("a\n--> b", 2, ParseErrorKind::SourceGoalRequiresContext),
+        (
+            "this.#x",
+            5,
+            ParseErrorKind::PrivateIdentifierRequiresContext,
+        ),
         (
             "({ #x: 1 })",
             3,
@@ -717,6 +678,21 @@ fn strict_mode_dependent_and_unsupported_forms_fail_closed() {
     }
     parse(&source("delete x.y"));
     parse(&source("evaluate = 1"));
+    for valid in [
+        "a => {}",
+        "async x => x",
+        "async (x) => await x",
+        "async function () { await x }",
+        "({ m() {}, get x() {}, set x(v) {}, *g() {}, async m() {}, 'k'() {}, [k]() {} })",
+        "function () { 'use strict'; with_ = 1 }",
+        "function () {}",
+        "class { #x; m() { return this.#x } }",
+        "import('x', { with: {} })",
+        "function () { return new.target }",
+        "({ m() { return super.m() } })",
+    ] {
+        parse(&source(valid));
+    }
 }
 
 #[test]

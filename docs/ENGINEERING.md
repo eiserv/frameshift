@@ -1,6 +1,6 @@
 # Engineering
 
-**Status: guidance and decisions with M0 in progress.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text, position primitives, parser-directed JavaScript scanners, regular-expression validation, identifier classification from generated Unicode 18.0.0 tables, a bounded expression parser with an arena tree, and the span edit core exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
+**Status: guidance and decisions with M0 in progress.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text, position primitives, parser-directed JavaScript scanners, regular-expression validation, identifier classification from generated Unicode 18.0.0 tables, a JavaScript parser with an arena tree for complete Script and Module source text, and the span edit core exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
 
 ## 1. Engineering principles
 
@@ -344,6 +344,7 @@ The existing M0 crates follow the layering in section 6 of [ARCHITECTURE.md](ARC
 
 - Matches over closed kinds enumerate every variant explicitly. Unexpected values at open input boundaries report an internal error or classify the input as `unknown`; they never produce silent success.
 - Exhaustiveness is enforced by the compiler: matches over closed enumerations in core code have no wildcard arms, so a new variant breaks the build until every match handles it (section 2.5).
+- A helper whose fallback rejects its input, such as the parser's reinterpretation of cover expressions as patterns, may test only the kinds it accepts with `if let` or `matches!`. A new kind then fails closed rather than succeeding silently. Any match whose fallback could succeed enumerates every variant.
 - Rules return explicit results: an operation, a classification with a reason, or "not applicable". There is no implicit success.
 
 ### 7.4 Concurrency

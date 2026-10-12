@@ -47,7 +47,7 @@ macro_rules! define_reserved_words {
                 }
             }
 
-            fn from_spelling(spelling: &str) -> Option<Self> {
+            pub(crate) fn from_spelling(spelling: &str) -> Option<Self> {
                 match spelling {
                     $($spelling => Some(Self::$kind),)+
                     _ => None,

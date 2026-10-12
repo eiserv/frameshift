@@ -223,19 +223,21 @@ fn unary_exponent_and_nullish_grammar_errors_fail_closed() {
         ("-2 ** 2", 3, ParseErrorKind::InvalidExponentiation),
         ("a ?? b || c", 2, ParseErrorKind::MixedNullishAndLogical),
         ("a && b ?? c", 7, ParseErrorKind::MixedNullishAndLogical),
-        ("if", 0, ParseErrorKind::ReservedWordRequiresContext),
+        ("if", 0, ParseErrorKind::ReservedWord),
         (r"\u0069f", 0, ParseErrorKind::EscapedReservedWord),
         (
             "await value",
             0,
             ParseErrorKind::ContextualKeywordRequiresContext,
         ),
-        ("f({ value() {} })", 9, ParseErrorKind::UnsupportedSyntax),
+        ("static", 0, ParseErrorKind::ReservedWordRequiresContext),
     ] {
         let input = source(source_text);
         let error = failure(&input, 0, ParseLimits::default());
         assert_eq!((error.offset, error.kind), (offset, kind), "{source_text}");
     }
+    let input = source("f({ value() {} })");
+    assert!(parse_js_expression(&input, 0, ParseLimits::default()).is_ok());
     let input = source("a ?? (b || c)");
     let tree = parse_js_expression(&input, 0, ParseLimits::default()).unwrap();
     assert_eq!(input.slice(tree.consumed_span()).unwrap(), "a ?? (b || c)");
