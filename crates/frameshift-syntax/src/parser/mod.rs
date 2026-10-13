@@ -19,6 +19,8 @@ mod scope;
 mod statement;
 mod typescript;
 
+use std::collections::HashSet;
+
 use frameshift_core::{SourceText, Span};
 
 pub use error::{ParseError, ParseErrorKind, StrictModeError};
@@ -36,7 +38,9 @@ use crate::{
     unicode::is_js_identifier_start,
 };
 
-use self::{class::ClassScope, module::ModuleState, names::Name, scope::Scopes};
+use self::{
+    class::ClassScope, module::ModuleState, names::Name, scope::Scopes, typescript::ArrowAttempt,
+};
 
 /// Explicit resource bounds for one parse.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,7 +164,7 @@ impl From<SourceGoal> for Goal {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Strictness {
     Sloppy,
     Strict,
@@ -168,7 +172,7 @@ enum Strictness {
 }
 
 // Whether a construct that needs an enclosing function or method is permitted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Permission {
     Allowed,
     Denied,
@@ -177,7 +181,7 @@ enum Permission {
 
 // Grammar parameters and placement facts of the code being parsed. Function
 // and class boundaries save and replace it.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct Context {
     strict: Strictness,
     // `return` is permitted.
@@ -286,6 +290,9 @@ struct Parser<'source> {
     bound_names: Vec<Span>,
     // Errors that apply only if the object literal stays an expression.
     expression_only_errors: Vec<(NodeId, ParseError)>,
+    // TypeScript arrow function heads that failed, with the state their
+    // outcome depends on (`typescript.rs`).
+    failed_arrow_heads: HashSet<ArrowAttempt>,
 }
 
 // Saved state for a speculative look at later tokens.
@@ -374,6 +381,7 @@ impl<'source> Parser<'source> {
             list_buffers: Vec::new(),
             bound_names: Vec::new(),
             expression_only_errors: Vec::new(),
+            failed_arrow_heads: HashSet::new(),
         }
     }
 

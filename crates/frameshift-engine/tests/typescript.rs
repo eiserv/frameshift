@@ -502,6 +502,49 @@ fn malformed_types_never_produce_a_partial_tree() {
     }
 }
 
+// Each failed arrow function head used to parse the nested content once more
+// before the expression reading parsed it again, which doubled the work per
+// level: valid code with 15 levels of `[(` reached the speculation limit in
+// the TypeScript dialects. The fuzzer's slowest input exposed it. A failed
+// head is no longer retried in the same state, so a token budget far below
+// the exponential cost suffices, and the trees equal the JavaScript ones.
+#[test]
+fn nested_parentheses_do_not_repeat_failed_arrow_heads() {
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| {
+            let limits = ParseLimits {
+                max_tokens: 20_000,
+                ..ParseLimits::default()
+            };
+            for (open, close) in [
+                ("[(", ")]"),
+                ("([", "])"),
+                ("({ a: ", " })"),
+                ("([(", ")])"),
+                ("([a = ", "])"),
+                ("async ([", "])"),
+            ] {
+                let text = format!("{}value{}", open.repeat(30), close.repeat(30));
+                let source = input(&text);
+                let javascript =
+                    parse_js_expression(&source, 0, JsDialect::JavaScript, limits).unwrap();
+                for dialect in [
+                    JsDialect::TypeScript,
+                    JsDialect::Tsx,
+                    JsDialect::TypeScriptDeclaration,
+                ] {
+                    let tree = parse_js_expression(&source, 0, dialect, limits)
+                        .unwrap_or_else(|error| panic!("{dialect:?} {open:?}: {error}"));
+                    assert_eq!(tree.nodes(), javascript.nodes(), "{dialect:?} {open:?}");
+                }
+            }
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
 #[test]
 fn typescript_is_explicit_and_resource_limits_include_speculation() {
     let source = input("type Answer = number;");

@@ -1,6 +1,6 @@
 //! TypeScript grammar integrated with the JavaScript parser and arena.
 
-use super::{ParseError, ParseErrorKind, Parser};
+use super::{Context, ParseError, ParseErrorKind, Parser};
 use crate::{
     TypeScriptKind as Ts,
     ast::{NodeId, SyntaxNodeKind},
@@ -8,6 +8,24 @@ use crate::{
     punctuator::Punctuator,
     template::{TemplateContext, TemplateKind, TemplateMode, TemplatePosition, scan_js_template},
 };
+
+// A speculative arrow function head and every piece of parser state that its
+// outcome depends on. A head that failed fails again in the same state, so
+// the parser speculates on it only once. Without this, each nested
+// parenthesized expression whose content can start a binding pattern, as in
+// `([([a])])`, would be parsed once inside the failed head and again as an
+// expression, which doubles the work per level (the compiler keeps a set of
+// such positions for the same reason).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) struct ArrowAttempt {
+    start: usize,
+    cursor: usize,
+    is_async: bool,
+    context: Context,
+    no_in: bool,
+    template_expression_depth: usize,
+    disallow_conditional: bool,
+}
 
 impl Parser<'_> {
     fn ts_can_start_type(&mut self) -> Result<bool, ParseError> {
@@ -1801,9 +1819,25 @@ impl Parser<'_> {
         is_async: bool,
         allowed: bool,
     ) -> Result<Option<NodeId>, ParseError> {
+        let attempt = ArrowAttempt {
+            start,
+            cursor: self.cursor,
+            is_async,
+            context: self.context,
+            no_in: self.no_in,
+            template_expression_depth: self.template_expression_depth,
+            disallow_conditional: self.ts_disallow_conditional,
+        };
+        if self.failed_arrow_heads.contains(&attempt) {
+            return Ok(None);
+        }
         let Some((parameters, mark)) =
             self.ts_try(|parser| parser.ts_arrow_head(start, is_async))?
         else {
+            self.failed_arrow_heads
+                .try_reserve(1)
+                .map_err(|_| self.error(start, ParseErrorKind::AllocationFailed))?;
+            self.failed_arrow_heads.insert(attempt);
             return Ok(None);
         };
         if !allowed {
