@@ -6,3 +6,5 @@ Cargo.lock text eol=lf
 .gitattributes text eol=lf
 *.go text eol=lf
 go.mod text eol=lf
+# E2 fixtures are compared byte for byte on every platform.
+tools/frameshift-e2/fixtures/** -text

@@ -60,9 +60,13 @@ pub(crate) fn is_void_element(name: &str) -> bool {
     )
 }
 
-/// Elements whose whitespace Astro preserves, so the printer adds none.
+/// Elements whose whitespace Astro preserves or HTML treats as text, so the
+/// printer adds none.
 pub(crate) fn is_whitespace_sensitive(name: &str) -> bool {
-    matches!(name, "pre" | "textarea" | "listing")
+    matches!(
+        name,
+        "pre" | "textarea" | "listing" | "title" | "script" | "style"
+    )
 }
 
 /// Raw-text and escapable raw-text elements, whose JSX children follow

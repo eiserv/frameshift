@@ -1,0 +1,87 @@
+frameshift-e2 provenance 1
+profile astro7-preact10
+source app/about/page.tsx transformed src/pages/about.astro
+source app/globals.css copied src/styles/globals.css
+source app/layout.tsx transformed src/layouts/RootLayout.astro
+source app/page.tsx transformed src/pages/index.astro
+source components/SiteHeader.tsx transformed src/components/SiteHeader.astro
+source package.json superseded astro.config.mjs package.json
+source tsconfig.json out-of-scope
+output astro.config.mjs
+  0..79 generated package.json 0..297
+output package.json
+  0..191 generated package.json 0..297
+output src/components/SiteHeader.astro
+  0..7 generated components/SiteHeader.tsx 85..245
+  7..27 generated components/SiteHeader.tsx 93..116
+  27..28 generated components/SiteHeader.tsx 85..245
+  28..33 generated components/SiteHeader.tsx 124..192
+  33..42 generated components/SiteHeader.tsx 130..138
+  42..56 generated components/SiteHeader.tsx 139..156
+  56..57 generated components/SiteHeader.tsx 124..192
+  57..69 generated components/SiteHeader.tsx 157..185
+  69..73 generated components/SiteHeader.tsx 124..192
+  73..78 generated components/SiteHeader.tsx 199..231
+  78..92 generated components/SiteHeader.tsx 205..218
+  92..93 generated components/SiteHeader.tsx 199..231
+  93..98 generated components/SiteHeader.tsx 219..224
+  98..102 generated components/SiteHeader.tsx 199..231
+  102..113 generated components/SiteHeader.tsx 85..245
+output src/layouts/RootLayout.astro
+  0..36 generated app/layout.tsx 0..23
+  36..93 generated app/layout.tsx 62..112
+  93..202 generated app/layout.tsx 279..512
+  202..207 generated app/layout.tsx 361..505
+  207..217 generated app/layout.tsx 367..376
+  217..218 generated app/layout.tsx 361..505
+  218..331 generated app/layout.tsx 279..512
+  331..358 generated app/layout.tsx 170..184
+  358..412 generated app/layout.tsx 234..258
+  412..422 generated app/layout.tsx 279..512
+  422..430 generated app/layout.tsx 384..493
+  430..460 generated app/layout.tsx 390..423
+  460..461 generated app/layout.tsx 384..493
+  461..480 generated app/layout.tsx 433..447
+  480..491 generated app/layout.tsx 456..479
+  491..506 generated app/layout.tsx 462..472
+  506..518 generated app/layout.tsx 456..479
+  518..528 generated app/layout.tsx 384..493
+  528..537 generated app/layout.tsx 361..505
+output src/pages/about.astro
+  0..73 generated app/about/page.tsx 91..315
+  73..102 generated app/about/page.tsx 64..71
+  102..139 generated app/layout.tsx 234..258
+  139..140 generated app/about/page.tsx 91..315
+  140..151 generated app/about/page.tsx 129..308
+  151..165 generated app/about/page.tsx 138..155
+  165..166 generated app/about/page.tsx 129..308
+  166..175 generated app/about/page.tsx 163..180
+  175..183 generated app/about/page.tsx 167..175
+  183..188 generated app/about/page.tsx 163..180
+  188..196 generated app/about/page.tsx 187..217
+  196..219 generated app/about/page.tsx 190..213
+  219..223 generated app/about/page.tsx 187..217
+  223..230 generated app/about/page.tsx 224..293
+  230..239 generated app/about/page.tsx 230..238
+  239..257 generated app/about/page.tsx 239..260
+  257..258 generated app/about/page.tsx 224..293
+  258..267 generated app/about/page.tsx 261..286
+  267..271 generated app/about/page.tsx 224..293
+  271..284 generated app/about/page.tsx 129..308
+  284..299 generated app/about/page.tsx 91..315
+output src/pages/index.astro
+  0..73 generated app/page.tsx 15..164
+  73..94 generated app/layout.tsx 170..184
+  94..131 generated app/layout.tsx 234..258
+  131..132 generated app/page.tsx 15..164
+  132..144 generated app/page.tsx 52..157
+  144..153 generated app/page.tsx 68..90
+  153..166 generated app/page.tsx 72..85
+  166..171 generated app/page.tsx 68..90
+  171..179 generated app/page.tsx 97..142
+  179..217 generated app/page.tsx 100..138
+  217..221 generated app/page.tsx 97..142
+  221..234 generated app/page.tsx 52..157
+  234..249 generated app/page.tsx 15..164
+output src/styles/globals.css
+  0..149 copied app/globals.css 0..149

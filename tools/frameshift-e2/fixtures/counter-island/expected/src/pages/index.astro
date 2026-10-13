@@ -1,0 +1,11 @@
+---
+import Counter from '../components/Counter';
+import RootLayout from '../layouts/RootLayout.astro';
+---
+<RootLayout>
+  <main>
+    <h1>Tally board</h1>
+    <p>Count the boats that pass the pier.</p>
+    <Counter client:load initial={3} />
+  </main>
+</RootLayout>

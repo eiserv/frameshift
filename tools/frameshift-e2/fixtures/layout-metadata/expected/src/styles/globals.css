@@ -1,0 +1,9 @@
+/* Base styles of the fictional Lumen Studio site. */
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+
+.site-header {
+  padding: 1rem;
+}

@@ -305,7 +305,8 @@ impl From<BuildError> for PrintError {
 ///
 /// Generated lines use `options`. Children of an element are placed on
 /// separate indented lines only when none of them is text and the element is
-/// not whitespace-sensitive (`pre`, `textarea`, `listing`); otherwise they
+/// not whitespace-sensitive (`pre`, `textarea`, `listing`, `title`, `script`,
+/// `style`); otherwise they
 /// are printed inline, so no whitespace is added next to text. Markup inside
 /// expressions is printed inline. Text is escaped for HTML and Astro (`&`,
 /// `<`, `>`, `{`, `}`, tab, line breaks, and U+00A0 become references), and

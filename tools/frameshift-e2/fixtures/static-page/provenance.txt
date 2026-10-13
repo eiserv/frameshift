@@ -1,0 +1,94 @@
+frameshift-e2 provenance 1
+profile astro7-preact10
+source app/about/page.tsx transformed src/pages/about.astro
+source app/layout.tsx transformed src/layouts/RootLayout.astro
+source app/page.tsx transformed src/pages/index.astro
+source package.json superseded astro.config.mjs package.json
+source tsconfig.json out-of-scope
+output astro.config.mjs
+  0..79 generated package.json 0..297
+output package.json
+  0..191 generated package.json 0..297
+output src/layouts/RootLayout.astro
+  0..5 generated app/layout.tsx 97..155
+  5..15 generated app/layout.tsx 103..112
+  15..16 generated app/layout.tsx 97..155
+  16..139 generated app/layout.tsx 15..162
+  139..148 generated app/layout.tsx 120..143
+  148..161 generated app/layout.tsx 126..136
+  161..171 generated app/layout.tsx 120..143
+  171..180 generated app/layout.tsx 97..155
+output src/pages/about.astro
+  0..58 generated app/about/page.tsx 191..593
+  58..59 generated app/about/page.tsx 31..91
+  59..119 copied app/about/page.tsx 31..91
+  119..120 generated app/about/page.tsx 31..91
+  120..158 copied app/about/page.tsx 92..130
+  158..159 generated app/about/page.tsx 92..130
+  159..202 copied app/about/page.tsx 132..175
+  202..203 generated app/about/page.tsx 132..175
+  203..238 copied app/about/page.tsx 216..251
+  238..239 generated app/about/page.tsx 216..251
+  239..263 copied app/about/page.tsx 254..278
+  263..268 generated app/about/page.tsx 254..278
+  268..280 generated app/about/page.tsx 191..593
+  280..291 generated app/about/page.tsx 294..586
+  291..305 generated app/about/page.tsx 303..320
+  305..306 generated app/about/page.tsx 294..586
+  306..315 generated app/about/page.tsx 328..353
+  315..331 generated app/about/page.tsx 332..348
+  331..336 generated app/about/page.tsx 328..353
+  336..344 generated app/about/page.tsx 360..435
+  344..358 generated app/about/page.tsx 363..386
+  358..359 generated app/about/page.tsx 386..394
+  359..365 copied app/about/page.tsx 387..393
+  365..366 generated app/about/page.tsx 386..394
+  366..380 generated app/about/page.tsx 394..408
+  380..381 generated app/about/page.tsx 408..423
+  381..394 copied app/about/page.tsx 409..422
+  394..395 generated app/about/page.tsx 408..423
+  395..396 generated app/about/page.tsx 423..431
+  396..400 generated app/about/page.tsx 360..435
+  400..408 generated app/about/page.tsx 442..482
+  408..419 generated app/about/page.tsx 446..456
+  419..420 generated app/about/page.tsx 442..482
+  420..440 generated app/about/page.tsx 457..477
+  440..445 generated app/about/page.tsx 442..482
+  445..453 generated app/about/page.tsx 489..520
+  453..477 generated app/about/page.tsx 492..516
+  477..481 generated app/about/page.tsx 489..520
+  481..488 generated app/about/page.tsx 527..571
+  488..497 generated app/about/page.tsx 533..541
+  497..498 generated app/about/page.tsx 527..571
+  498..520 generated app/about/page.tsx 542..564
+  520..524 generated app/about/page.tsx 527..571
+  524..537 generated app/about/page.tsx 294..586
+  537..552 generated app/about/page.tsx 191..593
+output src/pages/index.astro
+  0..74 generated app/page.tsx 46..385
+  74..83 generated app/page.tsx 83..378
+  83..92 generated app/page.tsx 96..117
+  92..104 generated app/page.tsx 100..112
+  104..109 generated app/page.tsx 96..117
+  109..115 generated app/page.tsx 124..172
+  115..161 copied app/page.tsx 125..171
+  161..162 generated app/page.tsx 124..172
+  162..171 generated app/page.tsx 179..366
+  171..193 generated app/page.tsx 184..205
+  193..194 generated app/page.tsx 179..366
+  194..203 generated app/page.tsx 215..258
+  203..217 generated app/page.tsx 221..234
+  217..218 generated app/page.tsx 215..258
+  218..234 generated app/page.tsx 235..251
+  234..238 generated app/page.tsx 215..258
+  238..247 generated app/page.tsx 267..353
+  247..267 generated app/page.tsx 273..292
+  267..285 generated app/page.tsx 293..314
+  285..286 generated app/page.tsx 267..353
+  286..297 generated app/page.tsx 315..346
+  297..301 generated app/page.tsx 267..353
+  301..312 generated app/page.tsx 179..366
+  312..322 generated app/page.tsx 83..378
+  322..337 generated app/page.tsx 46..385
+assumption src/pages/about.astro child-not-true app/about/page.tsx 386..394
+assumption src/pages/about.astro child-not-true app/about/page.tsx 408..423

@@ -1,0 +1,45 @@
+frameshift-e2 provenance 1
+profile astro7-preact10
+source app/layout.tsx transformed src/layouts/RootLayout.astro
+source app/page.tsx transformed src/pages/index.astro
+source components/Counter.tsx transformed src/components/Counter.tsx
+source package.json superseded astro.config.mjs package.json
+source tsconfig.json out-of-scope
+output astro.config.mjs
+  0..45 generated package.json 0..296
+  45..83 generated components/Counter.tsx 0..13
+  83..114 generated package.json 0..296
+  114..158 generated components/Counter.tsx 0..13
+  158..162 generated package.json 0..296
+output package.json
+  0..336 generated package.json 0..296
+output src/components/Counter.tsx
+  0..338 copied components/Counter.tsx 15..353
+output src/layouts/RootLayout.astro
+  0..5 generated app/layout.tsx 97..155
+  5..15 generated app/layout.tsx 103..112
+  15..16 generated app/layout.tsx 97..155
+  16..139 generated app/layout.tsx 15..162
+  139..148 generated app/layout.tsx 120..143
+  148..161 generated app/layout.tsx 126..136
+  161..171 generated app/layout.tsx 120..143
+  171..180 generated app/layout.tsx 97..155
+output src/pages/index.astro
+  0..49 generated app/page.tsx 0..44
+  49..119 generated app/page.tsx 61..229
+  119..128 generated app/page.tsx 98..222
+  128..137 generated app/page.tsx 111..131
+  137..148 generated app/page.tsx 115..126
+  148..153 generated app/page.tsx 111..131
+  153..161 generated app/page.tsx 138..180
+  161..196 generated app/page.tsx 141..176
+  196..200 generated app/page.tsx 138..180
+  200..213 generated app/page.tsx 187..210
+  213..225 generated app/page.tsx 188..195
+  225..234 generated app/page.tsx 196..207
+  234..235 generated app/page.tsx 204..207
+  235..236 copied app/page.tsx 205..206
+  236..237 generated app/page.tsx 204..207
+  237..240 generated app/page.tsx 187..210
+  240..250 generated app/page.tsx 98..222
+  250..265 generated app/page.tsx 61..229

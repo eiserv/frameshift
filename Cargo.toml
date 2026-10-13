@@ -7,6 +7,7 @@ members = [
     "crates/frameshift-engine",
     "tools/frameshift-bench",
     "tools/frameshift-corpus",
+    "tools/frameshift-e2",
     "tools/frameshift-fuzz",
     "tools/frameshift-fuzz-sections",
     "tools/frameshift-entity-gen",
