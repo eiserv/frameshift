@@ -19,7 +19,7 @@ mod scope;
 mod statement;
 mod typescript;
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use frameshift_core::{SourceText, Span};
 
@@ -39,7 +39,7 @@ use crate::{
 };
 
 use self::{
-    class::ClassScope, module::ModuleState, names::Name, scope::Scopes, typescript::ArrowAttempt,
+    class::ClassScope, module::ModuleState, names::Name, scope::Scopes, typescript::Attempt,
 };
 
 /// Explicit resource bounds for one parse.
@@ -290,9 +290,10 @@ struct Parser<'source> {
     bound_names: Vec<Span>,
     // Errors that apply only if the object literal stays an expression.
     expression_only_errors: Vec<(NodeId, ParseError)>,
-    // TypeScript arrow function heads that failed, with the state their
-    // outcome depends on (`typescript.rs`).
-    failed_arrow_heads: HashSet<ArrowAttempt>,
+    // Outcomes of TypeScript speculation that repeat in the same state: false
+    // for a reading that failed, and the answer of a lookahead
+    // (`typescript.rs`).
+    speculations: HashMap<Attempt, bool>,
 }
 
 // Saved state for a speculative look at later tokens.
@@ -381,7 +382,7 @@ impl<'source> Parser<'source> {
             list_buffers: Vec::new(),
             bound_names: Vec::new(),
             expression_only_errors: Vec::new(),
-            failed_arrow_heads: HashSet::new(),
+            speculations: HashMap::new(),
         }
     }
 

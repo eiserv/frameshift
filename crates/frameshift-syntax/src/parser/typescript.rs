@@ -9,18 +9,29 @@ use crate::{
     template::{TemplateContext, TemplateKind, TemplateMode, TemplatePosition, scan_js_template},
 };
 
-// A speculative arrow function head and every piece of parser state that its
-// outcome depends on. A head that failed fails again in the same state, so
-// the parser speculates on it only once. Without this, each nested
-// parenthesized expression whose content can start a binding pattern, as in
-// `([([a])])`, would be parsed once inside the failed head and again as an
-// expression, which doubles the work per level (the compiler keeps a set of
-// such positions for the same reason).
+// A speculative reading that the TypeScript grammar tries before another
+// one: an arrow function head, the lookahead for a function type, type
+// arguments in an expression, or a constraint after `infer`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) struct ArrowAttempt {
-    start: usize,
+enum Speculation {
+    ArrowHead { start: usize, is_async: bool },
+    FunctionTypeStart,
+    Instantiation,
+    InferConstraint,
+}
+
+// A speculation and every piece of parser state that its outcome depends on.
+// The outcome repeats in the same state, so the parser speculates once per
+// attempt and records failures and lookahead answers. Without the record,
+// nested constructs that each start a speculation, such as `([([a])])` or
+// `f<([[f<([[a]])>]])>`, are parsed once inside every failed or discarded
+// reading and again in the next one, which at least doubles the work per
+// level (the compiler keeps a set of positions that are not arrow functions
+// for the same reason).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) struct Attempt {
+    speculation: Speculation,
     cursor: usize,
-    is_async: bool,
     context: Context,
     no_in: bool,
     template_expression_depth: usize,
@@ -28,6 +39,43 @@ pub(super) struct ArrowAttempt {
 }
 
 impl Parser<'_> {
+    fn ts_attempt(&self, speculation: Speculation) -> Attempt {
+        Attempt {
+            speculation,
+            cursor: self.cursor,
+            context: self.context,
+            no_in: self.no_in,
+            template_expression_depth: self.template_expression_depth,
+            disallow_conditional: self.ts_disallow_conditional,
+        }
+    }
+
+    fn ts_record(&mut self, attempt: Attempt, outcome: bool) -> Result<(), ParseError> {
+        self.speculations
+            .try_reserve(1)
+            .map_err(|_| self.error(attempt.cursor, ParseErrorKind::AllocationFailed))?;
+        self.speculations.insert(attempt, outcome);
+        Ok(())
+    }
+
+    // Speculates unless the same attempt failed before, and records a
+    // failure.
+    fn ts_try_once<T>(
+        &mut self,
+        speculation: Speculation,
+        parse: impl FnOnce(&mut Self) -> Result<Option<T>, ParseError>,
+    ) -> Result<Option<T>, ParseError> {
+        let attempt = self.ts_attempt(speculation);
+        if self.speculations.get(&attempt) == Some(&false) {
+            return Ok(None);
+        }
+        let result = self.ts_try(parse)?;
+        if result.is_none() {
+            self.ts_record(attempt, false)?;
+        }
+        Ok(result)
+    }
+
     fn ts_can_start_type(&mut self) -> Result<bool, ParseError> {
         self.skip_trivia()?;
         if self.text[self.cursor..].starts_with("??") {
@@ -87,6 +135,10 @@ impl Parser<'_> {
         if !self.at_char('(')? {
             return Ok(false);
         }
+        let attempt = self.ts_attempt(Speculation::FunctionTypeStart);
+        if let Some(&starts) = self.speculations.get(&attempt) {
+            return Ok(starts);
+        }
         let mut starts = false;
         self.ts_try(|parser| {
             parser.ts_expect('(')?;
@@ -110,6 +162,7 @@ impl Parser<'_> {
             }
             Ok(None)
         })?;
+        self.ts_record(attempt, starts)?;
         Ok(starts)
     }
     pub(super) fn ts_node(
@@ -500,7 +553,7 @@ impl Parser<'_> {
         }
         if self.consume_word("infer")?.is_some() {
             let name = self.ts_name(true)?;
-            let constraint = self.ts_try(|parser| {
+            let constraint = self.ts_try_once(Speculation::InferConstraint, |parser| {
                 if parser.consume_word("extends")?.is_none() {
                     return Ok(None);
                 }
@@ -1819,25 +1872,11 @@ impl Parser<'_> {
         is_async: bool,
         allowed: bool,
     ) -> Result<Option<NodeId>, ParseError> {
-        let attempt = ArrowAttempt {
-            start,
-            cursor: self.cursor,
-            is_async,
-            context: self.context,
-            no_in: self.no_in,
-            template_expression_depth: self.template_expression_depth,
-            disallow_conditional: self.ts_disallow_conditional,
-        };
-        if self.failed_arrow_heads.contains(&attempt) {
-            return Ok(None);
-        }
-        let Some((parameters, mark)) =
-            self.ts_try(|parser| parser.ts_arrow_head(start, is_async))?
+        let Some((parameters, mark)) = self
+            .ts_try_once(Speculation::ArrowHead { start, is_async }, |parser| {
+                parser.ts_arrow_head(start, is_async)
+            })?
         else {
-            self.failed_arrow_heads
-                .try_reserve(1)
-                .map_err(|_| self.error(start, ParseErrorKind::AllocationFailed))?;
-            self.failed_arrow_heads.insert(attempt);
             return Ok(None);
         };
         if !allowed {
@@ -1870,7 +1909,7 @@ impl Parser<'_> {
         let args = if force {
             Some(self.ts_type_arguments()?)
         } else {
-            self.ts_try(|parser| {
+            self.ts_try_once(Speculation::Instantiation, |parser| {
                 let args = parser.ts_type_arguments()?;
                 // The pinned compiler re-scans the closing `>` together with
                 // a directly following `>` or `=` into one operator, so such

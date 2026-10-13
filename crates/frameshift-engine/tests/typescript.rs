@@ -545,6 +545,61 @@ fn nested_parentheses_do_not_repeat_failed_arrow_heads() {
         .unwrap();
 }
 
+// Type arguments in an expression and the lookahead for a function type
+// speculated on each other: the lookahead parsed a bracketed parameter with
+// the cover grammar, including every nested `f<`, and discarded the result.
+// Valid code with 15 levels of `f<([[` reached the speculation limit, and a
+// fuzzed input took more than ten seconds in an instrumented build. Every
+// speculation now runs once per position and parser state.
+#[test]
+fn type_arguments_and_function_types_do_not_repeat_speculation() {
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024)
+        .spawn(|| {
+            let limits = ParseLimits {
+                max_tokens: 20_000,
+                ..ParseLimits::default()
+            };
+            let valid = format!("{}value{}", "f<([[".repeat(25), "]])>".repeat(25));
+            let unclosed = "f<([[".repeat(25);
+            for dialect in [
+                JsDialect::TypeScript,
+                JsDialect::Tsx,
+                JsDialect::TypeScriptDeclaration,
+            ] {
+                let source = input(&valid);
+                let tree = parse_js_expression(&source, 0, dialect, limits)
+                    .unwrap_or_else(|error| panic!("{dialect:?}: {error}"));
+                let instantiations = tree
+                    .nodes()
+                    .iter()
+                    .filter(|node| {
+                        matches!(
+                            node.kind(),
+                            SyntaxNodeKind::TypeScript {
+                                kind: Ts::Instantiation,
+                                ..
+                            }
+                        )
+                    })
+                    .count();
+                assert_eq!(instantiations, 1, "{dialect:?}");
+                let source = input(&unclosed);
+                let error = parse_js_expression(&source, 0, dialect, limits)
+                    .err()
+                    .unwrap();
+                assert_ne!(
+                    error.kind,
+                    frameshift_engine::ParseErrorKind::ResourceLimit,
+                    "{dialect:?}"
+                );
+            }
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
 #[test]
 fn typescript_is_explicit_and_resource_limits_include_speculation() {
     let source = input("type Answer = number;");
