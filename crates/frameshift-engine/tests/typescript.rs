@@ -600,6 +600,44 @@ fn type_arguments_and_function_types_do_not_repeat_speculation() {
         .unwrap();
 }
 
+// A failed speculation restores every parser field it can change. A namespace
+// body that failed inside a function in a parameter default left its scope
+// pushed and the module's export state replaced; the rollback's balance
+// checks, which run in debug builds, reported it. The same text then failed
+// again in the other reading, so no tree depended on the leak.
+#[test]
+fn failed_speculation_leaves_scopes_and_exports_balanced() {
+    for text in [
+        "export const a = 1; type T = ({ b = function () { namespace N { ) } } }) => void;",
+        "export const a = 1; const f = (b = function () { namespace N { export const c = ; } }) => b;",
+        "export const a = 1; f<{ [function () { namespace N { ) } }]: T }>(x);",
+    ] {
+        let source = input(text);
+        for dialect in [
+            JsDialect::TypeScript,
+            JsDialect::Tsx,
+            JsDialect::TypeScriptDeclaration,
+        ] {
+            let error =
+                parse_js_program(&source, SourceGoal::Module, dialect, ParseLimits::default())
+                    .err()
+                    .unwrap_or_else(|| panic!("{dialect:?} accepted {text}"));
+            assert!(
+                !matches!(
+                    error.kind,
+                    frameshift_engine::ParseErrorKind::ResourceLimit
+                        | frameshift_engine::ParseErrorKind::InternalInvariant(_)
+                ),
+                "{dialect:?} {text}: {error}"
+            );
+        }
+    }
+    check(
+        "export const a = 1; const f = (b = function () { namespace N { export const c = 1; } }) => b;",
+        JsDialect::TypeScript,
+    );
+}
+
 #[test]
 fn typescript_is_explicit_and_resource_limits_include_speculation() {
     let source = input("type Answer = number;");

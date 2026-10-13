@@ -62,6 +62,12 @@ pub(super) struct Scopes<'source> {
     stack: Vec<Scope<'source>>,
 }
 
+impl Scopes<'_> {
+    pub(super) fn depth(&self) -> usize {
+        self.stack.len()
+    }
+}
+
 /// How a declaration binds its name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Declaration {

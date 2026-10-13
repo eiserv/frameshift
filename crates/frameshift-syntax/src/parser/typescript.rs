@@ -1,6 +1,6 @@
 //! TypeScript grammar integrated with the JavaScript parser and arena.
 
-use super::{Context, ParseError, ParseErrorKind, Parser};
+use super::{ParseError, ParseErrorKind, Parser, speculation::Speculation};
 use crate::{
     TypeScriptKind as Ts,
     ast::{NodeId, SyntaxNodeKind},
@@ -9,73 +9,7 @@ use crate::{
     template::{TemplateContext, TemplateKind, TemplateMode, TemplatePosition, scan_js_template},
 };
 
-// A speculative reading that the TypeScript grammar tries before another
-// one: an arrow function head, the lookahead for a function type, type
-// arguments in an expression, or a constraint after `infer`.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum Speculation {
-    ArrowHead { start: usize, is_async: bool },
-    FunctionTypeStart,
-    Instantiation,
-    InferConstraint,
-}
-
-// A speculation and every piece of parser state that its outcome depends on.
-// The outcome repeats in the same state, so the parser speculates once per
-// attempt and records failures and lookahead answers. Without the record,
-// nested constructs that each start a speculation, such as `([([a])])` or
-// `f<([[f<([[a]])>]])>`, are parsed once inside every failed or discarded
-// reading and again in the next one, which at least doubles the work per
-// level (the compiler keeps a set of positions that are not arrow functions
-// for the same reason).
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) struct Attempt {
-    speculation: Speculation,
-    cursor: usize,
-    context: Context,
-    no_in: bool,
-    template_expression_depth: usize,
-    disallow_conditional: bool,
-}
-
 impl Parser<'_> {
-    fn ts_attempt(&self, speculation: Speculation) -> Attempt {
-        Attempt {
-            speculation,
-            cursor: self.cursor,
-            context: self.context,
-            no_in: self.no_in,
-            template_expression_depth: self.template_expression_depth,
-            disallow_conditional: self.ts_disallow_conditional,
-        }
-    }
-
-    fn ts_record(&mut self, attempt: Attempt, outcome: bool) -> Result<(), ParseError> {
-        self.speculations
-            .try_reserve(1)
-            .map_err(|_| self.error(attempt.cursor, ParseErrorKind::AllocationFailed))?;
-        self.speculations.insert(attempt, outcome);
-        Ok(())
-    }
-
-    // Speculates unless the same attempt failed before, and records a
-    // failure.
-    fn ts_try_once<T>(
-        &mut self,
-        speculation: Speculation,
-        parse: impl FnOnce(&mut Self) -> Result<Option<T>, ParseError>,
-    ) -> Result<Option<T>, ParseError> {
-        let attempt = self.ts_attempt(speculation);
-        if self.speculations.get(&attempt) == Some(&false) {
-            return Ok(None);
-        }
-        let result = self.ts_try(parse)?;
-        if result.is_none() {
-            self.ts_record(attempt, false)?;
-        }
-        Ok(result)
-    }
-
     fn ts_can_start_type(&mut self) -> Result<bool, ParseError> {
         self.skip_trivia()?;
         if self.text[self.cursor..].starts_with("??") {
@@ -198,66 +132,6 @@ impl Parser<'_> {
             Ok(())
         } else {
             Err(self.error(self.cursor, ParseErrorKind::InvalidTypeScriptSyntax))
-        }
-    }
-
-    // Speculation is restricted to type syntax and function heads. Bodies are
-    // parsed only after a head commits. Failed work still consumes `ts_work`.
-    pub(super) fn ts_try<T>(
-        &mut self,
-        parse: impl FnOnce(&mut Self) -> Result<Option<T>, ParseError>,
-    ) -> Result<Option<T>, ParseError> {
-        let checkpoint = self.checkpoint();
-        let mut references = Vec::new();
-        references
-            .try_reserve_exact(self.classes.len())
-            .map_err(|_| self.error(self.cursor, ParseErrorKind::AllocationFailed))?;
-        references.extend(self.classes.iter().map(|class| class.references.len()));
-        let lengths = (
-            self.nodes.len(),
-            self.children.len(),
-            self.template_parts.len(),
-            self.bound_names.len(),
-            self.expression_only_errors.len(),
-        );
-        let state = (
-            self.context,
-            self.cover,
-            self.no_in,
-            self.template_expression_depth,
-        );
-        let result = parse(self);
-        if matches!(&result, Ok(Some(_))) {
-            return result;
-        }
-        self.restore(checkpoint);
-        for (class, len) in self.classes.iter_mut().zip(references) {
-            class.references.truncate(len);
-        }
-        self.nodes.truncate(lengths.0);
-        self.children.truncate(lengths.1);
-        self.template_parts.truncate(lengths.2);
-        self.bound_names.truncate(lengths.3);
-        self.expression_only_errors.truncate(lengths.4);
-        (
-            self.context,
-            self.cover,
-            self.no_in,
-            self.template_expression_depth,
-        ) = state;
-        match result {
-            Err(error)
-                if matches!(
-                    error.kind,
-                    ParseErrorKind::ResourceLimit
-                        | ParseErrorKind::AllocationFailed
-                        | ParseErrorKind::InternalInvariant(_)
-                ) =>
-            {
-                Err(error)
-            }
-            Ok(None) | Err(_) => Ok(None),
-            Ok(Some(_)) => unreachable!(),
         }
     }
 
@@ -1694,19 +1568,15 @@ impl Parser<'_> {
         } else if self.at_char('{')? {
             let start = self.cursor;
             self.ts_expect('{')?;
+            // The body has its own scope and exports, which are restored on
+            // every path: a speculation can discard a failed body inside a
+            // function in a parameter default.
             self.push_scope(super::scope::ScopeKind::Block)?;
             let module = std::mem::take(&mut self.module);
-            let mut statements = self.take_list();
-            while !self.at_char('}')? {
-                if self.at_end()? {
-                    return Err(self.error(self.cursor, ParseErrorKind::ExpectedClosingBrace));
-                }
-                let statement = self.parse_module_item_declaration()?;
-                self.push_child(&mut statements, statement)?;
-            }
-            self.ts_expect('}')?;
+            let statements = self.ts_namespace_statements();
             self.module = module;
             self.pop_scope();
+            let statements = statements?;
             let body = self.ts_node(Ts::NamespaceBody, start, &statements)?;
             self.recycle_list(statements);
             self.push_child(&mut items, body)?;
@@ -1716,6 +1586,19 @@ impl Parser<'_> {
         let result = self.ts_node(Ts::Namespace, start, &items);
         self.recycle_list(items);
         result
+    }
+
+    fn ts_namespace_statements(&mut self) -> Result<Vec<NodeId>, ParseError> {
+        let mut statements = self.take_list();
+        while !self.at_char('}')? {
+            if self.at_end()? {
+                return Err(self.error(self.cursor, ParseErrorKind::ExpectedClosingBrace));
+            }
+            let statement = self.parse_module_item_declaration()?;
+            self.push_child(&mut statements, statement)?;
+        }
+        self.ts_expect('}')?;
+        Ok(statements)
     }
 
     fn ts_is_import_equals(&mut self) -> Result<bool, ParseError> {

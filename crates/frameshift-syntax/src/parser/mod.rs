@@ -4,8 +4,9 @@
 //! grammar reinterpretation, `function` and `class` the function-like forms,
 //! `statement` and `module` the source-file grammar, `names` the
 //! context-dependent identifier rules, `typescript` the TypeScript grammar
-//! of the TypeScript and TSX dialects, and `scope` the transient declaration
-//! scopes behind early errors. Context and scopes live only for one parse.
+//! of the TypeScript and TSX dialects, `speculation` its rollback of failed
+//! readings, and `scope` the transient declaration scopes behind early
+//! errors. Context and scopes live only for one parse.
 
 mod class;
 mod error;
@@ -16,6 +17,7 @@ mod module;
 mod names;
 mod pattern;
 mod scope;
+mod speculation;
 mod statement;
 mod typescript;
 
@@ -39,7 +41,7 @@ use crate::{
 };
 
 use self::{
-    class::ClassScope, module::ModuleState, names::Name, scope::Scopes, typescript::Attempt,
+    class::ClassScope, module::ModuleState, names::Name, scope::Scopes, speculation::Attempt,
 };
 
 /// Explicit resource bounds for one parse.
@@ -292,7 +294,7 @@ struct Parser<'source> {
     expression_only_errors: Vec<(NodeId, ParseError)>,
     // Outcomes of TypeScript speculation that repeat in the same state: false
     // for a reading that failed, and the answer of a lookahead
-    // (`typescript.rs`).
+    // (`speculation.rs`).
     speculations: HashMap<Attempt, bool>,
 }
 
