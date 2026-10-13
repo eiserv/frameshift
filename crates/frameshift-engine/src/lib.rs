@@ -3,12 +3,22 @@
 //! This M0 API exposes source positions, lexical primitives, a JavaScript
 //! parser for Script and Module source text with explicit JSX, TypeScript,
 //! and TSX dialects, regular-expression validation, pinned Unicode identifier
-//! classification, character reference decoding with pinned tables, and span
-//! rewriting. It contains no project inspection, migration, or verification
-//! pipeline. Future CLI code must depend on this facade rather than lower
+//! classification, character reference decoding with pinned tables, span
+//! rewriting, and the Astro component printer with JSX conversion and
+//! multi-source provenance of the E2 experiment. It contains no project
+//! inspection, migration, or verification pipeline. Future CLI code must depend on this facade rather than lower
 //! layers.
 
 pub use frameshift_core::{Position, SourceText, Span, TextError, TextLimits};
+pub use frameshift_emit::{
+    Anchor, Assumption, AssumptionKind, AstroComponent, AttributeItem, AttributeName,
+    AttributeValue, BuildError, ClientDirective, ComponentName, ComponentReference,
+    ComponentStrategy, ConvertError, ConvertErrorKind, ConvertedMarkup, Element, ElementResolver,
+    EmitLimits, EmittedText, Expression, ExpressionPiece, FrontmatterItem, HtmlTagName, ImportItem,
+    Indent, JsIdentifier, JsxConversion, LineEnding, NamedImport, OutputBuilder, OutputRegion,
+    PrintError, PrintOptions, PropMember, PropType, ProvenanceError, RegionOrigin, SourceId,
+    TagName, TemplateNode, convert_jsx, print_astro_component,
+};
 pub use frameshift_syntax::{
     AssignmentOperator, BinaryOperator, ChildList, ChildNodes, Comment, CommentKind, FunctionKind,
     GreaterThanMode, HtmlCharacterReference, HtmlReferenceContext, HtmlReferenceValue,

@@ -22,10 +22,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "frameshift-emit"
+version = "0.0.0"
+dependencies = [
+ "frameshift-core",
+ "frameshift-syntax",
+ "frameshift-transform",
+]
+
+[[package]]
 name = "frameshift-engine"
 version = "0.0.0"
 dependencies = [
  "frameshift-core",
+ "frameshift-emit",
  "frameshift-syntax",
  "frameshift-transform",
 ]

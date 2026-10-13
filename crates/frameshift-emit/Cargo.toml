@@ -1,0 +1,13 @@
+[package]
+name = "frameshift-emit"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+frameshift-core = { path = "../frameshift-core" }
+frameshift-syntax = { path = "../frameshift-syntax" }
+frameshift-transform = { path = "../frameshift-transform" }
+
+[lints]
+workspace = true

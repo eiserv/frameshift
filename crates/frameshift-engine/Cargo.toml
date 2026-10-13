@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 frameshift-core = { path = "../frameshift-core" }
+frameshift-emit = { path = "../frameshift-emit" }
 frameshift-syntax = { path = "../frameshift-syntax" }
 frameshift-transform = { path = "../frameshift-transform" }
 
