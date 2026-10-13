@@ -256,9 +256,20 @@ fn tree_invariants(tree: &SyntaxTree<'_>) -> Result<(), String> {
         *seen = true;
         let node = tree.node(id).ok_or("missing node")?;
         let parent = node.span();
-        source
+        let spelling = source
             .slice(parent)
             .map_err(|error| format!("node {}: {error:?}", id.index()))?;
+        if !matches!(
+            node.kind(),
+            SyntaxNodeKind::Program { .. } | SyntaxNodeKind::JsxText
+        ) && !spelling.is_empty()
+            && !at_token_boundaries(tree, parent, spelling)
+        {
+            return Err(format!(
+                "node {} at {parent:?} starts or ends with trivia",
+                id.index()
+            ));
+        }
         let mut previous = parent.start();
         for child in tree.child_nodes(id).ok_or("missing child iterator")? {
             let span = tree.node(child).ok_or("child outside arena")?.span();
@@ -323,6 +334,38 @@ fn tree_invariants(tree: &SyntaxTree<'_>) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+// Whether a node's span starts at a token and ends with one: it neither
+// starts nor ends with whitespace or a line terminator, and neither boundary
+// lies inside a comment. Only programs and JSX text include trivia.
+fn at_token_boundaries(tree: &SyntaxTree<'_>, span: Span, spelling: &str) -> bool {
+    let trivia = |ch: char| {
+        matches!(
+            ch,
+            '\t' | '\u{b}' | '\u{c}' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
+                ..='\u{200a}'
+                    | '\u{202f}'
+                    | '\u{205f}'
+                    | '\u{3000}'
+                    | '\u{feff}'
+                    | '\n'
+                    | '\r'
+                    | '\u{2028}'
+                    | '\u{2029}'
+        )
+    };
+    let comments = tree.comments();
+    let inside_comment = |offset: usize| {
+        let index = comments.partition_point(|comment| comment.span.end() <= offset);
+        comments
+            .get(index)
+            .is_some_and(|comment| comment.span.start() <= offset)
+    };
+    !spelling.starts_with(trivia)
+        && !spelling.ends_with(trivia)
+        && !inside_comment(span.start())
+        && !inside_comment(span.end() - 1)
 }
 
 fn ordered_span(span: Span, parent: Span, previous: &mut usize) -> Result<(), String> {
