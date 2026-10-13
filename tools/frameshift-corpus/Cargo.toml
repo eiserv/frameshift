@@ -1,0 +1,11 @@
+[package]
+name = "frameshift-corpus"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+frameshift-engine = { path = "../../crates/frameshift-engine" }
+
+[lints]
+workspace = true

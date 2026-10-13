@@ -11,8 +11,6 @@
 //! `--check` validates generated parser and empty-edit contracts without timing.
 
 mod alloc;
-mod check;
-mod corpus;
 mod directory;
 mod measure;
 
@@ -24,10 +22,12 @@ use std::{
     time::Duration,
 };
 
+use frameshift_corpus::{
+    Corpus, CorpusFile, DEFAULT_SEED, GENERATOR_VERSION, check, generate_file,
+};
 use frameshift_engine::{ParseLimits, SourceGoal};
 
 use crate::{
-    corpus::{Corpus, CorpusFile, DEFAULT_SEED, GENERATOR_VERSION, generate_file},
     directory::{Extension, Failure, Outcome, Sample},
     measure::{FileMemory, Timing},
 };

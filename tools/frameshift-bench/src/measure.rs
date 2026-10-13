@@ -11,7 +11,9 @@ use std::{
 
 use frameshift_engine::{ParseLimits, SourceText, TextLimits, parse_js_program};
 
-use crate::{ALLOCATOR, corpus::CorpusFile};
+use frameshift_corpus::CorpusFile;
+
+use crate::ALLOCATOR;
 
 /// Minimum and median of repeated measurements.
 pub struct Timing {

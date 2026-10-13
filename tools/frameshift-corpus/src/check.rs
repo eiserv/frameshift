@@ -8,7 +8,7 @@ use frameshift_engine::{
     TemplatePart, TextLimits, apply_edits, parse_js_program,
 };
 
-use crate::corpus::CorpusFile;
+use crate::CorpusFile;
 
 /// Counts of successfully checked files and their syntax.
 #[derive(Debug, Default, PartialEq, Eq)]

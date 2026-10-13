@@ -18,7 +18,7 @@ use frameshift_engine::{
     SourceGoal, SourceText, TextError, TextLimits, parse_js_program,
 };
 
-use crate::corpus::CorpusFile;
+use frameshift_corpus::CorpusFile;
 
 /// Directories that never hold project sources: version control data and
 /// installed packages. A fresh checkout contains no build output.

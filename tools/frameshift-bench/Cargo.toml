@@ -5,6 +5,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+frameshift-corpus = { path = "../frameshift-corpus" }
 frameshift-engine = { path = "../../crates/frameshift-engine" }
 
 # The counting allocator implements `GlobalAlloc`, which requires unsafe code,

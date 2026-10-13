@@ -6,12 +6,20 @@ version = 4
 name = "frameshift-bench"
 version = "0.0.0"
 dependencies = [
+ "frameshift-corpus",
  "frameshift-engine",
 ]
 
 [[package]]
 name = "frameshift-core"
 version = "0.0.0"
+
+[[package]]
+name = "frameshift-corpus"
+version = "0.0.0"
+dependencies = [
+ "frameshift-engine",
+]
 
 [[package]]
 name = "frameshift-engine"

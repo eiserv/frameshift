@@ -1,4 +1,9 @@
-//! Deterministic generator of fictional JavaScript source files (`D-040`).
+//! Deterministic fictional source corpora and parser contract checks shared
+//! by the development tools (`D-040`, `D-043`, `D-044`).
+//!
+//! The measurement harness measures these corpora, and the fuzzer seeds its
+//! inputs with them and checks accepted trees with [`check`]. No product
+//! crate depends on this crate.
 //!
 //! Output depends only on the seed and [`GENERATOR_VERSION`]. Every decision
 //! uses integer arithmetic on a SplitMix64 sequence, because floating-point
@@ -9,6 +14,7 @@
 
 use frameshift_engine::{JsDialect, SourceGoal};
 
+pub mod check;
 mod typescript;
 
 /// Version of the generated output. Any change to the bytes produced for a
