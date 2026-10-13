@@ -1,14 +1,32 @@
 //! Reproducible parser and empty-edit contract checks, separate from timings.
 //!
 //! The public facade supplies every operation. Iterative traversal checks
-//! the arena and visitor contract that later analysis will depend on.
+//! the arena and visitor contract that later analysis will depend on. The
+//! measurement harness applies the checks to generated files, which must
+//! parse. The fuzzer applies them to arbitrary text, where a rejection is a
+//! valid outcome with contracts of its own.
 
 use frameshift_engine::{
-    CommentKind, EditLimits, Origin, ParseLimits, SourceText, Span, SyntaxNodeKind, SyntaxTree,
-    TemplatePart, TextLimits, apply_edits, parse_js_program,
+    CommentKind, EditLimits, JsDialect, Origin, ParseError, ParseLimits, SourceGoal, SourceText,
+    Span, SyntaxNodeKind, SyntaxTree, TemplatePart, TextLimits, apply_edits, parse_js_expression,
+    parse_js_program,
 };
 
 use crate::CorpusFile;
+
+/// The outcome of a parse whose contracts held.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Parsed {
+    /// The parser returned a tree.
+    Accepted {
+        /// Reachable syntax nodes.
+        nodes: usize,
+        /// Retained comments.
+        comments: usize,
+    },
+    /// The parser rejected the text with this error.
+    Rejected(ParseError),
+}
 
 /// Counts of successfully checked files and their syntax.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -28,12 +46,13 @@ pub struct Checked {
 pub fn corpus(files: &[CorpusFile]) -> Result<Checked, String> {
     let mut checked = Checked::default();
     for (index, file) in files.iter().enumerate() {
-        let (nodes, comments) = check_file(file).map_err(|error| {
-            format!(
-                "file {index} ({:?}, {:?}): {error}",
-                file.goal, file.dialect
-            )
-        })?;
+        let context = || format!("file {index} ({:?}, {:?})", file.goal, file.dialect);
+        let outcome = program(&file.text, file.goal, file.dialect, ParseLimits::default())
+            .map_err(|error| format!("{}: {error}", context()))?;
+        let (nodes, comments) = match outcome {
+            Parsed::Accepted { nodes, comments } => (nodes, comments),
+            Parsed::Rejected(error) => return Err(format!("{}: parse: {error:?}", context())),
+        };
         checked.files += 1;
         checked.bytes += file.text.len();
         checked.nodes += nodes;
@@ -42,17 +61,45 @@ pub fn corpus(files: &[CorpusFile]) -> Result<Checked, String> {
     Ok(checked)
 }
 
-fn check_file(file: &CorpusFile) -> Result<(usize, usize), String> {
-    let source = SourceText::new(file.text.clone(), TextLimits::default())
-        .map_err(|error| format!("source text: {error:?}"))?;
-    let tree = parse_js_program(&source, file.goal, file.dialect, ParseLimits::default())
-        .map_err(|error| format!("parse: {error:?}"))?;
+/// Parses `text` as complete source text and checks the contracts of the
+/// outcome.
+///
+/// An accepted program must span the whole text as a `Program` node of its
+/// goal and dialect, form a tree whose nodes are reachable exactly once with
+/// nested, source-ordered spans and valid template and comment spans, parse
+/// identically from a fresh source text, and survive an empty edit set byte
+/// for byte with complete provenance. A rejection must point to a character
+/// boundary of the text and repeat identically. `Err` describes the first
+/// violated contract.
+pub fn program(
+    text: &str,
+    goal: SourceGoal,
+    dialect: JsDialect,
+    limits: ParseLimits,
+) -> Result<Parsed, String> {
+    let source = source_text(text)?;
+    // A fresh index for the repeated parse keeps the comparison from reusing
+    // parser state or relying on one SourceText instance.
+    let repeated_source = source_text(text)?;
+    let tree = match (
+        parse_js_program(&source, goal, dialect, limits),
+        parse_js_program(&repeated_source, goal, dialect, limits),
+    ) {
+        (Ok(tree), Ok(repeated)) => {
+            same_trees(&tree, &repeated)?;
+            tree
+        }
+        (Err(error), Err(repeated)) => return rejected(text, 0, error, repeated),
+        (Ok(_), Err(error)) | (Err(error), Ok(_)) => {
+            return Err(format!("a repeated parse changed the outcome: {error:?}"));
+        }
+    };
     let whole = Span::new(0, source.len()).map_err(|error| format!("source span: {error:?}"))?;
     if tree.consumed_span() != whole
         || !tree.node(tree.root()).is_some_and(|node| {
             node.span() == whole
-                && matches!(node.kind(), SyntaxNodeKind::Program { goal, dialect, .. }
-                    if goal == file.goal && dialect == file.dialect)
+                && matches!(node.kind(), SyntaxNodeKind::Program { goal: parsed_goal, dialect: parsed_dialect, .. }
+                    if parsed_goal == goal && parsed_dialect == dialect)
         })
     {
         return Err(
@@ -60,18 +107,84 @@ fn check_file(file: &CorpusFile) -> Result<(usize, usize), String> {
         );
     }
     tree_invariants(&tree)?;
+    empty_edits(&source, text)?;
+    Ok(Parsed::Accepted {
+        nodes: tree.nodes().len(),
+        comments: tree.comments().len(),
+    })
+}
 
-    // Build a fresh index as well, so the comparison does not reuse parser
-    // state or rely on one SourceText instance.
-    let repeated_source = SourceText::new(file.text.clone(), TextLimits::default())
-        .map_err(|error| format!("repeated source text: {error:?}"))?;
-    let repeated = parse_js_program(
-        &repeated_source,
-        file.goal,
-        file.dialect,
-        ParseLimits::default(),
-    )
-    .map_err(|error| format!("repeated parse: {error:?}"))?;
+/// Parses `text` as one expression from the character boundary `offset` and
+/// checks the contracts of the outcome.
+///
+/// An accepted expression must consume the text from `offset` to its end,
+/// form a tree with the invariants of [`program`], and parse identically from
+/// a fresh source text. A rejection must point to a character boundary at or
+/// after `offset` and repeat identically. `Err` describes the first violated
+/// contract.
+pub fn expression(
+    text: &str,
+    offset: usize,
+    dialect: JsDialect,
+    limits: ParseLimits,
+) -> Result<Parsed, String> {
+    let source = source_text(text)?;
+    let repeated_source = source_text(text)?;
+    let tree = match (
+        parse_js_expression(&source, offset, dialect, limits),
+        parse_js_expression(&repeated_source, offset, dialect, limits),
+    ) {
+        (Ok(tree), Ok(repeated)) => {
+            same_trees(&tree, &repeated)?;
+            tree
+        }
+        (Err(error), Err(repeated)) => return rejected(text, offset, error, repeated),
+        (Ok(_), Err(error)) | (Err(error), Ok(_)) => {
+            return Err(format!("a repeated parse changed the outcome: {error:?}"));
+        }
+    };
+    let consumed =
+        Span::new(offset, source.len()).map_err(|error| format!("expression span: {error:?}"))?;
+    if tree.consumed_span() != consumed {
+        return Err(format!(
+            "expression consumed {:?} instead of {consumed:?}",
+            tree.consumed_span()
+        ));
+    }
+    tree_invariants(&tree)?;
+    Ok(Parsed::Accepted {
+        nodes: tree.nodes().len(),
+        comments: tree.comments().len(),
+    })
+}
+
+fn source_text(text: &str) -> Result<SourceText, String> {
+    SourceText::new(text.to_owned(), TextLimits::default())
+        .map_err(|error| format!("source text: {error:?}"))
+}
+
+fn rejected(
+    text: &str,
+    start: usize,
+    error: ParseError,
+    repeated: ParseError,
+) -> Result<Parsed, String> {
+    if error != repeated {
+        return Err(format!(
+            "a repeated parse changed the error from {error:?} to {repeated:?}"
+        ));
+    }
+    if error.offset < start || !text.is_char_boundary(error.offset) {
+        return Err(format!(
+            "error offset {} is not a character boundary in {start}..={}: {error:?}",
+            error.offset,
+            text.len()
+        ));
+    }
+    Ok(Parsed::Rejected(error))
+}
+
+fn same_trees(tree: &SyntaxTree<'_>, repeated: &SyntaxTree<'_>) -> Result<(), String> {
     if tree.root() != repeated.root()
         || tree.consumed_span() != repeated.consumed_span()
         || tree.nodes() != repeated.nodes()
@@ -102,11 +215,15 @@ fn check_file(file: &CorpusFile) -> Result<(usize, usize), String> {
             ));
         }
     }
+    Ok(())
+}
 
-    let rewritten = apply_edits(&source, &[], EditLimits::default())
+fn empty_edits(source: &SourceText, text: &str) -> Result<(), String> {
+    let whole = Span::new(0, source.len()).map_err(|error| format!("source span: {error:?}"))?;
+    let rewritten = apply_edits(source, &[], EditLimits::default())
         .map_err(|error| format!("empty edits: {error:?}"))?;
-    if source.as_str().as_bytes() != file.text.as_bytes()
-        || rewritten.as_str().as_bytes() != file.text.as_bytes()
+    if source.as_str().as_bytes() != text.as_bytes()
+        || rewritten.as_str().as_bytes() != text.as_bytes()
         || !rewritten.applied_edits().is_empty()
     {
         return Err("empty edits changed the source bytes or recorded an edit".to_owned());
@@ -122,7 +239,7 @@ fn check_file(file: &CorpusFile) -> Result<(usize, usize), String> {
     if !preserved {
         return Err("empty edits did not account for every original source byte".to_owned());
     }
-    Ok((tree.nodes().len(), tree.comments().len()))
+    Ok(())
 }
 
 fn tree_invariants(tree: &SyntaxTree<'_>) -> Result<(), String> {
@@ -272,6 +389,38 @@ mod tests {
             let checked = corpus(&[file]).unwrap();
             assert_eq!(checked.bytes, text.len());
             assert!(checked.nodes > 1);
+        }
+    }
+
+    #[test]
+    fn rejections_and_expressions_have_checked_outcomes() {
+        let limits = ParseLimits::default();
+        for goal in [SourceGoal::Script, SourceGoal::Module] {
+            let outcome = program("const é = ;", goal, JsDialect::JavaScript, limits).unwrap();
+            assert!(
+                matches!(outcome, Parsed::Rejected(ParseError { offset: 11, .. })),
+                "{outcome:?}"
+            );
+        }
+        for dialect in [
+            JsDialect::JavaScript,
+            JsDialect::Jsx,
+            JsDialect::TypeScript,
+            JsDialect::Tsx,
+            JsDialect::TypeScriptDeclaration,
+        ] {
+            assert_eq!(
+                expression("x; /* é */ a?.b ?? c ", 3, dialect, limits).unwrap(),
+                Parsed::Accepted {
+                    nodes: 5,
+                    comments: 1
+                }
+            );
+            let outcome = expression("a +", 0, dialect, limits).unwrap();
+            assert!(
+                matches!(outcome, Parsed::Rejected(ParseError { offset: 3, .. })),
+                "{outcome:?}"
+            );
         }
     }
 
