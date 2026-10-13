@@ -109,7 +109,7 @@ Go was treated as a first-class candidate (`D-015`) and was the initial recommen
   - *Compile times:* a deliberate crate structure, and incremental builds in development.
   - *Ownership and graph-shaped data:* arenas and indices, the established design in Rust compilers and in oxc.
   - *Learning curve:* documented conventions and reviews.
-- **Existing parsers.** oxc is fast and conformant, but its crates remain pre-1.0 (around version 0.14x in 2026) and its releases regularly contain breaking AST changes. It is therefore not an accepted foundation dependency. Purpose-built parsing remains a proposal (`P-002`), pending E1. oxc may serve as a development-time test oracle, or behind a Frameshift-owned facade if a decision record justifies it.
+- **Existing parsers.** oxc is fast and conformant, but its crates remain pre-1.0 (around version 0.14x in 2026) and its releases regularly contain breaking AST changes. It is therefore not an accepted foundation dependency. Purpose-built parsing is accepted (`P-002`), because E1 passed (`D-047`). oxc may serve as a development-time test oracle, or behind a Frameshift-owned facade if a decision record justifies it.
 - **Rust-specific rules for Frameshift crates:**
   - `unsafe` code is forbidden unless a decision record justifies a specific use.
   - Matches over closed enumerations in core code use no wildcard arms, so adding a variant forces every match to be revisited (enforced by a lint).
@@ -246,7 +246,7 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 
 | Component | Category | Proposal | Notes |
 | --- | --- | --- | --- |
-| JS, TS, JSX, TSX parser | Runtime | Build (E1) | Most critical component. Needs exact spans, comments, error policy, and resource limits. oxc may serve as a development-time test oracle. |
+| JS, TS, JSX, TSX parser | Runtime | Build (E1 passed, `P-002` accepted) | Most critical component. Needs exact spans, comments, error policy, and resource limits. oxc may serve as a development-time test oracle. |
 | CSS tokenizer and structural parser | Runtime | Build | Specified by CSS Syntax Level 3. Bounded. Lightning CSS may serve as a test oracle. |
 | JSON reading and deterministic writing | Runtime | Build | RFC 8259 is small and precisely specified. Frameshift needs control over key order, formatting, and error positions, and shares the code with JSONC. |
 | JSONC | Runtime | Build | Extension of the JSON parser |
