@@ -141,6 +141,8 @@ Every additional language must meet all of the following:
 6. **Same engineering standard.** Tests, CI, formatting, linting, and documentation, plus an entry in `AGENTS.md` once the component exists.
 7. **Core independence.** Optional components (verification helpers, a future model advisor) never become requirements for inspection, analysis, planning, or migration.
 
+Actual use: the development-only processor-time helper `tools/frameshift-cputime` in Go (`D-046`), because the Rust standard library has no processor-time clock and Go's reads it without unsafe code or dependencies.
+
 Plausible future cases (examples, not decisions):
 
 - the tree-sitter runtime and generated grammars (C) for long-tail languages in V2 or V3;
@@ -264,7 +266,8 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | Golden-file and snapshot testing | Development | Build | Small, and the update workflow must match [TESTING.md](TESTING.md) |
 | Benchmarks | Development | Build: a small standard-library harness with a counting allocator (`D-040`, implemented as `tools/frameshift-bench`). Statistics-based tools are evaluated again for M11. | The standard benchmark attribute is not stable, and criterion does not measure memory |
 | Fuzzing | Development | Build: a coverage-guided fuzzer with stable SanitizerCoverage instrumentation, a purpose-built runtime, and a purpose-built mutator (`D-044`, implemented as `tools/frameshift-fuzz`). cargo-fuzz was not adopted, because it needs a nightly toolchain and a C++ build. | Mandatory for every parser of untrusted input. The instrumentation works with the pinned stable toolchain on Windows; Linux and macOS are not yet validated. |
-| Formatting and linting | Development | rustfmt and Clippy (part of the toolchain) | Lints are configured, not just defaults |
+| Processor-time measurement for budget runs | Development | Build in Go with its standard library (`D-046`, implemented as `tools/frameshift-cputime`) | The Rust standard library has no processor-time clock. Go's standard library reads the times of a process tree on Windows and Linux without unsafe code. |
+| Formatting and linting | Development | rustfmt and Clippy (part of the toolchain); `gofmt` and `go vet` for the Go helper | Lints are configured, not just defaults |
 | Dependency audits and vulnerability scanning | Development | Evaluate cargo-audit and cargo-deny | Also checks licenses and duplicate dependencies |
 | Release automation | CI | Release Please action, GitHub CLI | Pinned (see [RELEASES.md](RELEASES.md)) |
 | Headless browser for runtime verification and fixture checks | External verification tool and development | User-installed external tool, never bundled. Tool and check protocol decided in M10. | Explicit execution authorization is required for product verification. |
