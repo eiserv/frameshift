@@ -1321,6 +1321,22 @@ impl<'source> SyntaxTree<'source> {
         Some(children)
     }
 
+    /// Returns the StringValue of a [`SyntaxNodeKind::StringLiteral`] node,
+    /// with every escape decoded. Returns `None` for any other node, an ID
+    /// outside this tree, or a value with an unpaired surrogate escape, which
+    /// a Rust string cannot represent.
+    pub fn string_literal_value(&self, id: NodeId) -> Option<String> {
+        let node = self.node(id)?;
+        if !matches!(node.kind, SyntaxNodeKind::StringLiteral) {
+            return None;
+        }
+        let spelling = self.source.slice(node.span).ok()?;
+        if !crate::value::string_literal_is_well_formed(spelling) {
+            return None;
+        }
+        Some(crate::value::string_literal_value(spelling))
+    }
+
     /// Returns comments encountered while parsing, in source order.
     pub fn comments(&self) -> &[crate::Comment] {
         &self.comments

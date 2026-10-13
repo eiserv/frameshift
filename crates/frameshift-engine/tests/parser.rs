@@ -372,3 +372,24 @@ fn trailing_tokens_and_invalid_source_offsets_do_not_return_partial_trees() {
         ParseErrorKind::Lexical(LexicalErrorKind::InvalidOffset(_))
     ));
 }
+
+#[test]
+fn string_literal_values_decode_escapes_and_reject_other_nodes() {
+    let input = source("['a\\x41\\u{1F600}\\n', \"b\", '\\uD800', c]");
+    let tree =
+        parse_js_expression(&input, 0, JsDialect::JavaScript, ParseLimits::default()).unwrap();
+    let SyntaxNodeKind::ArrayExpression { elements, .. } = tree.node(tree.root()).unwrap().kind()
+    else {
+        panic!("expected an array literal");
+    };
+    let elements = tree.children(elements).unwrap();
+    assert_eq!(
+        tree.string_literal_value(elements[0]).as_deref(),
+        Some("aA\u{1F600}\n")
+    );
+    assert_eq!(tree.string_literal_value(elements[1]).as_deref(), Some("b"));
+    // An unpaired surrogate has no Rust string representation.
+    assert_eq!(tree.string_literal_value(elements[2]), None);
+    assert_eq!(tree.string_literal_value(elements[3]), None);
+    assert_eq!(tree.string_literal_value(tree.root()), None);
+}
