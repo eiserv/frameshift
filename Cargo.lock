@@ -35,6 +35,19 @@ name = "frameshift-entity-gen"
 version = "0.0.0"
 
 [[package]]
+name = "frameshift-fuzz"
+version = "0.0.0"
+dependencies = [
+ "frameshift-corpus",
+ "frameshift-engine",
+ "frameshift-fuzz-sections",
+]
+
+[[package]]
+name = "frameshift-fuzz-sections"
+version = "0.0.0"
+
+[[package]]
 name = "frameshift-syntax"
 version = "0.0.0"
 dependencies = [

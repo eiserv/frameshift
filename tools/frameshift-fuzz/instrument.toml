@@ -1,0 +1,20 @@
+# Cargo configuration for coverage-instrumented builds of frameshift-fuzz
+# (D-044). Pass it with `--config tools/frameshift-fuzz/instrument.toml` and
+# a separate `--target-dir`, so ordinary builds keep their artifacts.
+#
+# The sancov pass of the pinned stable rustc gives every basic block an 8-bit
+# counter. One code generation unit per crate is required: with several, the
+# local ThinLTO step removes functions after instrumentation, and LLVM aborts
+# on the COMDAT associations of their counters. Overflow checks and debug
+# assertions turn silent arithmetic or invariant errors into findings. The
+# RUSTFLAGS environment variable overrides this configuration, and the
+# worker then refuses to run because no counters are registered.
+[build]
+rustflags = [
+    "-Cpasses=sancov-module",
+    "-Cllvm-args=-sanitizer-coverage-level=3",
+    "-Cllvm-args=-sanitizer-coverage-inline-8bit-counters",
+    "-Ccodegen-units=1",
+    "-Coverflow-checks=on",
+    "-Cdebug-assertions=on",
+]

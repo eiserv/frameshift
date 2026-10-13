@@ -1,0 +1,16 @@
+[package]
+name = "frameshift-fuzz-sections"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# Two section markers need the unsafe attributes `no_mangle` and
+# `link_section`, so this development-only crate cannot inherit the
+# workspace's `forbid`. It repeats the other workspace lints unchanged
+# (D-044).
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+
+[lints.clippy]
+wildcard_enum_match_arm = "deny"
