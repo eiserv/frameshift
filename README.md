@@ -69,7 +69,7 @@ See [docs/CLI.md](docs/CLI.md) for the full specification.
 | Document | Contents |
 | --- | --- |
 | [AGENTS.md](AGENTS.md) | Binding instructions for all agents working on this repository |
-| [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | Existing code, text contracts, limits, and development commands |
+| [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | Existing code, text contracts, limits, development commands, and E1 evidence |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Pipeline, subsystems, project model, rule engine, planning, safe execution, verification, limits |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Stages, milestones, dependencies, acceptance criteria, risks, non-goals |
 | [docs/MIGRATION_SPEC.md](docs/MIGRATION_SPEC.md) | Next.js to Astro + Preact: strategies, compatibility matrix, examples |

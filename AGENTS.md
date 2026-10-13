@@ -15,7 +15,7 @@ These instructions are binding for every agent working on Frameshift, whatever t
 - **Implementation language.** Rust is the primary language for engine and CLI (`D-018`). Other languages are allowed only for specific, important tasks with a demonstrable quality advantage, a decision record, and the requirements in `docs/ENGINEERING.md` section 2.7 (`D-019`). Effort and time are not arguments against quality (`D-020`). The M0 workspace uses the Rust standard library only (`D-032`). Do not add dependencies or bypass the E1/E2 experiment gates without the required decisions.
 - **Documentation map.**
   - `README.md`: overview and status.
-  - `docs/IMPLEMENTATION.md`: existing modules, text contracts, limits, and local validation.
+  - `docs/IMPLEMENTATION.md`: existing modules, text contracts, limits, local validation, and E1 evidence, including the draft maintainability review.
   - `docs/ARCHITECTURE.md`: pipeline, subsystem layers, project model, rule engine, planning, safe execution, verification levels, limits.
   - `docs/ROADMAP.md`: stages V1 to V3, milestones M0 to M24 and V3 tracks, acceptance criteria.
   - `docs/MIGRATION_SPEC.md`: the Next.js to Astro + Preact path and its compatibility matrix.
