@@ -164,7 +164,7 @@ The language is decided. Two experiments validate the core techniques before mil
   - At least 99 percent of corpus files parse.
   - Every failure is explained by syntax not yet implemented, never by a design flaw.
   - Span correctness is checked by slicing tests.
-  - Throughput of at least 30 MB/s per core.
+  - Throughput of at least 30 MB/s per core. For E1, this and the memory criterion are judged on the development machine; reference-hardware checks of all budgets follow before releases (`D-047`, section 4.3).
   - Peak heap demand of at most 20 times the total source bytes of each corpus with every source text and tree retained (`D-045`). Per-file peaks remain diagnostics; an all-empty corpus has no comparable ratio.
   - Fuzzing for a fixed CPU budget of one CPU-hour per fuzz target (`D-044`) finds no crashes, hangs, or contract violations.
   - A documented review concludes that the arena, visitor, and pattern-matching design is maintainable and extensible to further languages.
