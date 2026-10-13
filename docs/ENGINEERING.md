@@ -1,6 +1,6 @@
 # Engineering
 
-**Status: guidance and decisions with M0 in progress.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text, position primitives, parser-directed JavaScript scanners, regular-expression validation, identifier classification from generated Unicode 18.0.0 tables, a JavaScript parser with an arena tree for complete Script and Module source text, and the span edit core exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
+**Status: guidance and decisions with M0 complete.** Rust 1.98.0, rustfmt, and Clippy are pinned (`D-032`). Immutable source text, position primitives, parser-directed JavaScript scanners, regular-expression validation, identifier classification from generated Unicode 18.0.0 tables, a JavaScript parser with an arena tree for complete Script and Module source text, the span edit core, and the Astro component printer exist, with no external crates. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for actual modules, limits, and commands. This document records the implementation language decision, defines the build-versus-adopt policy for dependencies, sets performance goals, and establishes engineering conventions for future work. Rust is the accepted primary language (`D-018`). Other languages may be used for specific, important tasks under the rules in section 2.7 (`D-019`). Other recommendations are recorded as "Proposed" in [DECISIONS.md](DECISIONS.md) until accepted.
 
 ## 1. Engineering principles
 
@@ -179,6 +179,7 @@ The language is decided. Two experiments validate the core techniques before mil
   - Provenance records map every output region back to its source.
   - Astro builds the output with the pinned target profile.
   - The result confirms or refutes the assumption that a span-precise AST is enough without a concrete syntax tree (`P-003`).
+- Result (2026-10-13): passed on Windows x86_64 and Linux x86_64, with macOS byte identity shown by M1 CI, and `P-003` is accepted (`D-048`, `D-049`, section 11 of [IMPLEMENTATION.md](IMPLEMENTATION.md)).
 
 Later experiments, run before the milestones that depend on them, are listed in [DECISIONS.md](DECISIONS.md): E3 (static evaluation coverage), E4 (static output comparison), and E5 (draft and immutable release flow).
 
@@ -260,6 +261,7 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | Argument parsing | Runtime | Build | Small, and the CLI contract must be exact |
 | Terminal detection and color | Runtime | Build on the standard library | Terminal detection is in the standard library. Colors are plain ANSI sequences honoring `NO_COLOR`. |
 | Text diff for previews | Runtime | Build if needed | Myers' algorithm |
+| Astro component printer and JSX conversion | Runtime | Build (`D-048`, implemented in `frameshift-emit`) | Canonical output with exact provenance and fail-closed conversion; no formatter or Astro tooling runs during migration |
 | HTML parsing for static output comparison | Runtime (verification) | Evaluate an established HTML5 parser (for example html5ever) against building (E4, `Q-005`) | The HTML5 parsing algorithm is large but fully specified |
 | tree-sitter runtime and grammars | Runtime (V2 or later) | Evaluate when multi-language support starts (`D-019`) | C code compiled into the binary. Needs fuzzing and sanitizer runs. |
 | Unit and integration tests | Development | Standard toolchain | |

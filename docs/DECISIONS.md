@@ -55,9 +55,11 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-045 | E1 memory budget applies to the retained whole corpus | Accepted |
 | D-046 | Go helper for processor-time measurement | Accepted |
 | D-047 | E1 closure: accepted maintainability review and throughput on the development machine | Accepted |
+| D-048 | E2 structure: an output-layer printer crate, a development driver, a pinned Astro build, and Linux test runs | Accepted |
+| D-049 | E2 closure and the end of M0 | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
-| P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Proposed |
+| P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
 | P-004 | MVP project model instead of a universal IR | Accepted |
 | P-005 | Phase separation and recomputed plans | Accepted |
 | P-006 | Fixed kind-based weights (`weights-v1`) | Accepted |
@@ -74,7 +76,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | P-017 | Minimal relocation policy for output layout | Superseded by D-024 |
 | DF-001 to DF-012 | Deferred decisions | Deferred or resolved (see table) |
 | Q-001 to Q-013 | Open questions | Open or resolved (see table) |
-| E1 to E5 | Experiments | E1 passed; others planned |
+| E1 to E5 | Experiments | E1 and E2 passed; others planned |
 
 ## Accepted decisions
 
@@ -153,6 +155,8 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Fifteenth one-run exception (2026-10-13):** Through the Claude Code chat, the project owner explicitly authorized continuing development, recording the interview decisions, and committing and pushing directly to `main` once the agent is satisfied with the work. This run implements the `D-044` fuzzer, its first budget runs, the parser fixes that they led to, and the draft of the E1 maintainability review. This exception has the same limits as the first one.
 
 - **Sixteenth one-run exception (2026-10-13):** Through the Claude Code chat, the project owner explicitly authorized continuing development, recording the interview decisions, and committing and pushing directly to `main` once the agent is satisfied with the work. This run implements the follow-up work of the E1 maintainability review, the `D-046` helper, the span comparison with the pinned TypeScript compiler, and the fuzzing budget run under `D-047`. This exception has the same limits as the first one.
+
+- **Seventeenth one-run exception (2026-10-13):** Through the Claude Code chat, the project owner explicitly authorized continuing development, recording the interview decisions, and committing and pushing directly to `main` once the agent is satisfied with the work. This run implements experiment E2 under `D-048` and records its closure in `D-049`. This exception has the same limits as the first one.
 
 ### D-011: Release management with Release Please
 
@@ -480,6 +484,30 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale:** A desktop measurement under controlled conditions is reproducible evidence for the design question that E1 answers, linear parsing with sufficient headroom, while measurements under throttling are not. The reference-hardware check stays mandatory before a release.
 - **Tradeoffs:** The desktop is faster per core than the reference laptop, so the TypeScript dialects, which parse at about 70 percent of the speed of JavaScript, may still miss 30 MB/s on reference hardware. That risk is accepted until M11, where a miss leads to a throughput increment before 1.0.0.
 
+### D-048: E2 structure: an output-layer printer crate, a development driver, a pinned Astro build, and Linux test runs
+
+- **Status:** Accepted (2026-10-13), confirmed by the project owner through the Claude Code question interface.
+- **Context:** E1 passed (`D-047`), so experiment E2 was the remaining M0 gate. Open were where its code lives, how much of the printer it builds, how the criterion "Astro builds the output with the pinned target profile" is checked without making Astro part of the repository, and how byte identity across operating systems is shown on a Windows development machine.
+- **Decision:**
+  - A product crate of the output layer, `crates/frameshift-emit`, holds the Astro component model and printer, the conversion of React JSX into that model, and emitted text with multi-source provenance, so that M7 builds on it. A development-only tool, `tools/frameshift-e2`, wires the transformations of the three E2 fixtures by hand: it anticipates neither the rule engine nor the planner (M6, M7).
+  - The JSX conversion covers the subset of section 9.3 of [MIGRATION_SPEC.md](MIGRATION_SPEC.md) in general, not only what the fixtures use, and fails closed with a typed error on everything else.
+  - The target profile `astro7-preact10` is installed with npm outside the repository, with install scripts disabled, and `astro build` runs only on the generated fictional outputs. The versions are those of 2026-10-13: `astro` 7.3.8, `@astrojs/preact` 6.0.6, `preact` 10.29.8, and `@preact/compat` 18.3.2 as the `react` and `react-dom` aliases. Preact 11.0 became stable on 2026-09-30, but `@astrojs/preact` 6.0.6 declares `preact` `^10.6.5` as its peer, so `D-028` keeps Preact 10. The resulting `package-lock.json` had 162,184 bytes and the SHA-256 hash `082ff1022bdc505faecd94630b0aa67f4a0ea1421bb3684d4453065763e8e84e`. Astro is a development-time check, not part of the repository, any test, or the build.
+  - The pinned Rust 1.98.0 gains the `x86_64-unknown-linux-musl` standard library through `rustup target add`. Test binaries are linked statically with the bundled `rust-lld` and run on Linux x86_64 in a WSL distribution against the same golden files. macOS follows with the M1 CI.
+- **Rationale (`D-033`):** A printer that only a throwaway tool contained would have to be rebuilt in M7, while hand-wired fixture transformations keep the experiment from fixing rule and plan contracts before M5 and M6 define them. A general converter tests the design question of E2, whether span-precise trees and targeted printers suffice, on the whole V1 subset. Building with the real compiler is the only way to confirm that the output is valid Astro. Static musl binaries need no Linux toolchain on the development machine.
+- **Tradeoffs:** The E2 tool duplicates some analysis that rules will own later and is replaced by them. The Astro check needs network access once and a Node.js installation, and it executes Astro's code on Frameshift-generated fictional projects only. Linux runs cover x86_64 with musl, not glibc or ARM64.
+- **Implemented contract:** sections 10 and 11 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
+- **Revisit if:** the target profile changes (`D-028`), M7 replaces the hand-wired transformations with rules, or M1 CI provides native runs on every tier 1 platform.
+
+### D-049: E2 closure and the end of M0
+
+- **Status:** Accepted (2026-10-13), confirmed by the project owner through the Claude Code question interface.
+- **Context:** The E2 run met every criterion of section 2.8 of [ENGINEERING.md](ENGINEERING.md) on Windows x86_64 and Linux x86_64. No macOS machine was available. M0 also lists the setup of branch protection on `main`, which would end the one-run direct pushes of `D-010`.
+- **Decision:**
+  - E2 passed, and `P-003` is accepted: span-precise syntax trees with the per-file comment list, span edits, and targeted printers suffice for V1; no concrete syntax tree is needed. Byte identity on macOS is shown by the cross-platform CI of M1.
+  - Branch protection is set up together with the CI status checks of M1, not in M0. With E1 and E2 passed and `P-002` and `P-003` accepted, M0 is complete, and M1 is next.
+- **Rationale:** Windows and Linux already differ in path separators, line-ending defaults, and the C runtime, and both produced identical bytes; the printer reads no platform state. Branch protection without required checks would add no assurance.
+- **Tradeoffs:** A macOS-specific difference would surface only in M1. Until M1, `main` stays unprotected and relies on the integration workflow of `D-010`.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
@@ -499,9 +527,10 @@ Statuses change through an edit to this file under the integration workflow in D
 
 ### P-003: Span-based edits and targeted printers; no concrete syntax tree initially
 
-- **Status:** Proposed (2026-10-11). Depends on E2.
+- **Status:** Accepted (2026-10-13). E2 passed under `D-049`, which the project owner confirmed.
 - **Proposal:** A span-precise abstract syntax tree plus the original text. Code changes are non-overlapping span edits, and new files come from printers that embed source slices. A lossless concrete syntax tree is the fallback.
 - **Rationale:** Preserves formatting and comments in unchanged code with less machinery than a concrete syntax tree.
+- **Evidence (E2):** Rewritten files are byte-exact outside their edits, printed files copy expressions, statements, and comments as source slices, and the per-file comment list together with node spans accounts for every comment, so dropping one is detected and rejected. What a concrete syntax tree would add, trivia attached to tokens, was needed nowhere: canonical printing of markup regenerates tags anyway, and comments inside a regenerated tag fail closed instead of being moved.
 
 ### P-004: MVP project model instead of a universal IR
 
@@ -631,6 +660,8 @@ Statuses change through an edit to this file under the integration workflow in D
 Detailed success criteria for E1 and E2 are in section 2.8 of [ENGINEERING.md](ENGINEERING.md). Experiment results are recorded here together with the decisions they inform.
 
 **E1 progress (2026-10-13):** Parser-directed JavaScript trivia, strict-string, numeric, punctuation, template, and identifier scanners are implemented in the framework-independent syntax crate, exposed through the engine facade, and tested with fictional inputs. Exact spans, comment ordering, newline evidence, typed errors, tagged invalid-escape evidence, and explicit local limits are covered. This prepares parser-controlled lexical goals without guessing JSX, regular-expression, or template contexts. The template increment was selected through the question interface (`D-035`). Identifier characters are now classified with tables generated from pinned Unicode 18.0.0 data, which replaced the conservative numeric boundary error (`D-036`). Regular-expression literals are scanned and completely validated, including Annex B without the `u` or `v` flag and property names from pinned Unicode data (`D-037`). A recursive-descent parser and flat syntax-node arena cover the expression grammar, including destructuring through in-place cover-grammar reinterpretation (`D-038`), and complete Script and Module source text with statements, functions, classes, modules, sloppy mode, Annex B, and all early errors through transient scopes, with source spans, comments, and explicit resource limits (`D-039`). An explicit JSX dialect adds the complete grammar of the JSX specification, compared with `@babel/parser` on generated fictional programs (`D-041`), and the TypeScript and TSX dialects add the type, declaration, and expression grammar of the pinned compiler with structured type nodes, compared with `typescript` 6.0.3 on generated and hand-picked fictional inputs (`D-042`). The measurement harness (`D-040`) first measured 11.5 MB/s on a generated 10.3 MB corpus on an Intel Core i9-14900K, below the budget of 30 MB/s per core. After the throughput increment, the parser reaches 68.4 MB/s there, with 9.7 times the source size in heap when all trees are retained, within the budget of 20 (section 6 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). These figures come from a desktop processor, not the reference hardware; the JSX increment left them unchanged, and a generated JSX component corpus parses at 70.9 MB/s with 10.5 times the source size retained. The `D-043` increment added a generated TypeScript corpus, which parses at 49.0 MB/s with 12.4 times its size retained, and a sample of 13,292 real files from twelve approved Next.js projects, of which 99.92 percent parse, every rejection is explained, and no accepted file is rejected by the oracles; it parses at 93.5 MB/s with 8.7 times its size retained. Seven grammar differences found on the way are fixed. A coverage-guided fuzzer exists (`D-044`); its first runs found no crash or contract violation and exposed two cases of exponential speculation in the TypeScript dialects, which are fixed. The run of 2026-10-13 completed E1 under `D-047`: the project owner accepted the maintainability review (section 8 of [IMPLEMENTATION.md](IMPLEMENTATION.md)) and its follow-up work was done; 5,594,635 node spans agreed with the pinned TypeScript compiler on generated and real files, with one defect fixed and seven documented representational differences; and a fuzzing budget run measured more than one CPU-hour per target with the `D-046` helper and found nothing on the final commit, after the new token boundary contract had exposed span defects in the TypeScript dialects, which are fixed. On the development desktop, the final parser parses the generated JavaScript, JSX, and TypeScript corpora at 71.7, 71.9, and 47.2 MB/s and the accepted files of the real-world sample at 94.8 MB/s (minimum of five passes), with whole-corpus peaks of 9.7, 10.5, 12.4, and 8.7 times the source size (section 6 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). The corpus-check follow-up validates all 3,000 generated files through the public facade, with byte-identical output across two runs; all 175 current tests pass on Linux x86_64. Whole-corpus peaks are 9.7x for JavaScript, 10.5x for JSX, and 12.4x for the TypeScript corpus on the managed virtual machine, within the `D-045` budget. E1 passed, and P-002 is accepted. Reference-hardware measurements follow in M11 (`D-047`). Contracts and validation are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md).
+
+**E2 result (2026-10-13, `D-048`, `D-049`):** The output-layer crate `frameshift-emit` and the driver `tools/frameshift-e2` migrate three fictional fixtures, a static page with links, a layout with static metadata and a server component, and a client counter island, to 17 output files. Untouched regions keep their comments and formatting byte for byte: the island file differs from its source only by the removed directive, and every comment of the converted modules is copied, which the driver checks. Repeated runs produce identical outputs and provenance, and all 228 tests, including the byte-for-byte comparison with the golden files, pass on Windows x86_64 and on Linux x86_64 (static musl binaries in WSL). Every output byte maps to a copied source span or to the source construct it was generated for, as a provenance listing per fixture records. `astro build` with the `astro7-preact10` profile builds all three outputs; a review by hand found their HTML to match the markup that the source components render, including the head that Next.js adds (Next.js itself was not run), and the built island hydrated and counted in a browser. The experiment exposed three facts that the printer now encodes: the Astro 7 compiler applies JSX whitespace rules outside `pre` and other whitespace-sensitive elements, it passes character references through to HTML, which decodes names that JSX keeps literal, and it renders values such as a child `true`, numeric `style` values, and boolean values of non-boolean attributes differently from React. Details are in sections 10 and 11 of [IMPLEMENTATION.md](IMPLEMENTATION.md). macOS validation follows with M1 CI.
 
 ## Template for new entries
 

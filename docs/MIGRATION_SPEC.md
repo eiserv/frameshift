@@ -1,6 +1,6 @@
 # Migration Specification: Next.js to Astro + Preact
 
-**Status: specification.** Nothing here is implemented. This document specifies the first migration path, `nextjs-to-astro-preact` (`D-007`). Framework facts reflect the state of October 2026 and must be re-verified when the corresponding rules are implemented. Items marked as proposals are not yet decided: see [DECISIONS.md](DECISIONS.md).
+**Status: specification.** No migration rule is implemented. The output layer converts the JSX subset of section 9.3 and prints Astro components, which experiment E2 applied to fictional fixtures ([IMPLEMENTATION.md](IMPLEMENTATION.md), sections 10 and 11). This document specifies the first migration path, `nextjs-to-astro-preact` (`D-007`). Framework facts reflect the state of October 2026 and must be re-verified when the corresponding rules are implemented. Items marked as proposals are not yet decided: see [DECISIONS.md](DECISIONS.md).
 
 ## 1. Purpose and goals
 
@@ -46,9 +46,9 @@ At the time of writing, Next.js 16 is the current major version (16.3 was releas
 | Framework | Astro with the `@astrojs/preact` integration. |
 | Output | Static (`output: 'static'`). No server adapter. |
 | Islands | Preact components hydrated with Astro client directives. |
-| Target profile | `astro7-preact10`. It pins tested versions of Astro 7.x, `@astrojs/preact`, Preact 10.x, and `@preact/compat`. Each release supports one profile for the current Astro major. Preact 11 is pre-release at the time of writing and is adopted only once it is stable, officially supported by `@astrojs/preact`, and passes every island fixture (`D-028`). |
+| Target profile | `astro7-preact10`. It pins tested versions of Astro 7.x, `@astrojs/preact`, Preact 10.x, and `@preact/compat`. Each release supports one profile for the current Astro major. Preact 11 has been stable since 2026-09-30, but `@astrojs/preact` 6.0.6 still declares `preact` `^10.6.5` as its peer, so Preact 11 is adopted only once it is officially supported and passes every island fixture (`D-028`). E2 used `astro` 7.3.8, `@astrojs/preact` 6.0.6, `preact` 10.29.8, and `@preact/compat` 18.3.2 (`D-048`). |
 
-Astro 7 (2026) uses a Rust-based `.astro` compiler built on oxc and Lightning CSS, runs on Vite 8 with Rolldown, applies JSX whitespace rules in templates, and turns unclosed tags into errors instead of repairing them. Frameshift's printer must therefore emit strictly well-formed templates. The JSX-style whitespace handling is helpful here, because it makes React and Astro template semantics closer.
+Astro 7 (2026) uses a Rust-based `.astro` compiler built on oxc and Lightning CSS, runs on Vite 8 with Rolldown, applies JSX whitespace rules in templates, and turns unclosed tags into errors instead of repairing them. Frameshift's printer must therefore emit strictly well-formed templates. The JSX-style whitespace handling is helpful here, because it makes React and Astro template semantics closer. E2 confirmed it with Astro 7.3.8, except that `pre` content keeps its whitespace, and found that character references pass through to HTML, which decodes names that JSX keeps literal, and that Astro renders a child `true`, numeric `style` values, and boolean values of non-boolean attributes differently from React ([IMPLEMENTATION.md](IMPLEMENTATION.md), section 10).
 
 ## 3. Classification and strategies
 
@@ -238,7 +238,7 @@ All of the following must hold:
 3. Props are a destructuring pattern or a single props identifier. Rest elements are allowed.
 4. The body consists of statements followed by a single final `return` of JSX. No early returns.
 5. The body does not use React element APIs (`Children`, `cloneElement`, `isValidElement`, `createElement`).
-6. The JSX uses only supported constructs: intrinsic elements, fragments, expression containers, `&&` and ternary conditionals, `.map()` callbacks returning JSX, spread attributes, `className` and `htmlFor` (converted to `class` and `for`), `style` objects, `dangerouslySetInnerHTML` (converted to `set:html`), and `key` (removed). `children` may be used only as a direct JSX child expression and becomes `<slot />`.
+6. The JSX uses only supported constructs: intrinsic elements, fragments, expression containers, `&&` and ternary conditionals, `.map()` callbacks returning JSX, spread attributes, `className` and `htmlFor` (converted to `class` and `for`), `style` objects, `dangerouslySetInnerHTML` (converted to `set:html`), and `key` (removed). `children` may be used only as a direct JSX child expression and becomes `<slot />`. The implemented conversion ([IMPLEMENTATION.md](IMPLEMENTATION.md), section 10) narrows this list where React and Astro render differently: `style` objects need string values, attribute strings must not contain line breaks, comments inside tags are not converted, and value-dependent differences are returned as assumptions that rules classify as `review` unless they can prove them.
 7. Every JSX element type is an intrinsic element or a project component whose own strategy is known. Third-party components keep the containing component on step 2.
 8. Async functions are allowed.
 
