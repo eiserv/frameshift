@@ -296,13 +296,7 @@ impl<'source> Parser<'source> {
         if let Some(token) = self.peek_name()?
             && !token.has_escape
         {
-            let operator = match token.reserved_word {
-                Some(ReservedWord::Typeof) => Some(UnaryOperator::Typeof),
-                Some(ReservedWord::Void) => Some(UnaryOperator::Void),
-                Some(ReservedWord::Delete) => Some(UnaryOperator::Delete),
-                _ => None,
-            };
-            if let Some(operator) = operator {
+            if let Some(operator) = token.reserved_word.and_then(unary_keyword_operator) {
                 self.consume_token(token.span)?;
                 // Exponentiation binds more tightly than a prefix operator.
                 // Stopping below its precedence lets the outer expression
@@ -896,10 +890,13 @@ impl<'source> Parser<'source> {
         let next = self
             .peek_punctuator(self.goal_after_expression())?
             .map(|token| token.kind);
-        let permission = match next {
-            Some(Punctuator::LeftParen) => self.context.super_call,
-            Some(Punctuator::Dot | Punctuator::LeftBracket) => self.context.super_property,
-            _ => Permission::Denied,
+        // Any other token makes `super` invalid.
+        let permission = if next == Some(Punctuator::LeftParen) {
+            self.context.super_call
+        } else if matches!(next, Some(Punctuator::Dot | Punctuator::LeftBracket)) {
+            self.context.super_property
+        } else {
+            Permission::Denied
         };
         match permission {
             Permission::Allowed => {}
@@ -1330,20 +1327,19 @@ impl<'source> Parser<'source> {
         let mut trailing_comma = false;
         loop {
             let token = self.peek_punctuator(self.goal_for_expression_start())?;
-            match token.map(|token| token.kind) {
-                Some(Punctuator::RightBracket) => break,
-                Some(Punctuator::Comma) => {
-                    if let Some(comma) = token {
-                        let span = self.source_span(comma.span.start(), comma.span.start())?;
-                        let hole = self.add_node(SyntaxNodeKind::Elision, span)?;
-                        self.push_child(&mut elements, hole)?;
-                        self.consume_token(comma.span)?;
-                    }
-                    trailing_comma = false;
-                    continue;
-                }
-                _ => {}
+            if token.is_some_and(|token| token.kind == Punctuator::RightBracket) {
+                break;
             }
+            if let Some(comma) = token.filter(|token| token.kind == Punctuator::Comma) {
+                let span = self.source_span(comma.span.start(), comma.span.start())?;
+                let hole = self.add_node(SyntaxNodeKind::Elision, span)?;
+                self.push_child(&mut elements, hole)?;
+                self.consume_token(comma.span)?;
+                trailing_comma = false;
+                continue;
+            }
+            // Any other token must begin an element, which `parse_element`
+            // rejects otherwise.
             let element = self.parse_element()?;
             self.push_child(&mut elements, element)?;
             trailing_comma = false;
@@ -1749,14 +1745,18 @@ impl<'source> Parser<'source> {
         if token.has_escape {
             return Ok(None);
         }
-        let (operator, precedence) = match token.reserved_word {
-            Some(ReservedWord::In) if !self.no_in => (BinaryOperator::In, 10),
-            Some(ReservedWord::Instanceof) => (BinaryOperator::Instanceof, 10),
-            _ => return Ok(None),
+        // Any other word ends the expression, and the caller rejects what
+        // cannot follow it.
+        let operator = if token.reserved_word == Some(ReservedWord::In) && !self.no_in {
+            BinaryOperator::In
+        } else if token.reserved_word == Some(ReservedWord::Instanceof) {
+            BinaryOperator::Instanceof
+        } else {
+            return Ok(None);
         };
         Ok(Some(BinaryCandidate {
             operator,
-            precedence,
+            precedence: 10,
             right_associative: false,
             span: token.span,
         }))
@@ -1884,6 +1884,20 @@ fn update_operator(kind: Punctuator) -> Option<UpdateOperator> {
         Some(UpdateOperator::Increment)
     } else if kind == Punctuator::Decrement {
         Some(UpdateOperator::Decrement)
+    } else {
+        None
+    }
+}
+
+// Other words fall through to the primary expressions, which reject the
+// reserved words they do not handle.
+fn unary_keyword_operator(word: ReservedWord) -> Option<UnaryOperator> {
+    if word == ReservedWord::Typeof {
+        Some(UnaryOperator::Typeof)
+    } else if word == ReservedWord::Void {
+        Some(UnaryOperator::Void)
+    } else if word == ReservedWord::Delete {
+        Some(UnaryOperator::Delete)
     } else {
         None
     }
