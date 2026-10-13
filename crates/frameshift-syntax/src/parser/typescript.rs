@@ -199,6 +199,9 @@ impl Parser<'_> {
         if !predicate {
             return self.ts_type(!self.ts_disallow_conditional);
         }
+        // The lookahead restored the cursor to before the trivia that follows
+        // the colon.
+        self.skip_trivia()?;
         let start = self.cursor;
         let asserts = self.consume_word("asserts")?.is_some();
         let name = self.ts_name(false)?;

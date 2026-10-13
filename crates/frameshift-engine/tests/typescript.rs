@@ -20,8 +20,15 @@ fn check(text: &str, dialect: JsDialect) {
     while let Some(id) = stack.pop() {
         assert!(!reached[id.index()], "shared node: {text}");
         reached[id.index()] = true;
-        let parent = tree.node(id).unwrap().span();
-        source.slice(parent).unwrap();
+        let node = tree.node(id).unwrap();
+        let parent = node.span();
+        let spelling = source.slice(parent).unwrap();
+        if !matches!(
+            node.kind(),
+            SyntaxNodeKind::Program { .. } | SyntaxNodeKind::JsxText
+        ) {
+            assert_eq!(spelling.trim(), spelling, "trivia in {parent:?}: {text}");
+        }
         let mut previous = parent.start();
         for child in tree.child_nodes(id).unwrap() {
             let span = tree.node(child).unwrap().span();
@@ -598,6 +605,58 @@ fn type_arguments_and_function_types_do_not_repeat_speculation() {
         .unwrap()
         .join()
         .unwrap();
+}
+
+// A type predicate in a return type started before the whitespace after the
+// colon, because the lookahead that recognizes it restored the cursor to
+// before that trivia. The comparison of spans with the pinned compiler found
+// it on the generated corpus.
+#[test]
+fn type_predicates_start_at_their_first_token() {
+    for (text, predicate) in [
+        (
+            "function isText(value: unknown):  value is string { return true; }",
+            "value is string",
+        ),
+        (
+            "function check(value: unknown): /* c */\n asserts value is string {}",
+            "asserts value is string",
+        ),
+        (
+            "function check(value: unknown):\tasserts value {}",
+            "asserts value",
+        ),
+        ("type Guard = (x: unknown) =>  x is number;", "x is number"),
+        (
+            "class Box { has(): this is Full { return true; } }",
+            "this is Full",
+        ),
+    ] {
+        check(text, JsDialect::TypeScript);
+        let source = input(text);
+        let tree = parse_js_program(
+            &source,
+            SourceGoal::Module,
+            JsDialect::TypeScript,
+            ParseLimits::default(),
+        )
+        .unwrap();
+        let spans: Vec<_> = tree
+            .nodes()
+            .iter()
+            .filter(|node| {
+                matches!(
+                    node.kind(),
+                    SyntaxNodeKind::TypeScript {
+                        kind: Ts::Predicate { .. },
+                        ..
+                    }
+                )
+            })
+            .map(|node| source.slice(node.span()).unwrap())
+            .collect();
+        assert_eq!(spans, [predicate], "{text}");
+    }
 }
 
 // A failed speculation restores every parser field it can change. A namespace
