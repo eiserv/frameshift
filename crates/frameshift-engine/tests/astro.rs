@@ -33,15 +33,18 @@ impl ElementResolver for Resolver {
     }
 }
 
-// Finds the expression of the first `return` statement in the program.
+// Finds the expression of the first `return` statement in source order,
+// iteratively, so that deep trees cannot overflow the test's stack.
 fn returned(tree: &SyntaxTree<'_>) -> NodeId {
-    fn find(tree: &SyntaxTree<'_>, id: NodeId) -> Option<NodeId> {
-        if let SyntaxNodeKind::ReturnStatement { argument } = tree.node(id)?.kind() {
-            return argument;
+    let mut stack = vec![tree.root()];
+    while let Some(id) = stack.pop() {
+        if let SyntaxNodeKind::ReturnStatement { argument } = tree.node(id).unwrap().kind() {
+            return argument.expect("a returned expression");
         }
-        tree.child_nodes(id)?.find_map(|child| find(tree, child))
+        let children: Vec<NodeId> = tree.child_nodes(id).unwrap().collect();
+        stack.extend(children.into_iter().rev());
     }
-    find(tree, tree.root()).expect("a return statement")
+    panic!("a return statement")
 }
 
 fn parse(text: &SourceText) -> SyntaxTree<'_> {
@@ -416,4 +419,25 @@ fn expression_pieces_print_generated_identifiers() {
     .unwrap();
     assert_eq!(emitted.as_str(), "{titlex}\n");
     emitted.verify(&[&text]).unwrap();
+}
+
+#[test]
+fn long_member_chains_neither_recurse_nor_overflow() {
+    // The parser builds member chains without nesting, so a chain is limited
+    // only by the node limit. Every walk of the conversion is iterative, so a
+    // small stack suffices even in debug builds.
+    let chain = format!("items{}", ".next".repeat(20_000));
+    let handle = std::thread::Builder::new()
+        .stack_size(256 * 1024)
+        .spawn(move || {
+            let key = component(&format!("    <ul><li key={{{chain}}}>x</li></ul>"));
+            let markup = convert(&key, None).unwrap();
+            assert!(markup.assumptions.is_empty());
+            let child = component(&format!("    <p>{{{chain}}}</p>"));
+            let markup = convert(&child, Some("children")).unwrap();
+            let kinds: Vec<AssumptionKind> = markup.assumptions.iter().map(|a| a.kind).collect();
+            assert_eq!(kinds, [AssumptionKind::ChildNotTrue]);
+        })
+        .unwrap();
+    handle.join().unwrap();
 }

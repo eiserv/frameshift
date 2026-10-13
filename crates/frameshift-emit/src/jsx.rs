@@ -270,7 +270,7 @@ pub fn convert_jsx(
     let root = converter.unparenthesize(node)?;
     let root_span = converter.span(root)?;
     if let Some(binding) = conversion.children_binding {
-        converter.check_children_binding(root, binding, 0)?;
+        converter.check_children_binding(root, binding)?;
     }
     let root_kind = converter.kind(root)?;
     let nodes = if matches!(root_kind, SyntaxNodeKind::JsxElement { .. }) {
@@ -293,10 +293,6 @@ pub fn convert_jsx(
         copied: converter.copied,
     })
 }
-
-// Tree walks inside expressions may pass several syntax levels per level of
-// markup nesting.
-const WALK_LEVELS_PER_DEPTH: usize = 4;
 
 struct Converter<'t, 'r, 'c> {
     tree: &'t SyntaxTree<'t>,
@@ -372,18 +368,6 @@ impl<'t> Converter<'t, '_, '_> {
 
     fn depth_check(&self, depth: usize, span: Span) -> Result<(), ConvertError> {
         if depth > self.conversion.max_depth {
-            Err(self.error(ConvertErrorKind::TooDeep, span))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn walk_check(&self, level: usize, span: Span) -> Result<(), ConvertError> {
-        let limit = self
-            .conversion
-            .max_depth
-            .saturating_mul(WALK_LEVELS_PER_DEPTH);
-        if level > limit {
             Err(self.error(ConvertErrorKind::TooDeep, span))
         } else {
             Ok(())
@@ -805,7 +789,7 @@ impl<'t> Converter<'t, '_, '_> {
                     });
                     continue;
                 }
-                if !self.is_safe_child(expression, 0)? {
+                if !self.is_safe_child(expression)? {
                     self.assume(AssumptionKind::ChildNotTrue, span);
                 }
                 nodes.push(TemplateNode::Expression(self.container(child, depth)?));
@@ -885,7 +869,7 @@ impl<'t> Converter<'t, '_, '_> {
     ) -> Result<Expression, ConvertError> {
         self.depth_check(depth, anchor_span)?;
         let mut markup = Vec::new();
-        self.find_markup(start, inner, &mut markup, 0)?;
+        self.find_markup(start, inner, &mut markup)?;
         let mut pieces = Vec::new();
         let mut offset = inner.start();
         for jsx in markup {
@@ -918,32 +902,37 @@ impl<'t> Converter<'t, '_, '_> {
         })
     }
 
-    // Collects, in source order, the outermost JSX nodes inside `range`.
+    // Collects, in source order, the outermost JSX nodes inside `range`. The
+    // walk uses an explicit stack, because expression trees such as member
+    // chains are not bounded by the parser's nesting limit.
     fn find_markup(
         &self,
-        id: NodeId,
+        start: NodeId,
         range: Span,
         found: &mut Vec<NodeId>,
-        level: usize,
     ) -> Result<(), ConvertError> {
-        let span = self.span(id)?;
-        if span.end() <= range.start() || span.start() >= range.end() {
-            return Ok(());
-        }
-        self.walk_check(level, span)?;
-        let inside = span.start() >= range.start() && span.end() <= range.end();
-        if inside
-            && matches!(
-                self.kind(id)?,
-                SyntaxNodeKind::JsxElement { .. } | SyntaxNodeKind::JsxFragment { .. }
-            )
-        {
-            found.push(id);
-            return Ok(());
-        }
-        let children = self.tree.child_nodes(id).ok_or_else(|| self.invalid())?;
-        for child in children {
-            self.find_markup(child, range, found, level + 1)?;
+        let mut stack = vec![start];
+        while let Some(id) = stack.pop() {
+            let span = self.span(id)?;
+            if span.end() <= range.start() || span.start() >= range.end() {
+                continue;
+            }
+            let inside = span.start() >= range.start() && span.end() <= range.end();
+            if inside
+                && matches!(
+                    self.kind(id)?,
+                    SyntaxNodeKind::JsxElement { .. } | SyntaxNodeKind::JsxFragment { .. }
+                )
+            {
+                found.push(id);
+                continue;
+            }
+            let children: Vec<NodeId> = self
+                .tree
+                .child_nodes(id)
+                .ok_or_else(|| self.invalid())?
+                .collect();
+            stack.extend(children.into_iter().rev());
         }
         Ok(())
     }
@@ -994,27 +983,37 @@ impl<'t> Converter<'t, '_, '_> {
 
     // Rejects any use of the children binding other than a whole child
     // expression, and any rebinding of its name inside the markup. Escaped
-    // names are rejected, because they may spell the binding.
-    fn check_children_binding(
-        &self,
-        id: NodeId,
-        binding: &str,
-        level: usize,
-    ) -> Result<(), ConvertError> {
-        let span = self.span(id)?;
-        self.walk_check(level, span)?;
-        let kind = self.kind(id)?;
-        let child_list = if let SyntaxNodeKind::JsxElement { children, .. } = kind {
-            Some(children)
-        } else if let SyntaxNodeKind::JsxFragment { children, .. } = kind {
-            Some(children)
-        } else {
-            None
-        };
-        if let Some(list) = child_list {
-            let children = self.list(list)?;
+    // names are rejected, because they may spell the binding. The walk uses
+    // an explicit stack, like `find_markup`.
+    fn check_children_binding(&self, root: NodeId, binding: &str) -> Result<(), ConvertError> {
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            let span = self.span(id)?;
+            let kind = self.kind(id)?;
+            let named = |has_escape: bool| -> Result<bool, ConvertError> {
+                Ok(has_escape || self.text(span)? == binding)
+            };
+            let uses_binding = if let SyntaxNodeKind::Identifier { has_escape, .. } = kind {
+                named(has_escape)?
+            } else if let SyntaxNodeKind::BindingIdentifier { has_escape } = kind {
+                named(has_escape)?
+            } else {
+                false
+            };
+            if uses_binding {
+                return Err(self.error(ConvertErrorKind::ChildrenOutsideSlot, span));
+            }
+            let child_list = if let SyntaxNodeKind::JsxElement { children, .. } = kind {
+                Some(self.list(children)?)
+            } else if let SyntaxNodeKind::JsxFragment { children, .. } = kind {
+                Some(self.list(children)?)
+            } else {
+                None
+            };
             for child in self.tree.child_nodes(id).ok_or_else(|| self.invalid())? {
-                let allowed = if children.contains(&child)
+                // A whole child expression that is the binding becomes the slot.
+                let allowed = if let Some(children) = &child_list
+                    && children.contains(&child)
                     && let SyntaxNodeKind::JsxExpressionContainer {
                         expression: Some(expression),
                     } = self.kind(child)?
@@ -1024,117 +1023,99 @@ impl<'t> Converter<'t, '_, '_> {
                     false
                 };
                 if !allowed {
-                    self.check_children_binding(child, binding, level + 1)?;
+                    stack.push(child);
                 }
             }
-            return Ok(());
-        }
-        let named = |has_escape: bool| -> Result<bool, ConvertError> {
-            Ok(has_escape || self.text(span)? == binding)
-        };
-        let uses_binding = if let SyntaxNodeKind::Identifier { has_escape, .. } = kind {
-            named(has_escape)?
-        } else if let SyntaxNodeKind::BindingIdentifier { has_escape } = kind {
-            named(has_escape)?
-        } else {
-            false
-        };
-        if uses_binding {
-            return Err(self.error(ConvertErrorKind::ChildrenOutsideSlot, span));
-        }
-        for child in self.tree.child_nodes(id).ok_or_else(|| self.invalid())? {
-            self.check_children_binding(child, binding, level + 1)?;
         }
         Ok(())
     }
 
-    // Child expressions whose value can never be `true`.
-    fn is_safe_child(&self, id: NodeId, level: usize) -> Result<bool, ConvertError> {
-        if level > self.conversion.max_depth {
-            return Ok(false);
-        }
-        let kind = self.kind(id)?;
-        if matches!(
-            kind,
-            SyntaxNodeKind::StringLiteral
-                | SyntaxNodeKind::NumberLiteral { .. }
-                | SyntaxNodeKind::TemplateLiteral { .. }
-                | SyntaxNodeKind::NullLiteral
-                | SyntaxNodeKind::BooleanLiteral(false)
-                | SyntaxNodeKind::JsxElement { .. }
-                | SyntaxNodeKind::JsxFragment { .. }
-        ) {
-            return Ok(true);
-        }
-        if let SyntaxNodeKind::Parenthesized { expression } = kind {
-            return self.is_safe_child(expression, level + 1);
-        }
-        if let SyntaxNodeKind::Conditional {
-            consequent,
-            alternate,
-            ..
-        } = kind
-        {
-            return Ok(self.is_safe_child(consequent, level + 1)?
-                && self.is_safe_child(alternate, level + 1)?);
-        }
-        if let SyntaxNodeKind::Binary {
-            operator,
-            left,
-            right,
-        } = kind
-        {
-            return Ok(match operator {
-                // A falsy left operand is never `true`.
-                BinaryOperator::LogicalAnd | BinaryOperator::Comma => {
-                    self.is_safe_child(right, level + 1)?
+    // Child expressions whose value can never be `true`. Every rule requires
+    // all of its operands to be safe, so a worklist decides the conjunction
+    // without recursion.
+    fn is_safe_child(&self, expression: NodeId) -> Result<bool, ConvertError> {
+        let mut pending = vec![expression];
+        while let Some(id) = pending.pop() {
+            let kind = self.kind(id)?;
+            if matches!(
+                kind,
+                SyntaxNodeKind::StringLiteral
+                    | SyntaxNodeKind::NumberLiteral { .. }
+                    | SyntaxNodeKind::TemplateLiteral { .. }
+                    | SyntaxNodeKind::NullLiteral
+                    | SyntaxNodeKind::BooleanLiteral(false)
+                    | SyntaxNodeKind::JsxElement { .. }
+                    | SyntaxNodeKind::JsxFragment { .. }
+            ) {
+                continue;
+            }
+            if let SyntaxNodeKind::Parenthesized { expression } = kind {
+                pending.push(expression);
+            } else if let SyntaxNodeKind::Conditional {
+                consequent,
+                alternate,
+                ..
+            } = kind
+            {
+                pending.extend([consequent, alternate]);
+            } else if let SyntaxNodeKind::Binary {
+                operator,
+                left,
+                right,
+            } = kind
+            {
+                match operator {
+                    // A falsy left operand is never `true`.
+                    BinaryOperator::LogicalAnd | BinaryOperator::Comma => pending.push(right),
+                    BinaryOperator::LogicalOr | BinaryOperator::Nullish => {
+                        pending.extend([left, right]);
+                    }
+                    // Arithmetic and bitwise operators produce numbers or strings.
+                    BinaryOperator::Add
+                    | BinaryOperator::Subtract
+                    | BinaryOperator::Multiply
+                    | BinaryOperator::Divide
+                    | BinaryOperator::Remainder
+                    | BinaryOperator::Exponent
+                    | BinaryOperator::BitwiseOr
+                    | BinaryOperator::BitwiseXor
+                    | BinaryOperator::BitwiseAnd
+                    | BinaryOperator::ShiftLeft
+                    | BinaryOperator::ShiftRight
+                    | BinaryOperator::ShiftRightUnsigned => {}
+                    BinaryOperator::Equal
+                    | BinaryOperator::NotEqual
+                    | BinaryOperator::StrictEqual
+                    | BinaryOperator::StrictNotEqual
+                    | BinaryOperator::LessThan
+                    | BinaryOperator::GreaterThan
+                    | BinaryOperator::LessThanEqual
+                    | BinaryOperator::GreaterThanEqual
+                    | BinaryOperator::In
+                    | BinaryOperator::Instanceof => return Ok(false),
                 }
-                BinaryOperator::LogicalOr | BinaryOperator::Nullish => {
-                    self.is_safe_child(left, level + 1)? && self.is_safe_child(right, level + 1)?
-                }
-                // Arithmetic and bitwise operators produce numbers or strings.
-                BinaryOperator::Add
-                | BinaryOperator::Subtract
-                | BinaryOperator::Multiply
-                | BinaryOperator::Divide
-                | BinaryOperator::Remainder
-                | BinaryOperator::Exponent
-                | BinaryOperator::BitwiseOr
-                | BinaryOperator::BitwiseXor
-                | BinaryOperator::BitwiseAnd
-                | BinaryOperator::ShiftLeft
-                | BinaryOperator::ShiftRight
-                | BinaryOperator::ShiftRightUnsigned => true,
-                BinaryOperator::Equal
-                | BinaryOperator::NotEqual
-                | BinaryOperator::StrictEqual
-                | BinaryOperator::StrictNotEqual
-                | BinaryOperator::LessThan
-                | BinaryOperator::GreaterThan
-                | BinaryOperator::LessThanEqual
-                | BinaryOperator::GreaterThanEqual
-                | BinaryOperator::In
-                | BinaryOperator::Instanceof => false,
-            });
+            } else if let SyntaxNodeKind::Call {
+                callee,
+                arguments,
+                optional: false,
+            } = kind
+                && let Some(body) = self.mapped_body(callee, arguments)?
+            {
+                pending.push(body);
+            } else {
+                return Ok(false);
+            }
         }
-        if let SyntaxNodeKind::Call {
-            callee,
-            arguments,
-            optional: false,
-        } = kind
-        {
-            return self.is_safe_map(callee, arguments, level);
-        }
-        Ok(false)
+        Ok(true)
     }
 
-    // `items.map((item) => safe)`, an array of safe values.
-    fn is_safe_map(
+    // The expression body of the arrow in `items.map((item) => body)`, whose
+    // result is an array of `body` values.
+    fn mapped_body(
         &self,
         callee: NodeId,
         arguments: ChildList,
-        level: usize,
-    ) -> Result<bool, ConvertError> {
+    ) -> Result<Option<NodeId>, ConvertError> {
         let SyntaxNodeKind::Member {
             property,
             computed: false,
@@ -1142,22 +1123,22 @@ impl<'t> Converter<'t, '_, '_> {
             ..
         } = self.kind(callee)?
         else {
-            return Ok(false);
+            return Ok(None);
         };
         if self.node_text(property)? != "map" {
-            return Ok(false);
+            return Ok(None);
         }
         let arguments = self.list(arguments)?;
         let Some(&callback) = arguments.first() else {
-            return Ok(false);
+            return Ok(None);
         };
         let SyntaxNodeKind::ArrowFunction { body, .. } = self.kind(callback)? else {
-            return Ok(false);
+            return Ok(None);
         };
         if matches!(self.kind(body)?, SyntaxNodeKind::FunctionBody { .. }) {
-            return Ok(false);
+            return Ok(None);
         }
-        self.is_safe_child(body, level + 1)
+        Ok(Some(body))
     }
 
     fn is_string_or_number(&self, id: NodeId) -> Result<bool, ConvertError> {
@@ -1189,22 +1170,27 @@ impl<'t> Converter<'t, '_, '_> {
         ))
     }
 
-    fn is_side_effect_free(&self, id: NodeId) -> Result<bool, ConvertError> {
-        let kind = self.kind(id)?;
-        if let SyntaxNodeKind::Member {
-            object,
-            computed: false,
-            ..
-        } = kind
-        {
-            return self.is_side_effect_free(object);
+    // Member chains are walked iteratively, because the parser builds them
+    // without nesting, so their depth is bounded only by the node limit.
+    fn is_side_effect_free(&self, mut id: NodeId) -> Result<bool, ConvertError> {
+        loop {
+            let kind = self.kind(id)?;
+            if let SyntaxNodeKind::Member {
+                object,
+                computed: false,
+                ..
+            } = kind
+            {
+                id = object;
+                continue;
+            }
+            return Ok(matches!(
+                kind,
+                SyntaxNodeKind::Identifier { .. }
+                    | SyntaxNodeKind::StringLiteral
+                    | SyntaxNodeKind::NumberLiteral { .. }
+            ));
         }
-        Ok(matches!(
-            kind,
-            SyntaxNodeKind::Identifier { .. }
-                | SyntaxNodeKind::StringLiteral
-                | SyntaxNodeKind::NumberLiteral { .. }
-        ))
     }
 }
 
