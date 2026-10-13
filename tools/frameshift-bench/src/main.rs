@@ -214,7 +214,7 @@ fn run_checks(
         );
     }
     println!(
-        "checked: complete source spans, reachable source-ordered trees, template and comment spans, repeated parses, byte-exact empty edits and provenance"
+        "checked: complete source spans, reachable source-ordered trees, node spans at token boundaries, template and comment spans, repeated parses, byte-exact empty edits and provenance"
     );
     Ok(())
 }
