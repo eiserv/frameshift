@@ -597,6 +597,13 @@ impl<'source> Parser<'source> {
         self.skip_trivia()
     }
 
+    // The offset of the next token. Node spans start there, never in the
+    // trivia before it.
+    fn token_start(&mut self) -> Result<usize, ParseError> {
+        self.skip_trivia()?;
+        Ok(self.cursor)
+    }
+
     // Most calls find the trivia already skipped, so only that check is inlined.
     #[inline]
     fn skip_trivia(&mut self) -> Result<(), ParseError> {

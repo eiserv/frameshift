@@ -178,7 +178,7 @@ impl Parser<'_> {
         if !self.at_char(':')? {
             return Ok(None);
         }
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect(':')?;
         let ty = self.ts_return_type()?;
         self.ts_node(Ts::Annotation, start, &[ty]).map(Some)
@@ -201,8 +201,7 @@ impl Parser<'_> {
         }
         // The lookahead restored the cursor to before the trivia that follows
         // the colon.
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         let asserts = self.consume_word("asserts")?.is_some();
         let name = self.ts_name(false)?;
         let mut items = self.take_list();
@@ -222,7 +221,7 @@ impl Parser<'_> {
         if !self.at_char('<')? {
             return Ok(None);
         }
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect('<')?;
         let mut items = self.take_list();
         if self.at_char('>')? {
@@ -257,8 +256,7 @@ impl Parser<'_> {
     }
 
     fn ts_type_parameter(&mut self) -> Result<NodeId, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         let mut items = self.take_list();
         while (self.at_word("in")? || self.at_word("out")? || self.at_word("const")?)
             && self.lookahead(|parser| {
@@ -272,14 +270,14 @@ impl Parser<'_> {
         let name = self.ts_name(true)?;
         self.push_child(&mut items, name)?;
         if self.at_word("extends")? {
-            let start = self.cursor;
+            let start = self.token_start()?;
             self.scan_identifier()?;
             let ty = self.ts_type(true)?;
             let constraint = self.ts_node(Ts::Constraint, start, &[ty])?;
             self.push_child(&mut items, constraint)?;
         }
         if self.at_char('=')? {
-            let start = self.cursor;
+            let start = self.token_start()?;
             self.ts_expect('=')?;
             let ty = self.ts_type(true)?;
             let default = self.ts_node(Ts::DefaultType, start, &[ty])?;
@@ -291,8 +289,7 @@ impl Parser<'_> {
     }
 
     pub(super) fn ts_type_arguments(&mut self) -> Result<NodeId, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect('<')?;
         let mut items = self.take_list();
         if self.at_char('>')? {
@@ -329,8 +326,7 @@ impl Parser<'_> {
     }
 
     fn ts_type_inner(&mut self, conditional: bool) -> Result<NodeId, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         if self.ts_function_type_start()? {
             return self
                 .ts_function_type()?
@@ -363,8 +359,7 @@ impl Parser<'_> {
         kind: Ts,
         parse: fn(&mut Self) -> Result<NodeId, ParseError>,
     ) -> Result<NodeId, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         let leading = self.ts_symbol(ch)?;
         if leading && self.ts_function_type_start()? {
             return Err(self.error(self.cursor, ParseErrorKind::InvalidTypeScriptSyntax));
@@ -421,8 +416,7 @@ impl Parser<'_> {
     }
 
     fn ts_type_operator_inner(&mut self) -> Result<NodeId, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         if self.at_word("keyof")? || self.at_word("unique")? || self.at_word("readonly")? {
             self.scan_identifier()?;
             let ty = self.ts_type_operator()?;
@@ -458,8 +452,7 @@ impl Parser<'_> {
     }
 
     fn ts_postfix_type(&mut self) -> Result<NodeId, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         let mut ty = self.ts_type_primary()?;
         loop {
             if self.line_break_before_next()? {
@@ -494,8 +487,7 @@ impl Parser<'_> {
     }
 
     fn ts_type_primary(&mut self) -> Result<NodeId, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         if (self.at_word("asserts")? || self.at_word("this")?)
             && self.lookahead(|parser| {
                 let asserts = parser.at_word("asserts")?;
@@ -645,7 +637,7 @@ impl Parser<'_> {
     }
 
     fn ts_function_type(&mut self) -> Result<Option<NodeId>, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         let mut items = self.take_list();
         let abstract_modifier = self.at_word("abstract")?;
         if abstract_modifier {
@@ -692,12 +684,11 @@ impl Parser<'_> {
     }
 
     fn ts_tuple(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect('[')?;
         let mut items = self.take_list();
         while !self.at_char(']')? {
-            self.skip_trivia()?;
-            let element_start = self.cursor;
+            let element_start = self.token_start()?;
             let rest = self
                 .consume_punctuator(Punctuator::Ellipsis, self.goal_after_expression())?
                 .is_some();
@@ -752,7 +743,7 @@ impl Parser<'_> {
     }
 
     fn ts_jsdoc_function(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         let token = self.scan_identifier()?;
         if !self.ts_symbol('(')? {
             let name = self.add_node(
@@ -766,8 +757,7 @@ impl Parser<'_> {
         }
         let mut items = self.take_list();
         while !self.at_char(')')? {
-            self.skip_trivia()?;
-            let start = self.cursor;
+            let start = self.token_start()?;
             let mut children = self.take_list();
             if self.at_word("this")? || self.at_word("new")? {
                 let name = self.ts_name(false)?;
@@ -797,7 +787,7 @@ impl Parser<'_> {
     }
 
     fn ts_template_type(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         let mut items = self.take_list();
         let mut position = TemplatePosition::Start;
         loop {
@@ -838,7 +828,7 @@ impl Parser<'_> {
     }
 
     fn ts_import_type(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_word("import")?;
         self.ts_expect('(')?;
         let mut items = self.take_list();
@@ -886,7 +876,7 @@ impl Parser<'_> {
     }
 
     pub(super) fn ts_members(&mut self, kind: Ts) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect('{')?;
         let mut items = self.take_list();
         while !self.at_char('}')? {
@@ -903,11 +893,11 @@ impl Parser<'_> {
     }
 
     fn ts_mapped_type(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect('{')?;
         let mut items = self.take_list();
         if self.at_char('+')? || self.at_char('-')? || self.at_word("readonly")? {
-            let modifier_start = self.cursor;
+            let modifier_start = self.token_start()?;
             self.ts_symbol('+')?;
             self.ts_symbol('-')?;
             self.ts_word("readonly")?;
@@ -915,14 +905,14 @@ impl Parser<'_> {
             self.push_child(&mut items, modifier)?;
         }
         self.ts_expect('[')?;
-        let parameter_start = self.cursor;
+        let parameter_start = self.token_start()?;
         let name = self.ts_name(true)?;
         self.ts_word("in")?;
         let constraint = self.ts_type(true)?;
         let parameter = self.ts_node(Ts::TypeParameter, parameter_start, &[name, constraint])?;
         self.push_child(&mut items, parameter)?;
         if self.at_word("as")? {
-            let start = self.cursor;
+            let start = self.token_start()?;
             self.scan_identifier()?;
             let ty = self.ts_type(true)?;
             let remap = self.ts_node(Ts::NameRemapping, start, &[ty])?;
@@ -930,7 +920,7 @@ impl Parser<'_> {
         }
         self.ts_expect(']')?;
         if self.at_char('+')? || self.at_char('-')? || self.at_char('?')? {
-            let start = self.cursor;
+            let start = self.token_start()?;
             self.ts_symbol('+')?;
             self.ts_symbol('-')?;
             self.ts_expect('?')?;
@@ -1047,8 +1037,7 @@ impl Parser<'_> {
     }
 
     pub(super) fn ts_type_member(&mut self) -> Result<NodeId, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         let mut items = self.take_list();
         self.ts_member_modifiers(&mut items)?;
         let construct = self.at_word("new")?
@@ -1159,7 +1148,7 @@ impl Parser<'_> {
     }
 
     pub(super) fn ts_parameters(&mut self, bindings: bool) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect('(')?;
         let items = self.ts_parameter_items(')', bindings)?;
         self.ts_expect(')')?;
@@ -1172,8 +1161,7 @@ impl Parser<'_> {
     fn ts_parameter_items(&mut self, end: char, bindings: bool) -> Result<Vec<NodeId>, ParseError> {
         let mut items = self.take_list();
         while !self.at_char(end)? {
-            self.skip_trivia()?;
-            let start = self.cursor;
+            let start = self.token_start()?;
             let mut children = self.take_list();
             while self.at_char('@')? {
                 let decorator = self.ts_decorator()?;
@@ -1215,7 +1203,7 @@ impl Parser<'_> {
     }
 
     pub(super) fn ts_decorator(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect('@')?;
         let primary = self.parse_primary(false)?;
         let expression = self.parse_postfix(primary, super::expression::PostfixMode::Full)?;
@@ -1344,8 +1332,7 @@ impl Parser<'_> {
     }
 
     pub(super) fn ts_declaration(&mut self, in_list: bool) -> Result<Option<NodeId>, ParseError> {
-        self.skip_trivia()?;
-        let start = self.cursor;
+        let start = self.token_start()?;
         let is_type = self.at_word("type")?
             && self.lookahead(|parser| {
                 parser.scan_identifier()?;
@@ -1434,7 +1421,7 @@ impl Parser<'_> {
     }
 
     fn ts_type_alias(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_word("type")?;
         let mut items = self.take_list();
         let name = self.ts_name(true)?;
@@ -1461,7 +1448,7 @@ impl Parser<'_> {
     }
 
     fn ts_interface(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_word("interface")?;
         let mut items = self.take_list();
         let name = self.ts_name(true)?;
@@ -1483,7 +1470,7 @@ impl Parser<'_> {
         if !self.at_word(word)? {
             return Ok(None);
         }
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.scan_identifier()?;
         let mut items = self.take_list();
         loop {
@@ -1501,15 +1488,14 @@ impl Parser<'_> {
     }
 
     fn ts_enum(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_word("enum")?;
         let mut items = self.take_list();
         let name = self.ts_name(true)?;
         self.push_child(&mut items, name)?;
         self.ts_expect('{')?;
         while !self.at_char('}')? {
-            self.skip_trivia()?;
-            let member_start = self.cursor;
+            let member_start = self.token_start()?;
             let key = self.parse_property_key(false)?.node;
             let mut children = self.take_list();
             self.push_child(&mut children, key)?;
@@ -1531,7 +1517,7 @@ impl Parser<'_> {
     }
 
     fn ts_namespace(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         let global = self.at_word("global")?;
         let token = self.scan_identifier()?;
         let name = if global {
@@ -1569,7 +1555,7 @@ impl Parser<'_> {
             let nested = self.ts_namespace_rest(self.node_span(next).start(), next)?;
             self.push_child(&mut items, nested)?;
         } else if self.at_char('{')? {
-            let start = self.cursor;
+            let start = self.token_start()?;
             self.ts_expect('{')?;
             // The body has its own scope and exports, which are restored on
             // every path: a speculation can discard a failed body inside a
@@ -1617,7 +1603,7 @@ impl Parser<'_> {
     }
 
     fn ts_import_equals(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_word("import")?;
         let mut items = self.take_list();
         if self.at_word("type")? {
@@ -1632,7 +1618,7 @@ impl Parser<'_> {
                 parser.scan_identifier()?;
                 parser.at_char('(')
             })? {
-            let start = self.cursor;
+            let start = self.token_start()?;
             self.scan_identifier()?;
             self.ts_expect('(')?;
             if !matches!(self.peek_char()?, Some('\'' | '"')) {
@@ -1691,7 +1677,7 @@ impl Parser<'_> {
     ) -> Result<Option<(NodeId, usize)>, ParseError> {
         let mark = self.bound_names.len();
         let mut items = self.take_list();
-        let generic_start = self.cursor;
+        let generic_start = self.token_start()?;
         let generics = self.ts_type_parameters()?;
         if let Some(generics) = generics {
             if self.jsx {
@@ -1773,7 +1759,7 @@ impl Parser<'_> {
     }
 
     pub(super) fn ts_assertion(&mut self) -> Result<NodeId, ParseError> {
-        let start = self.cursor;
+        let start = self.token_start()?;
         self.ts_expect('<')?;
         let ty = if self.at_word("const")? {
             let token = self.scan_identifier()?;

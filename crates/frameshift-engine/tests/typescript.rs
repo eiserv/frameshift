@@ -728,6 +728,29 @@ fn signatures_without_bodies_span_their_return_type_and_semicolon() {
     }
 }
 
+// Several TypeScript productions read their start before the trivia in
+// front of their first token: a parameter list after type parameters, as
+// in `function f<T> (x: T) {}`, which the fuzzer found, and the type
+// parameter of a mapped type after `[`. Every TypeScript start now skips
+// trivia first.
+#[test]
+fn lists_after_type_parameters_start_at_their_first_token() {
+    for text in [
+        "function f<T> (x: T) {}",
+        "const g = function<T> \n(x: T) {};",
+        "class A { m<T> (x: T) {} }",
+        "const o = { m<T> (x: T) {} };",
+        "interface I { m<T> (x: T): T; <U> (y: U): U; new <V> (z: V): I; }",
+        "declare function d<T> /* c */ (x: T): T;",
+        "type M<T> = { [ K in keyof T ]: T[K] };",
+        "type N<T> = { -readonly [ K in keyof T as `x${K & string}` ] -?: T[K] };",
+        "const a = async <T,> (x: T) => x;",
+    ] {
+        check(text, JsDialect::TypeScript);
+        check(text, JsDialect::Tsx);
+    }
+}
+
 // A failed speculation restores every parser field it can change. A namespace
 // body that failed inside a function in a parameter default left its scope
 // pushed and the module's export state replaced; the rollback's balance
