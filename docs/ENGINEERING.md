@@ -164,7 +164,7 @@ The language is decided. Two experiments validate the core techniques before mil
   - Span correctness is checked by slicing tests.
   - Throughput of at least 30 MB/s per core.
   - Peak heap demand of at most 20 times the total source bytes of each corpus with every source text and tree retained (`D-045`). Per-file peaks remain diagnostics; an all-empty corpus has no comparable ratio.
-  - Fuzzing for a fixed CPU budget finds no crashes or hangs.
+  - Fuzzing for a fixed CPU budget of one CPU-hour per fuzz target (`D-044`) finds no crashes, hangs, or contract violations.
   - A documented review concludes that the arena, visitor, and pattern-matching design is maintainable and extensible to further languages.
 - Thresholds are set to expose design problems, not to win benchmarks.
 
