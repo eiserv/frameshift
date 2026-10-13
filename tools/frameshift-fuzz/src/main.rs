@@ -10,6 +10,7 @@
 //! network. Generated inputs derive from fictional seeds. No product crate
 //! depends on it.
 
+mod astro;
 mod coverage;
 mod edits;
 mod lexical;

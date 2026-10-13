@@ -298,6 +298,7 @@ Reference machine: an 8-core x86_64 or ARM64 laptop from 2023 or later, with an 
 
 - Algorithms over files, nodes, and graph edges must be linear or near-linear. Quadratic behavior requires a written justification.
 - Parse each file once. Share immutable results between stages.
+- Traverse syntax trees with explicit stacks or loops. Parser limits bound the parser's recursion, not tree depth, because chains such as `a.b.c` are built without nesting; recursion is acceptable only over constructs whose depth a limit bounds, such as markup nesting.
 - Intern identifiers and paths. Use compact node representations and indices instead of pointer-heavy graphs where it helps.
 - Bounded parallelism (worker count matched to available cores) with deterministic merging.
 - Stream large outputs. Never load more than necessary into memory at once.

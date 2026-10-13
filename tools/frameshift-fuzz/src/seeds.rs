@@ -249,6 +249,60 @@ const REFERENCE_TOKENS: [&str; 24] = [
     "nbsp", "&#", "&#x", "0", "9", "F", "128", "55296", "1114112", "\u{E9}",
 ];
 
+const ASTRO_TOKENS: [&str; 40] = [
+    "<",
+    ">",
+    "</",
+    "/>",
+    "<>",
+    "</>",
+    "{",
+    "}",
+    "{...",
+    "=",
+    "\"",
+    "'",
+    "&amp;",
+    "&copy",
+    "&#32;",
+    "&nbsp;",
+    "\n",
+    "\t",
+    "className",
+    "htmlFor",
+    "key",
+    "ref",
+    "style",
+    "dangerouslySetInnerHTML",
+    "__html",
+    "children",
+    "onClick",
+    "data-x",
+    "aria-label",
+    "hidden",
+    "title",
+    "pre",
+    "svg",
+    "Card",
+    "Menu.Item",
+    "&&",
+    "?",
+    ":",
+    ".map((x) => ",
+    "/* c */",
+];
+
+const ASTRO: [&str; 8] = [
+    "export default function Page({ children }) {\n  return (\n    <main className=\"page\">\n      <h1>Title &amp; more</h1>\n      {children}\n    </main>\n  );\n}\n",
+    "const list = <ul>{items.map((item) => <li key={item.id} className=\"row\">{item.name}</li>)}</ul>;\n",
+    "const card = <Card title=\"A\" featured {...rest}><Link href=\"/\">Home</Link></Card>;\n",
+    "const head = <><title>{title}</title><meta name=\"description\" content={text} /></>;\n",
+    "const raw = <div dangerouslySetInnerHTML={{ __html: html }} style={{ color: 'red' }} />;\n",
+    "const text = <p>\n  Clicked {count} times\n  {/* note */}\n  {ok ? <b>yes</b> : 'no'}\n</p>;\n",
+    "const form = <label htmlFor=\"name\" tabIndex={0}><input id=\"name\" disabled readOnly /></label>;\n",
+    "const pre = <pre>\n  kept\n</pre>;\nconst svg = <svg viewBox=\"0 0 1 1\" />;\n",
+];
+
 const EDIT_TOKENS: [&str; 6] = ["\u{E9}", "\u{1F600}", "\0", "\u{7F}", "\u{FF}", "abc"];
 
 /// Returns the tokens that the mutator inserts for `target`.
@@ -259,6 +313,7 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
         Target::Lexical => &LEXICAL_TOKENS,
         Target::References => &REFERENCE_TOKENS,
         Target::Edits => &EDIT_TOKENS,
+        Target::Astro => &ASTRO_TOKENS,
     }
 }
 
@@ -275,6 +330,10 @@ pub fn inputs(target: Target) -> Vec<Vec<u8>> {
         Target::Lexical => LEXICAL.iter().map(|text| (*text).to_owned()).collect(),
         Target::References => REFERENCES.iter().map(|text| (*text).to_owned()).collect(),
         Target::Edits => return edit_cases(),
+        Target::Astro => (0..GENERATED_PER_FAMILY)
+            .map(|seed| generate_component_file(seed, GENERATED_TARGET).text)
+            .chain(ASTRO.iter().map(|text| (*text).to_owned()))
+            .collect(),
     };
     texts
         .into_iter()

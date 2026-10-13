@@ -158,6 +158,8 @@ Statuses change through an edit to this file under the integration workflow in D
 
 - **Seventeenth one-run exception (2026-10-13):** Through the Claude Code chat, the project owner explicitly authorized continuing development, recording the interview decisions, and committing and pushing directly to `main` once the agent is satisfied with the work. This run implements experiment E2 under `D-048` and records its closure in `D-049`. This exception has the same limits as the first one.
 
+- **Eighteenth one-run exception (2026-10-14):** In the same Claude Code session, the project owner asked to verify that E1 and E2 are complete, to review the maintainability of the project, and to commit and push a short fix of any small gap directly to `main`. This run fixes unbounded recursion in the JSX conversion, adds the `astro` fuzz target, and records the review in section 11.1 of [IMPLEMENTATION.md](IMPLEMENTATION.md). This exception has the same limits as the first one.
+
 ### D-011: Release management with Release Please
 
 - **Status:** Accepted (2026-10-11).

@@ -14,7 +14,7 @@ use frameshift_engine::{
     validate_js_regexp,
 };
 
-use crate::{edits, lexical, seeds};
+use crate::{astro, edits, lexical, seeds};
 
 /// A fuzzed engine entry point with its contracts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,6 +31,8 @@ pub enum Target {
     References,
     /// The span edit core with edits decoded from the input.
     Edits,
+    /// JSX conversion and Astro printing of every JSX element.
+    Astro,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -47,13 +49,14 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
         Self::Lexical,
         Self::References,
         Self::Edits,
+        Self::Astro,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -65,6 +68,7 @@ impl Target {
             Self::Lexical => "lexical",
             Self::References => "references",
             Self::Edits => "edits",
+            Self::Astro => "astro",
         }
     }
 
@@ -94,6 +98,9 @@ impl Target {
             Self::Edits => {
                 "apply_edits with decoded edits; provenance, accounting, and order independence"
             }
+            Self::Astro => {
+                "convert_jsx and print_astro_component on JSX and TSX modules; determinism, anchors, and provenance"
+            }
         }
     }
 
@@ -101,7 +108,7 @@ impl Target {
     /// boundary use shorter inputs, because their work grows faster.
     pub fn max_len(self) -> usize {
         match self {
-            Self::Program | Self::Expression | Self::Edits => 4_096,
+            Self::Program | Self::Expression | Self::Edits | Self::Astro => 4_096,
             Self::RegExp | Self::References => 1_024,
             Self::Lexical => 512,
         }
@@ -127,6 +134,7 @@ impl Target {
             Self::Lexical => lexical::run(input),
             Self::References => references(input),
             Self::Edits => edits::run(input),
+            Self::Astro => astro::run(input),
         }
     }
 }
