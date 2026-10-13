@@ -659,6 +659,75 @@ fn type_predicates_start_at_their_first_token() {
     }
 }
 
+// An overload signature without a return type started the node of its
+// missing body at the end of the parameter list, so the node included the
+// whitespace before the semicolon; the fuzzer found it with the token
+// boundary contract. A function expression, which the pinned compiler
+// requires to have a body, also accepted none.
+#[test]
+fn signatures_without_bodies_span_their_return_type_and_semicolon() {
+    for (text, bodies) in [
+        ("function f() ;\nfunction f() {}", &[";"][..]),
+        ("function f(): void ;\nfunction f() {}", &[": void ;"][..]),
+        ("function f()\nfunction f() {}", &[""][..]),
+        ("class A { m() ; m(): void; m() {} }", &[";", ": void;"][..]),
+        ("abstract class B { abstract m() ; }", &[";"][..]),
+        ("declare function d() ;", &[";"][..]),
+        ("const o = { m() };", &[""][..]),
+    ] {
+        check(text, JsDialect::TypeScript);
+        let source = input(text);
+        let tree = parse_js_program(
+            &source,
+            SourceGoal::Module,
+            JsDialect::TypeScript,
+            ParseLimits::default(),
+        )
+        .unwrap();
+        let spans: Vec<_> = tree
+            .nodes()
+            .iter()
+            .filter(|node| {
+                matches!(
+                    node.kind(),
+                    SyntaxNodeKind::TypeScript {
+                        kind: Ts::BodylessFunction,
+                        ..
+                    }
+                )
+            })
+            .map(|node| source.slice(node.span()).unwrap())
+            .collect();
+        assert_eq!(spans, bodies, "{text}");
+    }
+    for (text, offset) in [
+        ("const x = function () ;", 22),
+        ("const x = function (): void ;", 28),
+        ("const x = function ()\nfoo();", 22),
+        ("const y = (function* g() );", 25),
+    ] {
+        let source = input(text);
+        let error = parse_js_program(
+            &source,
+            SourceGoal::Module,
+            JsDialect::TypeScript,
+            ParseLimits::default(),
+        )
+        .err()
+        .unwrap_or_else(|| panic!("accepted {text}"));
+        assert_eq!(
+            (error.offset, error.kind),
+            (
+                offset,
+                frameshift_engine::ParseErrorKind::ExpectedPunctuator(
+                    frameshift_engine::Punctuator::LeftBrace
+                )
+            ),
+            "{text}"
+        );
+    }
+}
+
 // A failed speculation restores every parser field it can change. A namespace
 // body that failed inside a function in a parameter default left its scope
 // pushed and the module's export state replaced; the rollback's balance

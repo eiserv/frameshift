@@ -152,12 +152,15 @@ impl<'source> Parser<'source> {
             arguments_forbidden: false,
         };
         let frame = self.enter_function(context);
+        // TypeScript overloads and ambient declarations omit the body; a
+        // function expression always has one, as in the pinned compiler.
         let result = self.parse_parameters_and_body(
             name.map(|token| token.span),
             ParameterRules {
                 unique: false,
                 accessor: None,
             },
+            placement != FunctionPlacement::Expression,
         );
         self.exit_function(frame);
         let (parameters, body) = result?;
@@ -225,6 +228,7 @@ impl<'source> Parser<'source> {
                 unique: true,
                 accessor,
             },
+            true,
         );
         self.exit_function(frame);
         self.leave();
@@ -245,13 +249,16 @@ impl<'source> Parser<'source> {
     }
 
     // Parses `( parameters ) { body }` in the function's context and scope.
+    // In the TypeScript dialects, `bodyless` permits a signature without a
+    // body.
     fn parse_parameters_and_body(
         &mut self,
         name: Option<Span>,
         rules: ParameterRules,
+        bodyless: bool,
     ) -> Result<(NodeId, NodeId), ParseError> {
         self.push_scope(ScopeKind::Function)?;
-        let result = self.parse_parameters_and_body_in_scope(name, rules);
+        let result = self.parse_parameters_and_body_in_scope(name, rules, bodyless);
         self.pop_scope();
         result
     }
@@ -260,6 +267,7 @@ impl<'source> Parser<'source> {
         &mut self,
         name: Option<Span>,
         rules: ParameterRules,
+        bodyless: bool,
     ) -> Result<(NodeId, NodeId), ParseError> {
         let generics = if self.typescript {
             self.ts_type_parameters()?
@@ -280,8 +288,14 @@ impl<'source> Parser<'source> {
             None
         };
         self.context.in_parameters = false;
-        if self.typescript && !self.at_char('{')? {
-            let start = annotation.map_or(self.last_end, |id| self.node_span(id).start());
+        if self.typescript && bodyless && !self.at_char('{')? {
+            // Without a return type, the node spans the semicolon, or nothing
+            // where a semicolon is inserted.
+            let start = match annotation {
+                Some(annotation) => self.node_span(annotation).start(),
+                None if self.at_char(';')? => self.cursor,
+                None => self.last_end,
+            };
             self.consume_semicolon()?;
             self.bound_names.truncate(parameters.mark);
             let items = annotation.into_iter().collect::<Vec<_>>();
