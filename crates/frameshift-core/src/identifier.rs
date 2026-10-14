@@ -31,7 +31,7 @@ pub enum IdentifierError {
     InvalidFindingCode,
     /// A rule ID is not a migration path followed by `/area.name`.
     InvalidRuleId,
-    /// A feature ID has fewer than three dot-separated name segments.
+    /// A feature ID has fewer than two segments or invalid name spelling.
     InvalidFeatureId,
     /// A unit kind does not accept the selected subject category.
     InvalidUnitSubject,
@@ -133,7 +133,7 @@ impl RuleId {
 
 /// A feature's stable, namespaced, dot-separated identity.
 ///
-/// Requires at least three lowercase ASCII name segments, using [`RuleId`]'s
+/// Requires at least two lowercase ASCII name segments, using [`RuleId`]'s
 /// segment grammar. Further segments support nested feature catalogs. Identity
 /// is independent of framework registration and catalog versions.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -143,7 +143,7 @@ impl FeatureId {
     /// Checks the byte limit before syntax and allocates only after validation.
     pub fn new(value: &str, limits: IdentifierLimits) -> Result<Self, IdentifierError> {
         check_size(value.len(), limits)?;
-        if !dotted(value, 3, usize::MAX) {
+        if !dotted(value, 2, usize::MAX) {
             return Err(IdentifierError::InvalidFeatureId);
         }
         copy(value).map(Self)

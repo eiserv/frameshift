@@ -27,7 +27,7 @@ pub fn run(input: &[u8]) -> Result<(), String> {
             feature.map(|id| id.as_str().to_owned()),
             FeatureId::new(text, limits).map(|id| id.as_str().to_owned()),
             text,
-            dotted(text, 3, usize::MAX),
+            dotted(text, 2, usize::MAX),
             limits,
         )?;
         let rule = RuleId::new(text, limits);

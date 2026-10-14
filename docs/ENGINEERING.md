@@ -392,7 +392,7 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | Target IDs | Lowercase, hyphen-separated, for example `astro-preact` |
 | Migration path IDs | `<source>-to-<target>`, for example `nextjs-to-astro-preact` |
 | Rule IDs | `<migration-path-id>/<area>.<name>`, for example `nextjs-to-astro-preact/route.static-page` |
-| Feature IDs | `<ecosystem>.<category>.<name>`, for example `nextjs.api.link` |
+| Feature IDs | At least two dot-separated names; usually `<ecosystem>.<category>.<name>`, for example `nextjs.api.link`; existing `nextjs.fetch` and `css.global` remain valid (`D-055`) |
 | Unit IDs | `<kind>:<subject>[#<export>]`, with original subject/export bytes percent-encoded under `D-056`; ordinary example `component:components/Hero.tsx#Hero` |
 | Target profile IDs | Framework and major versions, for example `astro7-preact10` |
 | Versions of embedded data | Knowledge base `YYYY.MM.N`, weights `weights-vN` |

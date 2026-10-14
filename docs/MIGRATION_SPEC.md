@@ -438,6 +438,8 @@ Removed relative to the source: `next.config.*`, `next-env.d.ts`, and the `app/`
 
 Legend: **A** `auto`, **R** `review`, **U** `unsupported` in V1. "Later" names the stage that plans to support an unsupported feature. Any construct not listed is `unknown`.
 
+Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Existing two-segment names remain stable. Entries ending in `.*` describe catalog families, not literal identifiers; each concrete member must pass `FeatureId` validation. The facade regression test validates every concrete ID and an example expansion of each family in this matrix.
+
 ### 17.1 Project and configuration
 
 | Feature | Feature ID | V1 | Notes |

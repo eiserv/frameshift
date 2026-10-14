@@ -56,6 +56,10 @@ fn catalog_ids_preserve_valid_names_and_expose_rule_parts() {
         assert_eq!(format!("{}/{}", id.migration_path(), id.name()), value);
     }
     for value in [
+        "nextjs.fetch",
+        "react.server-component",
+        "component.island",
+        "css.global",
         "nextjs.api.link",
         "react.hook.use-state",
         "react.hook.use-state.browser",
@@ -68,6 +72,41 @@ fn catalog_ids_preserve_valid_names_and_expose_rule_parts() {
             value
         );
     }
+}
+
+#[test]
+fn every_specified_feature_catalog_id_and_family_is_representable() {
+    let mut catalog = false;
+    let mut count = 0;
+    for line in include_str!("../../../docs/MIGRATION_SPEC.md").lines() {
+        if line == "| Feature | Feature ID | V1 | Notes |" {
+            catalog = true;
+            continue;
+        }
+        if !line.starts_with('|') {
+            catalog = false;
+        }
+        if catalog {
+            let cell = line.split('|').nth(2).unwrap();
+            for id in cell.split('`').skip(1).step_by(2) {
+                let member = id
+                    .strip_suffix(".*")
+                    .map(|prefix| format!("{prefix}.example"));
+                let value = member.as_deref().unwrap_or(id);
+                assert_eq!(
+                    FeatureId::new(value, IdentifierLimits::default())
+                        .unwrap()
+                        .as_str(),
+                    value
+                );
+                count += 1;
+            }
+        }
+    }
+    assert!(
+        count >= 60,
+        "expected the complete V1 feature matrix, found {count}"
+    );
 }
 
 #[test]
@@ -100,7 +139,7 @@ fn rejects_noncanonical_catalog_ids_without_repair() {
     }
     for value in [
         "",
-        "nextjs.link",
+        "nextjs",
         "nextjs..link",
         ".api.link",
         "nextjs.api.link.",
