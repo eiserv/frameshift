@@ -3,7 +3,7 @@
 /// Versions embedded in this engine build, independent of the host at runtime.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct VersionInfo {
-    /// Cargo package version of the engine, currently the unreleased `0.0.0`.
+    /// Cargo package version of the engine, inherited from the workspace.
     pub engine_version: &'static str,
     /// Shipped migration ruleset identifiers with their versions.
     pub rulesets: &'static [&'static str],
