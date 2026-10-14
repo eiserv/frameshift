@@ -125,6 +125,8 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 
 ### 7.5 Output safety
 
+**Implemented value boundary (`D-054`).** `OutputPath` checks canonical relative structure and portable individual names in memory, after `SourcePath` validation. It rejects traversal, native prefixes, backslashes, NUL and controls, alternate data stream punctuation, device names, trailing spaces/dots, and overly long components on every host. Limits bound input bytes and component count; typed errors never echo source names. This does not establish root containment or detect collisions and links. The filesystem controls below remain executor requirements. See section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
+
 - The output location must not exist or must be empty, unless `--on-existing replace-managed` applies.
 - The output must not be the source, inside the source, or contain the source. It must not be a filesystem root or the user's home directory.
 - Writes go to a staging directory next to the output, then are committed atomically by rename.

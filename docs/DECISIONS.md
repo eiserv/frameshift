@@ -61,6 +61,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-051 | M1 CI, release pull requests, and publication gate | Accepted |
 | D-052 | Go development helper for deterministic release archives | Accepted |
 | D-053 | Preserve source path names and validate portable output names separately | Accepted |
+| D-054 | Strict canonical path values and separate portable output validation | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -553,9 +554,18 @@ Statuses change through an edit to this file under the integration workflow in D
 
 ### D-053: Preserve source path names and validate portable output names separately
 
-- **Status:** Accepted (2026-10-14), confirmed through the Codex App question interface. Implementation is deferred while CI and releases are prioritized.
+- **Status:** Accepted (2026-10-14), confirmed through the Codex App question interface. The path-value implementation follows under D-054.
 - **Decision:** The future internal source path model preserves source names such as `CON.ts` or a trailing dot rather than excluding them solely because Windows cannot create them. The separate output path model rejects nonportable names. Existing root-relative, slash-separated, traversal, encoding, determinism, and collision requirements remain binding. No path types or filesystem executor are implemented by this decision.
 - **Rationale:** Analysis must account for a source file even when its name cannot be carried into portable output. Output safety belongs to a stronger validated type at the write boundary. This preserves evidence without weakening the planned executor contract.
+
+### D-054: Strict canonical path values and separate portable output validation
+
+- **Status:** Accepted (2026-10-14). The project owner selected strict, explicit internal paths through the Codex App question interface, and authorized PR integration after green CI while retaining main's branch protection.
+- **Decision:** Implement framework-independent, in-memory `SourcePath` and `OutputPath` values in the foundation crate, exposed through the engine's `foundation` namespace. Require nonempty, root-relative UTF-8 with `/` separators. Reject absolute paths, an initial ASCII drive prefix, backslashes, NUL, empty components, and `.` or `..` components. Never normalize or repair input. Native path conversion belongs to the future filesystem boundary; a name that this internal grammar cannot represent must be reported explicitly there, never skipped or rewritten.
+- **Output contract:** Preserve source spelling, case, and Unicode normalization. Output additionally rejects Unicode control characters, Windows reserved punctuation and device names (including extensions and superscript device digits), trailing ASCII spaces or dots, and components over 255 UTF-8 bytes or UTF-16 code units. These are conservative portable-name checks, not proof of filesystem writability or root containment.
+- **Limits and errors:** Explicit path limits default to 32 KiB of UTF-8 and 256 components, inclusive. Validate before allocating, reserve storage fallibly, and return typed errors without echoing input. Byte-length limits precede UTF-8 decoding and structural checks; structural checks precede output checks. Comparison and ordered collection iteration use original UTF-8 bytes, independently of the host.
+- **Boundary and rationale:** Distinct types make the stronger output-name contract visible to future planners and executors without excluding nonportable source names from analysis (`D-053`). They depend only on the Rust standard library and perform no I/O. Case and Unicode-normalization collision detection, file/directory prefix collisions, native encoding conversion, symlinks, destination limits, and containment checks remain requirements for discovery, planning, and execution, not claims of these value types. Framework adapters and future V2/V3 paths can reuse the same neutral values (`D-033`).
+- **Integration:** This run supersedes the offered direct-main exception with the owner's explicit choice of PR and merge after green CI. Do not weaken branch protection or merge the unrelated release PR.
 
 ## Technique proposals and related accepted decisions
 

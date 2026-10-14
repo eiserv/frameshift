@@ -26,6 +26,8 @@
 
 ### 3.1 Unit tests
 
+The eleven implemented public-facade path contract tests (`D-054`) exercise canonical source paths, separate portable output validation, exact bytes and offsets, resource boundaries, and deterministic collection keys without filesystem access. Their scope is recorded in section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md). Native path conversion, actual long-path I/O, collision detection, and containment tests remain future filesystem work.
+
 Pure functions and small components: path normalization, semver matching, gitignore matching, the static evaluator, metric arithmetic, the edit engine, and individual rule preconditions. Fast, exhaustive where the input space is small.
 
 ### 3.2 Parser fixtures and conformance
