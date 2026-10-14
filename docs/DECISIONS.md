@@ -58,6 +58,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-048 | E2 structure: an output-layer printer crate, a development driver, a pinned Astro build, and Linux test runs | Accepted |
 | D-049 | E2 closure and the end of M0 | Accepted |
 | D-050 | M1 CLI shell and truthful version documents | Accepted |
+| D-052 | Go development helper for deterministic release archives | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -524,6 +525,15 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale:** A finished shell makes the engine boundary concrete without pretending that migration commands are ready. Accurate compiler metadata and empty catalogs prevent development experiments from being advertised as supported product capabilities. The small argument contract and fixed document shapes fit purpose-built standard-library code under section 3 of [ENGINEERING.md](ENGINEERING.md). Layer namespaces anticipate additional subsystems without forcing simultaneous changes to the development tools (`D-033`).
 - **Tradeoffs:** This increment does not finish M1. Foundation findings, stable identifiers, portable paths, hashing, shared limits and deterministic collections, automated crate-boundary checks, CI, packaging, Release Please, and branch protection remain outstanding. The build script must be able to invoke the compiler that Cargo selected. The initial JSON writer handles shell documents only; general project documents remain reporting-layer work.
 - **Revisit if:** Release Please introduces the first release version and reliable commit metadata, the shipped catalogs become nonempty, or reporting needs a shared document writer.
+
+### D-052: Go development helper for deterministic release archives
+
+- **Status:** Accepted (2026-10-14), with the Go choice confirmed through the Codex App question interface.
+- **Decision:** Add `tools/frameshift-release`, a development-only Go 1.25.5 module using only the standard library. It builds sorted tar.gz and ZIP archives with UTC commit timestamps, normalized modes and ownership, empty gzip name/time headers, verifies every archived entry's bytes and mode, and produces sorted SHA-256 checksum lists. All output files are created exclusively; existing artifacts are never overwritten. Inputs must be regular files bounded to 256 MiB each. Only the declared artifact directory is written. The helper runs no binary itself.
+- **Evidence and alternatives (`D-019`):** Go provides `archive/tar`, `archive/zip`, `compress/gzip`, and the audited `crypto/sha256` implementation in its standard library on all target platforms. Rust's standard library provides none of these; equivalent Rust code needs separately evaluated libraries, and Frameshift must not build cryptography or compression (`ENGINEERING.md`, section 3.4). Platform tar/zip tools have divergent metadata defaults. The owner chose the memory-safe standard-library helper over additional Rust libraries.
+- **Boundary and distribution:** A separate development process, not a Cargo workspace member or product dependency. Its explicit flags describe a built binary, repository notices, artifact location, semantic version, platform, architecture, and commit epoch. Rust remains the only product implementation language. Native CI tests and vets the Go module and checks gofmt. Tests cover repeated archives, byte preservation, executable modes, checksums, malformed options, tampered entries, foreign files, and refusal to overwrite.
+- **Tradeoffs:** Release builds require the pinned Go toolchain as well as Rust. The helper holds a small fixed set of bounded files in memory, and Go's compression implementation is a build input. No license for Frameshift itself is selected by packaging third-party notices.
+- **Revisit if:** Release tooling needs streaming large assets or Rust adopts maintained compression and hash libraries for another accepted requirement.
 
 ## Technique proposals and related accepted decisions
 
