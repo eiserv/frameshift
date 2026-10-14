@@ -1,13 +1,13 @@
 # Architecture
 
-**Status: planned architecture with M0 complete.** Immutable source text, byte spans, derived positions, parser-directed JavaScript scanners, regular-expression literal validation, identifier classification from pinned Unicode tables, character reference decoding with pinned HTML and XHTML tables, pure span rewriting with text provenance, an Astro component printer with React JSX conversion and multi-source provenance, and a JavaScript parser with a flat syntax-node arena for complete Script and Module source text, with explicit JSX, TypeScript, TSX, and declaration-file dialects, are implemented. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the existing modules and exact contracts. There is no CSS or JSON parser yet. The pipeline and all remaining subsystems below are design intent. Identifiers such as `D-006` or `P-003` refer to entries in [DECISIONS.md](DECISIONS.md): "Accepted" entries are binding, "Proposed" entries are recommendations that still need confirmation.
+**Status: planned architecture with M0 complete and M1 in progress.** Immutable source text, byte spans, derived positions, parser-directed JavaScript scanners, regular-expression literal validation, identifier classification from pinned Unicode tables, character reference decoding with pinned HTML and XHTML tables, pure span rewriting with text provenance, an Astro component printer with React JSX conversion and multi-source provenance, and a JavaScript parser with a flat syntax-node arena for complete Script and Module source text, with explicit JSX, TypeScript, TSX, and declaration-file dialects, are implemented. [IMPLEMENTATION.md](IMPLEMENTATION.md) records the existing modules and exact contracts. The CLI help and version shell uses the grouped engine facade and its immutable build identity (`D-050`); it performs no project I/O. There is no CSS or JSON parser yet. The pipeline and all remaining subsystems below are design intent. Identifiers such as `D-006` or `P-003` refer to entries in [DECISIONS.md](DECISIONS.md): "Accepted" entries are binding, "Proposed" entries are recommendations that still need confirmation.
 
 Related documents:
 
 - [ROADMAP.md](ROADMAP.md): scope, stages, milestones, and acceptance criteria.
 - [MIGRATION_SPEC.md](MIGRATION_SPEC.md): the first migration path, Next.js to Astro + Preact.
 - [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md): status model, metrics, and report formats.
-- [CLI.md](CLI.md): the planned command-line interface.
+- [CLI.md](CLI.md): the implemented help and version shell and remaining planned commands.
 - [ENGINEERING.md](ENGINEERING.md): implementation language, dependency policy, and engineering practices.
 - [SECURITY.md](SECURITY.md): threat model and safety controls.
 

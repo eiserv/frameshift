@@ -30,7 +30,7 @@ sequenceDiagram
 
 - **Branches.** Short-lived feature branches off `main`. One topic per branch. Unrelated changes go into separate branches and pull requests.
 - **Commits.** Small, self-contained, and understandable on their own. Each commit should pass the relevant checks. Do not collect a large body of work into one commit.
-- **Pull requests.** Changes normally reach `main` through pull requests. Owner-authorized one-run exceptions for direct commits and pushes to `origin/main` are recorded in `D-010`, including the parser, measurement, JSX, and interrupted-run reconciliation increments. Direct pushes to `main` are otherwise prohibited. Branch protection settings still require authorized setup and verification in M0.
+- **Pull requests.** Changes normally reach `main` through pull requests. Owner-authorized one-run exceptions for direct commits and pushes to `origin/main` are recorded in `D-010`, including the parser, measurement, JSX, and interrupted-run reconciliation increments. Direct pushes to `main` are otherwise prohibited. Branch protection settings still require authorized setup and verification in M1 (`D-049`).
 - **Squash merges only.** Configured and verified on `eiserv/frameshift` on 2026-10-12: squash merging is enabled; merge commits and rebase merging are disabled. GitHub defaults to the pull request title as the commit subject and the pull request body as the commit body. Pull request titles must follow Conventional Commits. Only the squash commit reaches `main`, so Release Please does not read the individual branch commits as additional changes. This setting does not establish branch protection or validate commit messages automatically.
 - **Documentation and verification.** Each meaningful change includes the documentation updates and tests it needs (see [TESTING.md](TESTING.md)).
 - **Versions.** Never change version numbers by hand. Release Please manages them.
@@ -79,7 +79,7 @@ Recommended scopes are listed in section 8 of [ENGINEERING.md](ENGINEERING.md).
 
 Frameshift follows [Semantic Versioning](https://semver.org/).
 
-- **Before 1.0.0:** Release Please is configured with `bump-minor-pre-major`. Breaking changes and features bump the minor version, and fixes bump the patch version. The first release is 0.1.0 (the M1 shell).
+- **Before 1.0.0:** Release Please will be configured with `bump-minor-pre-major`. Breaking changes and features bump the minor version, and fixes bump the patch version. The first release is 0.1.0 (the completed M1 shell). The current help and version shell still reports Cargo's unreleased default version `0.0.0`; no release has been created (`D-050`).
 - **1.0.0** is declared deliberately with `Release-As: 1.0.0` when V1's acceptance criteria are met (see [ROADMAP.md](ROADMAP.md)). Product stages (V1, V2, V3) are not tied to major versions after that.
 - **Breaking changes** include:
   - removing or renaming commands or options, or changing their meaning;

@@ -1,0 +1,6 @@
+{
+  "kind": "frameshift.error",
+  "schemaVersion": 1,
+  "exitCode": 2,
+  "message": "unknown or unavailable command; run 'frameshift help'"
+}

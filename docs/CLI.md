@@ -1,6 +1,6 @@
 # Command-Line Interface
 
-**Status: specification.** No command exists yet. Everything below describes the intended interface of the `frameshift` executable (`D-001`). Command names, options, and output formats may change before they are implemented. All sample output is fictional.
+**Status: help and version shell implemented; remaining commands specified.** The `frameshift` executable provides `help`, `version`, `--help`/`-h`, `--version`, and version formatting (`D-050`). The project commands and other options below remain planned and are rejected by the current shell. Samples for those commands are fictional. The available shell is documented in section 4.9 and [IMPLEMENTATION.md](IMPLEMENTATION.md), section 12.
 
 The CLI is Frameshift's only user interface in the current scope (`D-004`). It is meant to become a polished, production-quality developer tool, not a temporary prototype.
 
@@ -25,8 +25,8 @@ The CLI is Frameshift's only user interface in the current scope (`D-004`). It i
 | `report` | Render a stored report document in other formats or views | Only with `--out` | No |
 | `rules` | List and document migration rules and supported features | No | No |
 | `explain` | Explain a finding code, rule, or feature | No | No |
-| `version` | Print version information | No | No |
-| `help` | Print help | No | No |
+| `version` (implemented) | Print version information | No | No |
+| `help` (implemented) | Print help | No | No |
 
 Commands that were considered and not included in V1:
 
@@ -37,6 +37,8 @@ Commands that were considered and not included in V1:
 - `doctor`: environment checks for verification can be added if user feedback shows a need.
 
 ## 3. Global options
+
+Only `--help`/`-h`, `--version`, and `--format` for `version` are implemented. `--format` accepts `text` or `json`, as a separate value or with `=`, before or after the command. Duplicate options, incompatible combinations, and every other option are usage errors. No presentation environment variable is needed by this uncolored, progress-free shell; the remaining presentation options are planned.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -245,7 +247,28 @@ Planned
 
 ### 4.9 `version` and `help`
 
-`frameshift version` prints the engine version, ruleset versions, knowledge base version, target profiles, build commit, and toolchain version. `--format json` produces a machine-readable form. `frameshift --version` prints the short version string. `frameshift help [<command>]` and `-h` print usage.
+**Implemented.** `frameshift version` prints the engine version, shipped rulesets, knowledge bases and target profiles, build commit, and the actual Rust compiler used to build the engine. The current catalogs are empty: the E2 driver does not ship product migration data. The build commit is unknown, and the version remains Cargo's unreleased `0.0.0`. Release Please will set release versions; none is created manually.
+
+`frameshift version --format json` produces one LF-terminated UTF-8 `frameshift.version` document with `schemaVersion: 1`, in the field order below. The schema is [frameshift.version.schema.json](../schemas/frameshift.version.schema.json). Consumers must accept additional fields.
+
+```json
+{
+  "kind": "frameshift.version",
+  "schemaVersion": 1,
+  "engineVersion": "0.0.0",
+  "rulesets": [],
+  "knowledgeBases": [],
+  "targetProfiles": [],
+  "buildCommit": null,
+  "toolchain": "rustc <actual version, commit and date>"
+}
+```
+
+The `toolchain` value above is illustrative. It is captured at build time, never discovered from the runtime host. `frameshift --version` prints `frameshift 0.0.0` and rejects every additional argument, including `--format`.
+
+`frameshift`, `frameshift help`, `frameshift --help`, and `frameshift -h` print the command overview. `frameshift help help` prints help usage. `frameshift help version`, `frameshift version --help`, and `frameshift version -h` print version usage. Help is text only. Unavailable help topics, unavailable commands, unexpected operands, malformed native Unicode arguments, unknown options, and duplicated options exit with 2. Successful output goes only to standard output; errors go to standard error. Diagnostics never echo user argument text.
+
+If JSON was explicitly selected anywhere in an invalid invocation, standard output contains one `frameshift.error` v1 document with `kind`, `schemaVersion`, `exitCode: 2`, and a static English `message`. Standard error still contains the human-readable error. The schema is [frameshift.error.schema.json](../schemas/frameshift.error.schema.json). In text mode, usage errors leave standard output empty. A standard-stream write or flush failure exits with 6 and cannot guarantee a complete JSON document.
 
 ## 5. Input and output handling
 
@@ -289,7 +312,7 @@ V1 supports an optional project configuration file (`D-027`):
 | 3 | Input error: source missing or unreadable, no supported framework for `analyze`, `plan`, or `migrate`, an invalid or stale plan document, or a source that no longer matches a plan or manifest |
 | 4 | Output refused: output location exists or is unsafe, a staging directory from an interrupted run is present, or managed output was modified |
 | 5 | Completed with failures: output committed, but one or more units failed |
-| 6 | Environment error: a required external tool is missing, or failed before its checks could run |
+| 6 | Environment error: a standard-stream write or flush failed (implemented), or a required external tool is missing or failed before its checks could run (planned) |
 | 70 | Internal error: an engine defect (finding `FS9001`). Results of this run are not trustworthy. 70 follows the BSD `sysexits` convention for internal software errors. |
 | 130 | Interrupted by the user. Nothing was committed. |
 

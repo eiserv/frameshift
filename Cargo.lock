@@ -11,6 +11,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "frameshift-cli"
+version = "0.0.0"
+dependencies = [
+ "frameshift-engine",
+]
+
+[[package]]
 name = "frameshift-core"
 version = "0.0.0"
 

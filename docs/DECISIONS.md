@@ -57,6 +57,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-047 | E1 closure: accepted maintainability review and throughput on the development machine | Accepted |
 | D-048 | E2 structure: an output-layer printer crate, a development driver, a pinned Astro build, and Linux test runs | Accepted |
 | D-049 | E2 closure and the end of M0 | Accepted |
+| D-050 | M1 CLI shell and truthful version documents | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -511,6 +512,18 @@ Statuses change through an edit to this file under the integration workflow in D
   - Branch protection is set up together with the CI status checks of M1, not in M0. With E1 and E2 passed and `P-002` and `P-003` accepted, M0 is complete, and M1 is next.
 - **Rationale:** Windows and Linux already differ in path separators, line-ending defaults, and the C runtime, and both produced identical bytes; the printer reads no platform state. Branch protection without required checks would add no assurance.
 - **Tradeoffs:** A macOS-specific difference would surface only in M1. Until M1, `main` stays unprotected and relies on the integration workflow of `D-010`.
+
+### D-050: M1 CLI shell and truthful version documents
+
+- **Status:** Accepted (2026-10-14), with the version document contract confirmed by the project owner through the Codex App question interface.
+- **Context:** M0 is complete. M1 needs a usable CLI shell, and the E2 maintainability review calls for grouping the engine facade before the CLI consumes it. No product migration ruleset, knowledge base, or target profile exists yet.
+- **Decision:** Add `crates/frameshift-cli`, with the executable `frameshift`, depending only on the engine facade and the standard library. Implement `help`, command help, `version`, `--version`, and `--format text|json` for version. Reject unavailable commands and unimplemented options. Keep the engine's `foundation`, `syntax`, `transform`, and `emit` namespaces and the existing M0 root imports. Do not add dependencies or change the unreleased Cargo package version `0.0.0`.
+- **Version document:** `frameshift.version`, `schemaVersion: 1`, with `engineVersion`, `rulesets`, `knowledgeBases`, `targetProfiles`, `buildCommit`, and `toolchain`. The three catalogs are empty arrays until product data ships. `buildCommit` is `null` until release tooling reliably embeds it. `toolchain` is the actual compiler identity captured by a standard-library-only Cargo build script invoking Cargo's `RUSTC --version`; normal operation executes nothing and reads no build metadata from the host. No Git inspection, timestamps, or absolute paths are embedded. The schema is `schemas/frameshift.version.schema.json`.
+- **Errors and streams:** Usage errors exit with 2, write a static English diagnostic to standard error, and, when JSON was explicitly requested, write one `frameshift.error` v1 document containing `exitCode` and `message` to standard output. User-supplied argument text is never echoed. The error schema is `schemas/frameshift.error.schema.json`. A failed standard-stream write or flush exits with 6; a failed stream cannot guarantee a complete JSON document.
+- **Validation:** Process-level golden and repeatability tests cover aliases, option placement, invalid arguments, non-Unicode native arguments, streams, and independence from runtime environment and current directory. Unit tests cover JSON string escaping and output failures. Golden updates are an explicitly ignored test mode, never part of ordinary test runs.
+- **Rationale:** A finished shell makes the engine boundary concrete without pretending that migration commands are ready. Accurate compiler metadata and empty catalogs prevent development experiments from being advertised as supported product capabilities. The small argument contract and fixed document shapes fit purpose-built standard-library code under section 3 of [ENGINEERING.md](ENGINEERING.md). Layer namespaces anticipate additional subsystems without forcing simultaneous changes to the development tools (`D-033`).
+- **Tradeoffs:** This increment does not finish M1. Foundation findings, stable identifiers, portable paths, hashing, shared limits and deterministic collections, automated crate-boundary checks, CI, packaging, Release Please, and branch protection remain outstanding. The build script must be able to invoke the compiler that Cargo selected. The initial JSON writer handles shell documents only; general project documents remain reporting-layer work.
+- **Revisit if:** Release Please introduces the first release version and reliable commit metadata, the shipped catalogs become nonempty, or reporting needs a shared document writer.
 
 ## Technique proposals and related accepted decisions
 

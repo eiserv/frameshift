@@ -1,0 +1,6 @@
+Frameshift @ENGINE_VERSION@
+Rulesets: none (not implemented)
+Knowledge bases: none (not implemented)
+Target profiles: none (not implemented)
+Build commit: unknown
+Toolchain: @TOOLCHAIN@

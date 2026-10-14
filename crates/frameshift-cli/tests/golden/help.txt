@@ -1,0 +1,14 @@
+Frameshift: deterministic framework migration engine
+
+Usage: frameshift <command> [options]
+
+Commands available in this build:
+  help [command]      Print usage for help or version
+  version             Print engine and build information
+
+Options:
+  -h, --help          Print usage
+  --version           Print the short version string
+  --format text|json  Select version output (default: text)
+
+Project inspection, analysis, migration, and verification are not implemented.

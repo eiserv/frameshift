@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/frameshift-cli",
     "crates/frameshift-core",
     "crates/frameshift-syntax",
     "crates/frameshift-transform",

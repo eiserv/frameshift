@@ -8,3 +8,6 @@ Cargo.lock text eol=lf
 go.mod text eol=lf
 # E2 fixtures are compared byte for byte on every platform.
 tools/frameshift-e2/fixtures/** -text
+# CLI golden output also has identical LF bytes on every platform.
+crates/frameshift-cli/tests/golden/** -text
+schemas/*.json text eol=lf

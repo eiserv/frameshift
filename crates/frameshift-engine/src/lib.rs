@@ -1,13 +1,16 @@
 //! Public facade for Frameshift's implemented, in-memory text operations.
 //!
-//! This M0 API exposes source positions, lexical primitives, a JavaScript
+//! The text API exposes source positions, lexical primitives, a JavaScript
 //! parser for Script and Module source text with explicit JSX, TypeScript,
 //! and TSX dialects, regular-expression validation, pinned Unicode identifier
 //! classification, character reference decoding with pinned tables, span
 //! rewriting, and the Astro component printer with JSX conversion and
 //! multi-source provenance of the E2 experiment. It contains no project
-//! inspection, migration, or verification pipeline. Future CLI code must depend on this facade rather than lower
-//! layers.
+//! inspection, migration, or verification pipeline. The M1 help and version
+//! CLI consumes this facade, including immutable build identity, rather than
+//! lower layers.
+
+pub mod version;
 
 /// Framework-independent source text, spans, positions, and text limits.
 pub use frameshift_core as foundation;

@@ -381,10 +381,10 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | Executable and command | `frameshift` (`frameshift.exe` on Windows) |
 | Repository | `eiserv/frameshift`, private (`D-026`) |
 | Rust crates | A Cargo workspace. Crates are named `frameshift-<subsystem>` (for example `frameshift-engine`, `frameshift-cli`). The binary is `frameshift`. Development-only tools live under `tools/`, are named `frameshift-<purpose>`, and are never dependencies of product crates. Modules inside crates use short, lowercase names. The existing M0 crate layout is recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md); it expands as concrete M1 requirements arise. |
-| JSON document kinds | `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, `frameshift.manifest`, `frameshift.error` |
+| JSON document kinds | `frameshift.version` and usage `frameshift.error` implemented (`D-050`); `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, and `frameshift.manifest` planned |
 | Output metadata | `.frameshift/` directory (with `SUMMARY.md`, `manifest.json`, `report.json`, `unmigrated/`), `src/frameshift-compat/` helpers |
 | Configuration file | `frameshift.jsonc` (`D-027`) |
-| Environment variable prefix | `FRAMESHIFT_` (reserved, none defined) |
+| Environment variable prefix | `FRAMESHIFT_` (no public runtime options defined). `FRAMESHIFT_RUSTC_VERSION` is private Cargo-injected build metadata, not a runtime option (`D-050`). |
 | Finding codes | `FS` followed by four digits, by area (see [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md)) |
 | Source adapter IDs | Lowercase framework name, for example `nextjs` |
 | Target IDs | Lowercase, hyphen-separated, for example `astro-preact` |

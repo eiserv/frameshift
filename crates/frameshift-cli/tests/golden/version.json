@@ -1,0 +1,10 @@
+{
+  "kind": "frameshift.version",
+  "schemaVersion": 1,
+  "engineVersion": "@ENGINE_VERSION@",
+  "rulesets": [],
+  "knowledgeBases": [],
+  "targetProfiles": [],
+  "buildCommit": null,
+  "toolchain": "@TOOLCHAIN@"
+}

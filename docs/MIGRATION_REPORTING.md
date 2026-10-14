@@ -247,7 +247,7 @@ A full report contains the following sections. Each one is a projection of the s
 
 - **Human-readable CLI output:** summary-first, compact, ASCII by default. Colors only on terminals that support them, honoring `NO_COLOR`. See [CLI.md](CLI.md).
 - **Markdown:** `.frameshift/SUMMARY.md` in the output project, plus `frameshift report --format markdown` for sharing.
-- **JSON:** versioned documents with `kind` (`frameshift.analysis`, `frameshift.plan`, `frameshift.report`, `frameshift.manifest`) and an integer `schemaVersion`. Adding fields does not change the schema version. Removing or changing the meaning of a field increments it and counts as a breaking change (see [RELEASES.md](RELEASES.md)). A formal JSON Schema for each document kind is planned alongside the first implementation.
+- **JSON:** versioned documents with `kind` and an integer `schemaVersion`. The CLI shell implements `frameshift.version` and usage `frameshift.error` v1 (`D-050`, [CLI.md](CLI.md), section 4.9), with schemas in [frameshift.version.schema.json](../schemas/frameshift.version.schema.json) and [frameshift.error.schema.json](../schemas/frameshift.error.schema.json). The migration documents `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, and `frameshift.manifest` remain planned. Adding fields does not change the schema version; consumers accept additional fields. Removing or changing the meaning of a field increments it and counts as a breaking change (see [RELEASES.md](RELEASES.md)). A formal JSON Schema for each remaining document kind is planned alongside its first implementation.
 
 ### 10.1 Determinism and privacy
 

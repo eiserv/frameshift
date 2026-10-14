@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frameshift version document",
+  "description": "Build identity and the catalogs actually shipped with the engine.",
+  "type": "object",
+  "required": ["kind", "schemaVersion", "engineVersion", "rulesets", "knowledgeBases", "targetProfiles", "buildCommit", "toolchain"],
+  "properties": {
+    "kind": { "const": "frameshift.version" },
+    "schemaVersion": { "const": 1 },
+    "engineVersion": { "type": "string", "minLength": 1 },
+    "rulesets": { "type": "array", "items": { "type": "string" } },
+    "knowledgeBases": { "type": "array", "items": { "type": "string" } },
+    "targetProfiles": { "type": "array", "items": { "type": "string" } },
+    "buildCommit": { "type": ["string", "null"] },
+    "toolchain": { "type": "string", "minLength": 1 }
+  }
+}

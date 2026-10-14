@@ -1,0 +1,4 @@
+Usage: frameshift version [--format text|json]
+Print engine version, shipped catalogs, build commit, and actual Rust compiler.
+Empty catalogs mean no migration data is shipped. An unknown build commit is null in JSON.
+Use frameshift --version for the short version string.

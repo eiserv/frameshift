@@ -2,7 +2,7 @@
 
 Frameshift is a framework migration engine in early development with a command-line interface. It will analyze existing software projects and migrate them from one framework to another, preserve their intended behavior, and report what it migrated, what it could not migrate, and why.
 
-> **Status: M0 complete, M1 next.** The repository contains a buildable Rust workspace with tested immutable source-text primitives, parser-directed JavaScript scanners, complete regular-expression literal validation, ECMAScript identifier classification from pinned Unicode 18.0.0 tables, character reference decoding with pinned HTML and XHTML tables, a JavaScript parser with an arena tree for complete Script and Module source text, including sloppy mode and the Annex B web-compatibility grammar, an explicitly selected JSX dialect, and explicitly selected TypeScript, TSX, and declaration-file dialects with structured type nodes, declarations, and TypeScript extensions, a deterministic span edit core with provenance, an Astro component printer that converts React JSX and maps every output byte to its source, and a development-only harness that measures parser throughput and memory on generated JavaScript, JSX, and TypeScript corpora and on real files outside the repository, with a reproducible contract-check mode for the generated corpora, a development-only coverage-guided fuzzer for the parsers, scanners, character reference decoders, and edit core, and a development-only Go helper that measures the processor time of fuzzing runs. On an approved sample of 13,292 files from twelve open-source Next.js projects, 99.92 percent parse and every rejection is explained. The parser experiment (E1) passed. The rewriting and Astro printing experiment (E2) passed as well: three fictional Next.js fixtures are migrated deterministically, byte for byte identical on Windows and Linux, and Astro builds the results. There is no CLI or working migration command yet. See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for existing code, contracts, limits, and development commands. The product commands below remain planned.
+> **Status: M0 complete, M1 in progress.** The repository contains a buildable Rust workspace with tested immutable source-text primitives, parser-directed JavaScript scanners, complete regular-expression literal validation, ECMAScript identifier classification from pinned Unicode 18.0.0 tables, character reference decoding with pinned HTML and XHTML tables, a JavaScript parser with an arena tree for complete Script and Module source text, including sloppy mode and the Annex B web-compatibility grammar, an explicitly selected JSX dialect, and explicitly selected TypeScript, TSX, and declaration-file dialects with structured type nodes, declarations, and TypeScript extensions, a deterministic span edit core with provenance, an Astro component printer that converts React JSX and maps every output byte to its source, and a development-only harness that measures parser throughput and memory on generated JavaScript, JSX, and TypeScript corpora and on real files outside the repository, with a reproducible contract-check mode for the generated corpora, a development-only coverage-guided fuzzer for the parsers, scanners, character reference decoders, and edit core, and a development-only Go helper that measures the processor time of fuzzing runs. On an approved sample of 13,292 files from twelve open-source Next.js projects, 99.92 percent parse and every rejection is explained. The parser experiment (E1) passed. The rewriting and Astro printing experiment (E2) passed as well: three fictional Next.js fixtures are migrated deterministically, byte for byte identical on Windows and Linux, and Astro builds the results. A CLI shell now provides help and version information, including versioned JSON output (`D-050`). There is no working migration command yet. See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for existing code, contracts, limits, and development commands. The product commands below remain planned.
 
 ## The problem
 
@@ -50,6 +50,16 @@ Milestones are defined by capabilities, not dates. See [docs/ROADMAP.md](docs/RO
 - **CLI-first, engine-centered.** The migration engine is independent of the CLI, so future interfaces can reuse it.
 - **Performance-aware.** Analysis of typical projects should be near-instantaneous.
 
+## Available CLI shell
+
+```text
+cargo run -p frameshift-cli --offline --locked -- help
+cargo run -p frameshift-cli --offline --locked -- version
+cargo run -p frameshift-cli --offline --locked -- version --format json
+```
+
+The executable is `target/debug/frameshift` (`frameshift.exe` on Windows) after a workspace build. Its current version is the unreleased Cargo version `0.0.0`, not a published release. Help lists only available commands. Version output reports the actual build compiler, empty migration catalogs, and an unknown build commit.
+
 ## Planned command-line interface
 
 The following commands illustrate the intended interface. They are a specification, not working software:
@@ -84,6 +94,6 @@ See [docs/CLI.md](docs/CLI.md) for the full specification.
 
 ## Project status
 
-- **Implementation:** started with the M0 foundation. No product command exists yet. Rust is the primary implementation language. Other languages may be used for specific, important tasks where they offer a demonstrable quality advantage (see [docs/DECISIONS.md](docs/DECISIONS.md)).
+- **Implementation:** started with the M0 foundation. The help and version CLI shell exists; migration commands remain planned. Rust is the primary implementation language. Other languages may be used for specific, important tasks where they offer a demonstrable quality advantage (see [docs/DECISIONS.md](docs/DECISIONS.md)).
 - **Repository:** private (`eiserv/frameshift` on GitHub). No license has been chosen yet, so no rights are granted beyond those of the copyright holder.
 - **Contributions:** not open during the private phase.
