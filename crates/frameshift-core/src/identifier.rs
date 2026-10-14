@@ -33,6 +33,14 @@ pub enum IdentifierError {
     InvalidRuleId,
     /// A feature ID has fewer than three dot-separated name segments.
     InvalidFeatureId,
+    /// A unit kind does not accept the selected subject category.
+    InvalidUnitSubject,
+    /// A route pattern is not a rooted, canonical slash-separated pattern.
+    InvalidRoutePattern,
+    /// A configuration concern is not at least two valid name segments.
+    InvalidConcern,
+    /// An explicitly supplied export name is empty or contains NUL.
+    InvalidExport,
     /// Storage could not be reserved for the value.
     AllocationFailed,
 }
@@ -46,6 +54,10 @@ impl fmt::Display for IdentifierError {
             Self::InvalidFindingCode => f.write_str("invalid finding code"),
             Self::InvalidRuleId => f.write_str("invalid rule identifier"),
             Self::InvalidFeatureId => f.write_str("invalid feature identifier"),
+            Self::InvalidUnitSubject => f.write_str("unit kind does not accept this subject"),
+            Self::InvalidRoutePattern => f.write_str("invalid route pattern"),
+            Self::InvalidConcern => f.write_str("invalid configuration concern"),
+            Self::InvalidExport => f.write_str("invalid export name"),
             Self::AllocationFailed => f.write_str("identifier storage allocation failed"),
         }
     }

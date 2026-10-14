@@ -6,7 +6,9 @@
 mod identifier;
 mod path;
 mod text;
+mod unit;
 
 pub use identifier::{FeatureId, FindingCode, IdentifierError, IdentifierLimits, RuleId};
 pub use path::{OutputPath, PathError, PathLimits, SourcePath};
 pub use text::{Position, SourceText, Span, TextError, TextLimits};
+pub use unit::{UnitId, UnitKind};

@@ -63,6 +63,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-053 | Preserve source path names and validate portable output names separately | Accepted |
 | D-054 | Strict canonical path values and separate portable output validation | Accepted |
 | D-055 | Stable, validated catalog identifiers | Accepted |
+| D-056 | Unambiguous, percent-encoded unit identities | Accepted |
 | D-066 | AGPL licensing and preparation for public source visibility | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
@@ -579,6 +580,15 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Limits:** Explicit inclusive limits default to 128 KiB for rule and feature ID text. The size check precedes syntax and allocation; storage is reserved fallibly. Finding codes have a fixed six-byte grammar. Errors carry no input text. Equality, hashing, and ordering use the exact validated bytes.
 - **Boundary and rationale (`D-033`):** Identity syntax is independent of catalog membership, shipped versions, and frameworks. Unassigned finding codes and unknown but well-formed names remain representable without claiming product support. Stable typed keys prevent mixing rule and feature identities and support future adapters without a global counter or I/O. Product catalogs, complete finding records, report-local IDs, and unit IDs are not implemented by this increment.
 - **Validation:** Five facade tests cover all 10,000 finding-code spellings, malformed identifiers, exact limits and error precedence, rule parts, ordering, and input-free diagnostics. Focused tests and Clippy pass on Linux x86_64 with pinned Rust 1.98.0.
+
+### D-056: Unambiguous, percent-encoded unit identities
+
+- **Status:** Accepted (2026-10-15). The project owner approved percent encoding through the Codex App question interface, keeping ordinary IDs unchanged and distinguishing literal delimiters and percent sequences.
+- **Decision:** Add the nine framework-neutral `UnitKind` values from MIGRATION_REPORTING.md and immutable `UnitId` values in the core, exposed through the engine foundation namespace. File constructors accept validated `SourcePath` values for layout, provider, component, route-file, module, and stylesheet units. Route and endpoint IDs use rooted URL patterns. Configuration IDs use at least two lowercase catalog name segments. Wrong subject categories fail explicitly.
+- **Encoding:** Serialize `<kind>:<subject>[#<export>]`. Within subject and export, keep ASCII letters, digits, and `-._~/[]()` literal. Encode every other original UTF-8 byte as uppercase `%HH`, including `%`, `#`, `:`, whitespace, controls, and non-ASCII text. For example, `component:a%23b` identifies file `a#b`, while `component:a#b` identifies export `b` of file `a`, and `component:a%2523b` identifies file `a%23b`. Never percent-decode input or change source names, case, or Unicode normalization.
+- **Validation and limits:** Optional exports are nonempty original UTF-8 without NUL, not necessarily JavaScript identifiers. Route patterns have a leading slash, no backslash or NUL, and no empty interior or dot components; root and a single trailing slash are preserved. URL encoding and parameter semantics are not interpreted. `IdentifierLimits` counts all serialized bytes, including kind, delimiters, and expansion, before fallible allocation. Kind and export shape checks precede sizing for file IDs; route/config IDs check kind and encoded size before subject syntax. Errors carry no source text.
+- **Boundary and rationale (`D-033`):** These are keys, not a project model, router, rendering layer, or proof of unit uniqueness within a discovered project. Category-specific constructors prevent confusing filesystem paths with URL patterns and configuration concerns. Injective encoding supports future review ledgers and adapters without imposing portable output-name checks on source identity. Reading serialized IDs from report documents remains reporting work. Report-local finding numbers remain separate.
+- **Validation:** Ten facade tests cover catalog and unit contracts. A ninth fuzz target, `identifiers`, uses independent acceptance models and percent encoding to check repeatability, limits, unchanged spelling, and exact serialization. Its generated tests also exercise malformed UTF-8, delimiters, and all four-digit finding codes. Instrumented Linux validation and final workspace evidence are in IMPLEMENTATION.md section 16.
 
 ### D-066: AGPL licensing and preparation for public source visibility
 

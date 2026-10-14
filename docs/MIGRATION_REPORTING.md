@@ -1,6 +1,6 @@
 # Migration Reporting
 
-**Status: reporting specification with catalog identifier values implemented.** `FindingCode`, `RuleId`, and `FeatureId` exist under `D-055` (section 15 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Full finding records, assessments, metrics, and migration reports remain planned. This document defines how Frameshift counts, classifies, measures, and reports migrations. Reporting is a core product feature: the numbers must be useful, reproducible, and impossible to misread as a guarantee of correctness. Related decisions: `D-009`, `P-006`, and `P-016` in [DECISIONS.md](DECISIONS.md).
+**Status: reporting specification with catalog and unit identifier values implemented.** `FindingCode`, `RuleId`, and `FeatureId` exist under `D-055`, and `UnitKind` and `UnitId` under `D-056` (sections 15 and 16 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Full finding records, assessments, metrics, and migration reports remain planned. This document defines how Frameshift counts, classifies, measures, and reports migrations. Reporting is a core product feature: the numbers must be useful, reproducible, and impossible to misread as a guarantee of correctness. Related decisions: `D-009`, `P-006`, and `P-016` in [DECISIONS.md](DECISIONS.md).
 
 ## 1. Principles
 
@@ -30,7 +30,7 @@ A unit is the smallest independently reported element of a migration. Units do n
 | `stylesheet` | One CSS, SCSS, or CSS Module file | `stylesheet:app/globals.css` |
 | `config` | One configuration concern, such as image handling, trailing slashes, TypeScript options, or scripts | `config:nextjs.images` |
 
-Unit IDs are stable across runs. They derive from kind, normalized path, and export name, or from the URL pattern for routes and endpoints, never from counters.
+Unit ID values are implemented (`D-056`, section 16 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). They derive from kind, exact canonical source path and optional export name, original rooted URL pattern for routes/endpoints, or a namespaced configuration concern, never from counters. Within the subject and export, ASCII letters, digits, and `-._~/[]()` remain literal; every other original UTF-8 byte is encoded as uppercase `%HH`. This distinguishes literal `#`, `%`, `:`, controls, and Unicode bytes without normalizing source names. For example, file `a#b` becomes `component:a%23b`, export `b` of file `a` becomes `component:a#b`, and file `a%23b` becomes `component:a%2523b`. Constructors validate identity structure and serialized byte limits, not actual discovery or framework route semantics. The counting model itself remains planned.
 
 ### 2.2 Inventory items
 
