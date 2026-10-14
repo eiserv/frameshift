@@ -314,6 +314,30 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
         Target::References => &REFERENCE_TOKENS,
         Target::Edits => &EDIT_TOKENS,
         Target::Astro => &ASTRO_TOKENS,
+        Target::Paths => &[
+            "/",
+            "\\",
+            ".",
+            "..",
+            "C:",
+            "\0",
+            "\u{1b}",
+            "é",
+            "e\u{301}",
+            "🦀",
+            "CON",
+            "AUX .txt",
+            "COM¹",
+            "lpt9.ts",
+            "CONIN$",
+            "CONOUT$",
+            ":",
+            "*",
+            "?",
+            " ",
+            "a",
+            "[...slug]",
+        ],
     }
 }
 
@@ -330,6 +354,30 @@ pub fn inputs(target: Target) -> Vec<Vec<u8>> {
         Target::Lexical => LEXICAL.iter().map(|text| (*text).to_owned()).collect(),
         Target::References => REFERENCES.iter().map(|text| (*text).to_owned()).collect(),
         Target::Edits => return edit_cases(),
+        Target::Paths => [
+            "",
+            "src/pages/[...slug].astro",
+            "CON.ts",
+            "src/COM².ts",
+            "dir/ads:stream",
+            "trailing.",
+            "dir/../file",
+            "C:file",
+            "\\\\?\\C:\\file",
+            "é/e\u{301}/🦀.tsx",
+            "src/\u{1b}[31m",
+            "a//b",
+            "a\\b",
+            "a\0b",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .chain([
+            "a".repeat(255),
+            "a".repeat(256),
+            std::iter::repeat_n("a", 257).collect::<Vec<_>>().join("/"),
+        ])
+        .collect(),
         Target::Astro => (0..GENERATED_PER_FAMILY)
             .map(|seed| generate_component_file(seed, GENERATED_TARGET).text)
             .chain(ASTRO.iter().map(|text| (*text).to_owned()))
