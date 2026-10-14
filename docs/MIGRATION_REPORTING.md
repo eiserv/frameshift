@@ -1,6 +1,6 @@
 # Migration Reporting
 
-**Status: specification.** Nothing here is implemented. This document defines how Frameshift counts, classifies, measures, and reports migrations. Reporting is a core product feature: the numbers must be useful, reproducible, and impossible to misread as a guarantee of correctness. Related decisions: `D-009`, `P-006`, and `P-016` in [DECISIONS.md](DECISIONS.md).
+**Status: reporting specification with catalog identifier values implemented.** `FindingCode`, `RuleId`, and `FeatureId` exist under `D-055` (section 15 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Full finding records, assessments, metrics, and migration reports remain planned. This document defines how Frameshift counts, classifies, measures, and reports migrations. Reporting is a core product feature: the numbers must be useful, reproducible, and impossible to misread as a guarantee of correctness. Related decisions: `D-009`, `P-006`, and `P-016` in [DECISIONS.md](DECISIONS.md).
 
 ## 1. Principles
 
@@ -225,7 +225,7 @@ Severities correspond to statuses: `blocker` makes the unit `unsupported`, `unkn
 | `FS7xxx` | Output and filesystem safety | `FS7001` output location exists. `FS7002` output location inside the source. `FS7003` unsafe output path rejected. `FS7004` managed output was modified since generation. |
 | `FS9xxx` | Internal | `FS9001` internal error. Results of this run are not trustworthy. |
 
-Codes are never reused for a different meaning. `frameshift explain <code>` prints the full documentation for a code (see [CLI.md](CLI.md)).
+Finding code syntax is implemented independently of this future catalog: exactly `FS` followed by four ASCII digits (`D-055`). A valid value alone does not establish that a code is assigned. Codes are never reused for a different meaning. `frameshift explain <code>` prints the full documentation for a code (see [CLI.md](CLI.md)).
 
 ## 9. Report contents
 

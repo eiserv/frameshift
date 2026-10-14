@@ -62,6 +62,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-052 | Go development helper for deterministic release archives | Accepted |
 | D-053 | Preserve source path names and validate portable output names separately | Accepted |
 | D-054 | Strict canonical path values and separate portable output validation | Accepted |
+| D-055 | Stable, validated catalog identifiers | Accepted |
 | D-066 | AGPL licensing and preparation for public source visibility | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
@@ -169,6 +170,8 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Nineteenth one-run exception (2026-10-14):** Through the Codex chat, the project owner explicitly authorized continuing development, interviewing for outstanding decisions, and committing and pushing verified changes directly to `main` once the work is complete. This run starts M1 with the grouped engine facade and the help and version CLI. This exception has the same limits as the first one.
 
 - **Twentieth one-run exception (2026-10-14):** Through the Codex chat, the project owner authorized continuing development after fetching the remote, interviewing for outstanding decisions, and committing and pushing the verified increment directly to `main`. The owner prioritized CI and the release foundation (`D-051`, `D-052`) and authorized enabling required CI checks after successful native runs. This exception has the same limits as the first one; branch protection is applied after integration.
+
+- **Twenty-first one-run exception (2026-10-15):** Through the Codex chat, the project owner authorized fetching the remote before development, recording interview decisions, and committing and pushing the verified increment directly to `main`. The owner also authorized PR creation and merge after green CI if a direct push is rejected, retaining branch protection. This run implements stable identifiers under `D-055` and the subsequent unit identity contract. It does not authorize changing protection or merging a release PR.
 
 ### D-011: Release management with Release Please
 
@@ -568,6 +571,15 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Boundary and rationale:** Distinct types make the stronger output-name contract visible to future planners and executors without excluding nonportable source names from analysis (`D-053`). They depend only on the Rust standard library and perform no I/O. Case and Unicode-normalization collision detection, file/directory prefix collisions, native encoding conversion, symlinks, destination limits, and containment checks remain requirements for discovery, planning, and execution, not claims of these value types. Framework adapters and future V2/V3 paths can reuse the same neutral values (`D-033`).
 - **Integration:** This run supersedes the offered direct-main exception with the owner's explicit choice of PR and merge after green CI. Do not weaken branch protection or merge the unrelated release PR.
 
+### D-055: Stable, validated catalog identifiers
+
+- **Status:** Accepted (2026-10-15).
+- **Context:** M1 needs framework-independent stable identifiers before discovery and reporting can consume them (`P-016`). The owner approved unambiguous percent encoding for source-derived unit IDs through the Codex App question interface; that separate contract follows in the next increment.
+- **Decision:** Add `FindingCode`, `RuleId`, `FeatureId`, `IdentifierLimits`, and `IdentifierError` in the core, exposed through `frameshift_engine::foundation`. Finding codes are exactly `FS` and four ASCII digits. Rule IDs are `<source>-to-<target>/area.name`, with exactly one `-to-` separator. Feature IDs have at least three dot-separated segments, permitting nested catalogs. Each name segment starts with a lowercase ASCII letter and continues with lowercase ASCII letters or digits and single internal hyphens. No spelling is repaired or normalized.
+- **Limits:** Explicit inclusive limits default to 128 KiB for rule and feature ID text. The size check precedes syntax and allocation; storage is reserved fallibly. Finding codes have a fixed six-byte grammar. Errors carry no input text. Equality, hashing, and ordering use the exact validated bytes.
+- **Boundary and rationale (`D-033`):** Identity syntax is independent of catalog membership, shipped versions, and frameworks. Unassigned finding codes and unknown but well-formed names remain representable without claiming product support. Stable typed keys prevent mixing rule and feature identities and support future adapters without a global counter or I/O. Product catalogs, complete finding records, report-local IDs, and unit IDs are not implemented by this increment.
+- **Validation:** Five facade tests cover all 10,000 finding-code spellings, malformed identifiers, exact limits and error precedence, rule parts, ordering, and input-free diagnostics. Focused tests and Clippy pass on Linux x86_64 with pinned Rust 1.98.0.
+
 ### D-066: AGPL licensing and preparation for public source visibility
 
 - **Status:** Accepted (2026-10-17). The owner requested preparation for public visibility and explicitly selected `AGPL-3.0-or-later` through the Codex question interface.
@@ -736,6 +748,7 @@ Detailed success criteria for E1 and E2 are in section 2.8 of [ENGINEERING.md](E
 ## Template for new entries
 
 ```markdown
+
 ### <ID>: <Title>
 
 - **Status:** Proposed | Accepted | Deferred | Superseded by <ID> (<date>).

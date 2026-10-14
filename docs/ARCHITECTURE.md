@@ -105,7 +105,7 @@ flowchart TB
 | Snapshot | Immutable, content-addressed set of source files used for one run. Its hash identifies the input. |
 | Unit | The smallest independently reported element of a migration, such as a route, layout, component, module, stylesheet, or configuration concern. Units do not overlap. The full taxonomy is in [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md). |
 | Inventory item | A counted but unweighted element: dependency, verbatim file, out-of-scope file, or ignored path. |
-| Feature | A catalogued framework construct, such as `nextjs.link` or `react.hook.use-state`, identified by a stable feature ID. |
+| Feature | A catalogued framework construct, such as `nextjs.api.link` or `react.hook.use-state`, identified by a stable feature ID. |
 | Feature occurrence | One detected instance of a feature in a unit, with source location and extracted facts. |
 | Finding | A diagnostic: code, severity, location, explanation, remediation, and the rule or check that produced it. |
 | Assessment status | Pre-execution classification of a feature occurrence or unit: `auto`, `review`, `unsupported`, or `unknown`. |
@@ -141,7 +141,7 @@ The vertical chain shows layer order, not single-step dependencies. A layer may 
 
 Boundary rules:
 
-- **Foundation** has no knowledge of frameworks. Its full scope is diagnostics, stable identifiers, the internal path model (canonical, slash-separated, root-relative), hashing, resource limits, and collections with deterministic iteration. The text and path values are implemented; the remaining foundation contracts are planned.
+- **Foundation** has no knowledge of frameworks. Its full scope is diagnostics, stable identifiers, the internal path model (canonical, slash-separated, root-relative), hashing, resource limits, and collections with deterministic iteration. The text, path, and stable catalog identifier values are implemented; the remaining foundation contracts are planned. Catalog identifier syntax and limits are in section 15 of [IMPLEMENTATION.md](IMPLEMENTATION.md) (`D-055`); membership and shipped catalogs remain future work.
 - The implemented path values are `SourcePath` and the stronger `OutputPath` (`D-053`, `D-054`). They require canonical slash-separated root-relative UTF-8, reject ambiguous forms without normalization, and preserve source spelling. Their complete value contract and filesystem limits are in section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md); native conversion, collision detection, and safe writes remain future subsystem work.
 - **Input** is the only layer that touches the source filesystem. Every later layer reads the snapshot.
 - **Syntax** knows file formats but not frameworks.
@@ -259,7 +259,7 @@ A concept moves into the core only when two adapters need it with compatible mea
 3. **Assessment rules.** Each occurrence receives `auto`, `review`, `unsupported`, or `unknown`, with a reason. The status may depend on context: source version, render context, target profile, or knowledge base data.
 4. **Unit status.** A unit's status is the most severe status among its occurrences, ordered `auto` < `review` < `unknown` < `unsupported`. All occurrences remain listed.
 5. **Transitive readiness.** Unit status is local. Route readiness looks at the route's transitive dependency closure: layouts, rendered components, imported modules, and stylesheets. This gives route-level answers such as "this route is blocked by a context provider shared across islands" (see [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md)).
-6. **Dependencies.** The knowledge base assigns each declared package a compatibility class for specific version ranges. For the first migration path, the classes are `framework`, `compatible`, `compat` (works through `preact/compat`), `compat-unverified`, `incompatible`, and `unknown` (see section 14 of [MIGRATION_SPEC.md](MIGRATION_SPEC.md)). Code that uses an incompatible package gets an occurrence of `dependency.incompatible`. An unused declared package affects nothing except the dependency inventory.
+6. **Dependencies.** The knowledge base assigns each declared package a compatibility class for specific version ranges. For the first migration path, the classes are `framework`, `compatible`, `compat` (works through `preact/compat`), `compat-unverified`, `incompatible`, and `unknown` (see section 14 of [MIGRATION_SPEC.md](MIGRATION_SPEC.md)). Code that uses an incompatible package gets an occurrence of `dependency.compatibility.incompatible`. An unused declared package affects nothing except the dependency inventory.
 7. **Project-level verdicts.** Some answers concern the whole project, such as "can the result be built as a static site". These verdicts are derived from explicit facts (for example, "request-time APIs are used on 9 of 12 routes"), not from percentage thresholds.
 
 ### 11.1 Knowledge base

@@ -398,6 +398,8 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | Versions of embedded data | Knowledge base `YYYY.MM.N`, weights `weights-vN` |
 | Release artifacts | See [RELEASES.md](RELEASES.md) |
 
+Catalog identifier values implement the exact grammar and inclusive limits in section 15 of [IMPLEMENTATION.md](IMPLEMENTATION.md) (`D-055`). Stable identity does not depend on a version or registry lookup.
+
 Conventional Commit scopes follow the subsystems. Recommended scopes: `cli`, `core`, `discovery`, `parser`, `analyzer`, `graph`, `model`, `rules`, `planner`, `transform`, `emit`, `verify`, `report`, `kb`, `security`, `migration`, `deps`, `ci`, `release`, plus document names for documentation (for example `docs(architecture)`).
 
 ## 9. Development practices for future work
