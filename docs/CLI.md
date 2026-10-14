@@ -247,7 +247,7 @@ Planned
 
 ### 4.9 `version` and `help`
 
-**Implemented.** `frameshift version` prints the engine version, shipped rulesets, knowledge bases and target profiles, build commit, and the actual Rust compiler used to build the engine. The current catalogs are empty: the E2 driver does not ship product migration data. The build commit is unknown, and the version remains Cargo's unreleased `0.0.0`. Release Please will set release versions; none is created manually.
+**Implemented.** `frameshift version` prints the engine version, shipped rulesets, knowledge bases and target profiles, build commit, and the actual Rust compiler used to build the engine. The current catalogs are empty: the E2 driver does not ship product migration data. The build commit is unknown in ordinary local builds; CI and packaging explicitly embed the checked-out commit (`D-051`). The version remains the workspace's unreleased `0.0.0`. Release Please manages versions; none is bumped manually.
 
 `frameshift version --format json` produces one LF-terminated UTF-8 `frameshift.version` document with `schemaVersion: 1`, in the field order below. The schema is [frameshift.version.schema.json](../schemas/frameshift.version.schema.json). Consumers must accept additional fields.
 

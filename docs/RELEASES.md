@@ -1,6 +1,20 @@
 # Releases and CI/CD
 
-**Status: plan.** No GitHub Actions workflows, release configuration, release manifests, or releases exist. This document describes the planned version control conventions, CI/CD workflows, release process, and artifact distribution. Version control conventions apply from the first commit. The workflows are built in milestone M1 (see [ROADMAP.md](ROADMAP.md)), and the release pipeline is hardened in M11.
+**Status: CI and gated release foundation implemented (`D-051`, `D-052`).** Workflows, release configuration, and a release manifest exist. No release has been published. Release PRs are enabled; publication is disabled until M1 is accepted. Section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) records actual local and remote evidence. The remaining signing, immutable release, binary reproducibility, scheduled verification, and product smoke-test requirements below are plans for later milestones.
+
+### Current controls and commands
+
+- `.github/workflows/ci.yml`: pull requests, pushes to main, and manual runs. Native tests on all six platforms, formatting, Clippy, commit conventions, Cargo boundaries, corpus and E2 checks, cross-platform E2 hash comparison, and read-only packaging validation. `CI required` is the aggregate branch-protection check.
+- `.github/workflows/release.yml`: push to main or manual run. `FRAMESHIFT_RELEASE_APP_READY=true` enables release PRs. `FRAMESHIFT_RELEASE_APP_ID` identifies the private App, and `FRAMESHIFT_RELEASE_APP_PRIVATE_KEY` is its repository secret. Tokens are short-lived and restricted to `eiserv/frameshift`.
+- `FRAMESHIFT_M1_RELEASE_READY=false`: Release Please skips tags and releases. Packaging cannot upload release assets until this repository variable is deliberately set to `true` after M1 acceptance. No workflow merges release PRs.
+- `.github/workflows/package.yml`: a read-only reusable six-target build and archive validation, also manually dispatchable with an existing tag or commit. Its `publish` input validates release eligibility but cannot upload assets itself. Actual uploads occur only in the gated Release workflow, after packaging succeeds. Failed release uploads are retried by rerunning the Release workflow's failed jobs.
+- `.github/scripts/check.ps1`: local Cargo boundaries, version consistency, and Action pins. With `-Conventions`, uses a GitHub event file to check PR titles and commit subjects. Native shell subjects are data, never executed.
+- `tools/frameshift-release`: Go 1.25.5 standard-library-only archiver and checksum writer (`D-052`). `go -C tools/frameshift-release run . pack --binary <binary> --docs <repository> --out <existing directory> --version <version> --os <linux|macos|windows> --arch <x86_64|arm64> --epoch <commit Unix time>`, then `go -C tools/frameshift-release run . checksums <artifact directory> <version>`. Paths are relative to the Go module when using `go -C`.
+- `FRAMESHIFT_BUILD_COMMIT`: optional build input, validated as a complete lowercase Git SHA-1 and embedded in version output. CI and packaging set it to the checked-out commit. Ordinary local builds keep `buildCommit: null`; runtime never reads this variable.
+
+Release Please uses one root `simple` strategy with `version.txt`, `initial-version: 0.1.0`, workspace-inherited package versions, and precise TOML updates of `[workspace.package].version` and all Cargo lock package versions. This resolves the previously planned Rust strategy's incompatibility with the virtual root and inherited versions (`D-051`). The lock selector must be revised before any external Cargo dependency is adopted. CI verifies that all current packages are local and share the version. All current files still report 0.0.0; only a Release Please PR proposes a bump.
+
+The private App was installed on exactly Frameshift with contents and pull-request write access and mandatory metadata read access. It has no webhook, user OAuth authorization, or administration access. Repository settings and the exact live branch-protection state are recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 ## 1. Overview
 
@@ -30,7 +44,7 @@ sequenceDiagram
 
 - **Branches.** Short-lived feature branches off `main`. One topic per branch. Unrelated changes go into separate branches and pull requests.
 - **Commits.** Small, self-contained, and understandable on their own. Each commit should pass the relevant checks. Do not collect a large body of work into one commit.
-- **Pull requests.** Changes normally reach `main` through pull requests. Owner-authorized one-run exceptions for direct commits and pushes to `origin/main` are recorded in `D-010`, including the parser, measurement, JSX, and interrupted-run reconciliation increments. Direct pushes to `main` are otherwise prohibited. Branch protection settings still require authorized setup and verification in M1 (`D-049`).
+- **Pull requests.** Changes normally reach `main` through pull requests. Owner-authorized one-run exceptions for direct commits and pushes to `origin/main` are recorded in `D-010`, including the parser, measurement, JSX, and interrupted-run reconciliation increments. Direct pushes to `main` are otherwise prohibited. Branch protection is authorized after green M1 CI (`D-051`); the actual remote settings are recorded in IMPLEMENTATION.md.
 - **Squash merges only.** Configured and verified on `eiserv/frameshift` on 2026-10-12: squash merging is enabled; merge commits and rebase merging are disabled. GitHub defaults to the pull request title as the commit subject and the pull request body as the commit body. Pull request titles must follow Conventional Commits. Only the squash commit reaches `main`, so Release Please does not read the individual branch commits as additional changes. This setting does not establish branch protection or validate commit messages automatically.
 - **Documentation and verification.** Each meaningful change includes the documentation updates and tests it needs (see [TESTING.md](TESTING.md)).
 - **Versions.** Never change version numbers by hand. Release Please manages them.
@@ -96,9 +110,9 @@ Frameshift follows [Semantic Versioning](https://semver.org/).
 1. Every push to `main` runs the Release Please job. It reads the Conventional Commits since the last release.
 2. If there are releasable changes, it opens or updates a single **release pull request** that bumps the version and updates `CHANGELOG.md`.
 3. Merging the release pull request (a deliberate maintainer action) triggers the next run on `main`. That run creates the Git tag (`vX.Y.Z`) and the GitHub Release with release notes. The job outputs `release_created` and `tag_name`.
-4. Packaging runs as a dependent job in the same workflow run and attaches the binaries to that release (section 6.3).
+4. Read-only packaging runs as a dependent reusable job in the same workflow run. A separate gated upload job attaches verified assets (section 6.3).
 
-Configuration (decided in M1): manifest-based configuration with a single root package, tags without component prefix (`v0.1.0`), `bump-minor-pre-major`, and the `rust` release strategy, which updates the version in `Cargo.toml` (for a Cargo workspace, the workspace configuration is set up accordingly in M1). Changelog sections show features, fixes, performance improvements, reverts, and breaking changes. Other commit types are hidden.
+Implemented configuration: `release-please-config.json` and `.release-please-manifest.json`, with a single root package and `simple` strategy as explained above (`D-051`). Tags have no component prefix (`v0.1.0`), `bump-minor-pre-major` is enabled, and minor features are not converted to patches. Changelog sections show features, fixes, performance improvements, reverts, and breaking changes. Other commit types are hidden.
 
 ### 5.2 `GITHUB_TOKEN` trigger behavior
 
@@ -130,21 +144,32 @@ jobs:
       tag: ${{ needs.release-please.outputs.tag_name }}
 ```
 
-## 6. Planned workflows
+## 6. Workflows and pinned Actions
+
+| Action | Version | Full commit pin |
+| --- | --- | --- |
+| actions/checkout | 7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
+| actions/upload-artifact | 7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` |
+| actions/download-artifact | 8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` |
+| actions/setup-go | 7.0.0 | `b7ad1dad31e06c5925ef5d2fc7ad053ef454303e` |
+| actions/create-github-app-token | 3.3.0 | `64ab729a6294000f5aa4a4bc0b73d1f32bc45510` |
+| googleapis/release-please-action | 5.0.0 | `45996ed1f6d02564a971a2fa1b5860e934307cf7` |
+
+Pins were resolved from official repository tags on 2026-10-14 and locally checked with actionlint 1.7.11. Rust installs through rustup at exactly 1.98.0, without a third-party setup Action. Every PR tests packaging on all six targets. No build cache is configured. External dependency audits remain deferred while the Cargo workspace and Go modules contain no external libraries; the boundary checker fails closed on a new external Cargo dependency.
 
 ### 6.1 Overview
 
-| Workflow (planned) | Trigger | Purpose |
+| Workflow | Trigger | Purpose |
 | --- | --- | --- |
 | CI | Pull requests (`opened`, `synchronize`, `reopened`, `edited` for title checks), pushes to `main` | Validation |
 | Release | Pushes to `main`, manual dispatch | Release Please, then packaging |
-| Package (reusable) | Called by Release, manual dispatch with a tag, pull requests that change packaging | Build, archive, checksum, smoke-test, upload |
-| Scheduled verification | Schedule | Long-running test tiers (see section 7 of [TESTING.md](TESTING.md)) |
+| Package (reusable) | Called by CI and Release, manual dispatch with an existing tag or commit | Build, archive, checksum, smoke-test; private workflow artifacts |
+| Scheduled verification (planned) | Schedule | Long-running test tiers (see section 7 of [TESTING.md](TESTING.md)) |
 
 ### 6.2 CI
 
 - Formatting and linting with the language's standard tools.
-- Static analysis: Clippy with the project's lint configuration (including the ban on wildcard arms over closed enumerations and on `unsafe` code outside the allocator module of the development-only measurement harness, `D-040`), dependency boundary checks between crates, dependency audits and vulnerability scanning.
+- Static analysis: Clippy with the project's lint configuration (including the ban on wildcard arms over closed enumerations and on `unsafe` code outside the reviewed development-only allocator, coverage runtime, and section markers, `D-040` and `D-044`), and explicit Cargo dependency boundary checks. External dependency auditing and vulnerability scanning are planned before adopting runtime libraries.
 - Unit, fixture, golden, classification, negative, safety, determinism, and CLI end-to-end tests.
 - Cross-platform test matrix (Linux, Windows, macOS, and ARM64 runners where available), scaled by the tiers in [TESTING.md](TESTING.md) to respect the Actions minutes available to private repositories.
 - Cross-builds for every release target, to catch platform-specific build breaks early.
@@ -154,23 +179,23 @@ jobs:
 ### 6.3 Packaging
 
 1. Build the binary for each target with the pinned Rust toolchain and reproducibility flags (section 9), on native runners per operating system. Both macOS architectures can be built on an ARM64 macOS runner. Linux binaries are statically linked against musl, so they run on any distribution without depending on its glibc version. If musl's memory allocator measurably affects performance, a dedicated allocator is evaluated under its own decision record.
-2. Smoke-test each binary on a native runner where one exists. `frameshift version` must report the tag's version and commit, and `frameshift inspect` must succeed on a small fixture.
+2. Smoke-test each binary on a native runner. `frameshift version` must report the exact packaged version and commit, and help must succeed. An `inspect` fixture smoke test starts only when that command exists in M2.
 3. Create deterministic archives (section 8).
 4. Generate the checksum file.
 5. Verify archive contents and checksums before upload.
 6. Upload assets to the release with the GitHub CLI.
-7. Pull requests that change packaging run steps 1 to 5 for one platform as a check, and store the results as short-lived workflow artifacts instead of uploading them.
+7. Every CI run executes packaging for all six platforms and stores the results as private workflow artifacts with three-day retention. Before writing an archive, the Go helper reads it back and checks every entry's bytes and mode. The workflow creates each archive twice and compares its hashes.
 
 ## 7. Platforms
 
-| Platform | Tier (planned) | Notes |
+| Platform | Tier | Native runner label |
 | --- | --- | --- |
-| Linux x86_64 | 1 | Native runners |
-| Linux ARM64 | 1 | GitHub provides Linux ARM64 standard runners for private repositories (2 vCPUs) |
-| Windows x86_64 | 1 | Native runners |
-| Windows ARM64 | 1 | GitHub provides Windows ARM64 standard runners for private repositories. Rust supports the `aarch64-pc-windows-msvc` target. |
-| macOS ARM64 | 1 | Native runners |
-| macOS x86_64 | 2 | Built (cross-compiled, or on an Intel runner while available). Intel macOS runner availability is declining, so the current runner labels must be checked when the workflows are built. Native testing happens only when such a runner exists. |
+| Linux x86_64 | 1 | `ubuntu-24.04` |
+| Linux ARM64 | 1 | `ubuntu-24.04-arm` |
+| Windows x86_64 | 1 | `windows-2025` |
+| Windows ARM64 | 1 | `windows-11-arm` |
+| macOS ARM64 | 1 | `macos-15` |
+| macOS x86_64 | 2 | `macos-15-intel`, while available |
 
 - **Tier 1:** built, full test suite on native runners, release artifacts smoke-tested natively.
 - **Tier 2:** built, smoke-tested natively only when a runner is available. The release notes state the limitation.
@@ -218,8 +243,8 @@ Each archive contains one top-level directory, `frameshift-<version>-<os>-<arch>
   - Ownership and permissions are normalized.
   - Gzip headers carry no name or timestamp, and zip entries use fixed timestamps.
 
-  A small release tool in the project's own language may be preferable to platform `tar` and `zip`, because their behavior varies. Decided in M11.
-- **Verification.** Before release, CI builds the Linux artifacts twice on different runners and compares checksums. A mismatch blocks the release.
+  The implemented Go helper fixes these fields through standard-library archive writers (`D-052`). ZIP records UTC commit times with its timestamp representation; tar records the commit timestamp. Files are 0644, except the executable at 0755. A fixed file list is sorted byte-wise. Repeated archives of the same binary are checked on every platform.
+- **Binary reproducibility (planned for M11).** Build Linux artifacts twice on different runners and compare checksums. Current repeated archive checks package the same binary twice and do not prove this stronger property.
 
 ## 10. Signing, provenance, and supply chain safeguards
 
@@ -246,7 +271,7 @@ How Release Please handles tag creation for draft releases must be validated in 
 ## 11. Permissions and secrets
 
 - Workflows default to `permissions: contents: read`.
-- The Release Please job gets `contents: write` and `pull-requests: write`. The packaging job gets `contents: write` for uploads. Attestations would additionally need `id-token: write` and `attestations: write`.
+- The Release Please job mints a repository-scoped App token with `contents: write` and `pull-requests: write`. The reusable packaging jobs keep read-only tokens. Only the final release upload job gets `contents: write`. Attestations would additionally need `id-token: write` and `attestations: write`.
 - Secrets are limited to the GitHub App credentials for release pull request CI. They are only available to the release job. Pull request workflows receive no secrets.
 - All third-party actions are pinned to full commit SHAs. Updates are reviewed like dependency updates.
 - Release workflows use a concurrency group, so overlapping runs cannot race.
@@ -261,7 +286,7 @@ How Release Please handles tag creation for draft releases must be validated in 
 
 ## 13. Release checklist
 
-1. `main` is green, including the scheduled verification tier.
+1. `main` is green. Scheduled verification tiers must also pass once implemented in release hardening.
 2. Review the release pull request: version bump, changelog wording, and breaking change notes. Wording is fixed by correcting commit messages or using `Release-As`, not by editing the generated changelog by hand.
 3. Confirm that the knowledge base and target profile versions are as intended.
 4. Merge the release pull request.
@@ -271,13 +296,14 @@ How Release Please handles tag creation for draft releases must be validated in 
 
 ## 14. Failure handling
 
-- **Packaging fails after the release was created:** rerun packaging through manual dispatch with the tag. While releases are mutable, uploads replace partial assets.
+- **Packaging fails after the release was created:** rerun the failed Package and upload jobs in the originating Release run. Manual Package dispatch can validate the tag independently but cannot upload release assets. While releases are mutable, verified uploads replace partial assets.
 - **A published release is broken:** publish a new patch version. Never move or reuse a tag.
 - **Release Please produced a wrong version:** fix the cause (a commit type or footer) and use `Release-As` if needed. Never edit version numbers by hand.
 
 ## 15. Open items
 
-- Release Please strategy and configuration for the chosen language (M1).
 - Draft and immutable release flow (experiment E5, M11).
-- Archive creation tool (M11).
-- Current macOS Intel runner availability (M1).
+- Binary reproducibility across separate runners (M11).
+- Scheduled fuzzing and verification tiers.
+- Remaining M1 foundation types and the explicit publication gate.
+- Continued macOS Intel runner availability.

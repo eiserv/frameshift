@@ -1,0 +1,126 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conventions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - name: Check commit conventions and crate boundaries
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/check.ps1 -Conventions
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --offline --locked -- -D warnings
+
+  test:
+    name: Test (${{ matrix.os }}, ${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, os: linux, arch: x86_64, target: x86_64-unknown-linux-musl }
+          - { runner: ubuntu-24.04-arm, os: linux, arch: arm64, target: aarch64-unknown-linux-musl }
+          - { runner: windows-2025, os: windows, arch: x86_64, target: x86_64-pc-windows-msvc }
+          - { runner: windows-11-arm, os: windows, arch: arm64, target: aarch64-pc-windows-msvc }
+          - { runner: macos-15, os: macos, arch: arm64, target: aarch64-apple-darwin }
+          - { runner: macos-15-intel, os: macos, arch: x86_64, target: x86_64-apple-darwin }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    env:
+      CARGO_INCREMENTAL: '0'
+      FRAMESHIFT_BUILD_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy --target '${{ matrix.target }}'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.5'
+          cache: false
+      - run: cargo build --workspace --offline --locked
+      - run: cargo test --workspace --offline --locked
+      - run: cargo test --workspace --release --offline --locked
+      - run: cargo run -p frameshift-bench --offline --locked -- --check
+      - run: cargo run -p frameshift-e2 --offline --locked -- check
+      - name: Validate Go development helpers
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          foreach ($tool in @('frameshift-cputime', 'frameshift-release')) {
+            go -C "tools/$tool" test ./...
+            go -C "tools/$tool" vet ./...
+            if (gofmt -l "tools/$tool") { throw 'Go sources are not formatted.' }
+          }
+      - name: Record E2 output hashes
+        shell: pwsh
+        run: ./.github/scripts/determinism.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: determinism-${{ matrix.os }}-${{ matrix.arch }}
+          path: target/e2-sha256.txt
+          if-no-files-found: error
+          retention-days: 3
+
+  determinism:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: determinism-*
+          path: hashes
+      - name: Compare all six native outputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem hashes -Recurse -File)
+          if ($files.Count -ne 6) { throw 'Expected hashes from all six platforms.' }
+          $expected = [IO.File]::ReadAllBytes($files[0].FullName)
+          foreach ($file in $files) {
+            $actual = [IO.File]::ReadAllBytes($file.FullName)
+            if (-not [Linq.Enumerable]::SequenceEqual[byte]($expected, $actual)) { throw 'E2 output differs between platforms.' }
+          }
+
+  packaging:
+    uses: ./.github/workflows/package.yml
+    with:
+      ref: ${{ github.sha }}
+      publish: false
+
+  required:
+    name: CI required
+    if: always()
+    needs: [conventions, test, determinism, packaging]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every validation job
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
+        run: |
+          test "$RESULTS" = 'success,success,success,success'

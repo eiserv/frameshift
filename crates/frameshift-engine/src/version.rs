@@ -11,7 +11,7 @@ pub struct VersionInfo {
     pub knowledge_bases: &'static [&'static str],
     /// Shipped migration target profile identifiers.
     pub target_profiles: &'static [&'static str],
-    /// Build commit when reliably embedded; unknown in the current build.
+    /// Explicitly injected build commit; unknown in ordinary local builds.
     pub build_commit: Option<&'static str>,
     /// Actual compiler identity captured by the engine's Cargo build script.
     pub toolchain: &'static str,
@@ -28,7 +28,7 @@ pub const fn info() -> VersionInfo {
         rulesets: &[],
         knowledge_bases: &[],
         target_profiles: &[],
-        build_commit: None,
+        build_commit: option_env!("FRAMESHIFT_BUILD_COMMIT"),
         toolchain: env!("FRAMESHIFT_RUSTC_VERSION"),
     }
 }

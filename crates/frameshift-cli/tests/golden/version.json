@@ -5,6 +5,6 @@
   "rulesets": [],
   "knowledgeBases": [],
   "targetProfiles": [],
-  "buildCommit": null,
+  "buildCommit": @BUILD_COMMIT_JSON@,
   "toolchain": "@TOOLCHAIN@"
 }

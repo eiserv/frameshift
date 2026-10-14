@@ -141,7 +141,7 @@ Every additional language must meet all of the following:
 6. **Same engineering standard.** Tests, CI, formatting, linting, and documentation, plus an entry in `AGENTS.md` once the component exists.
 7. **Core independence.** Optional components (verification helpers, a future model advisor) never become requirements for inspection, analysis, planning, or migration.
 
-Actual use: the development-only processor-time helper `tools/frameshift-cputime` in Go (`D-046`), because the Rust standard library has no processor-time clock and Go's reads it without unsafe code or dependencies.
+Actual uses: the development-only processor-time helper `tools/frameshift-cputime` in Go (`D-046`), because the Rust standard library has no processor-time clock and Go's reads it without unsafe code or dependencies; and `tools/frameshift-release` (`D-052`), because Go supplies reviewed hashing, compression, and both archive formats in its standard library.
 
 Plausible future cases (examples, not decisions):
 
@@ -276,6 +276,8 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 
 ### 3.6 Process
 
+The development-only Go release helper implements archives and checksums without new dependencies (`D-052`). Official CI Actions and the local workflow validator are evaluated and pinned under `D-051`; the exact pins and publication gates are in [RELEASES.md](RELEASES.md).
+
 - Every runtime dependency, and every development tool that affects build output, gets an entry in [DECISIONS.md](DECISIONS.md) with the evaluation against section 3.2.
 - Dependencies are pinned. Upgrades are separate commits (`build(deps): ...`) with a changelog review.
 - A third-party notices file is generated from the dependencies actually shipped before any public release (see [SECURITY.md](SECURITY.md)).
@@ -311,7 +313,7 @@ Benchmarks run on synthetic projects of fixed sizes (generated deterministically
 ## 5. Portability
 
 - **Targets:** Linux, Windows, and macOS on x86_64 and ARM64, with support tiers defined in [RELEASES.md](RELEASES.md).
-- **Paths:** internally normalized, slash-separated, and relative to the root. Platform-specific forms (drive letters, UNC paths, backslashes) exist only at the CLI boundary. Long paths on Windows must be tested.
+- **Paths:** internally normalized, slash-separated, and relative to the root. Native host forms (drive letters, UNC paths, backslashes used as separators) stay at filesystem boundaries. Source names are preserved for analysis; portable output names have a separate stronger validation contract (`D-053`, not implemented yet). Long paths on Windows must be tested.
 - **Case sensitivity:** never rely on case-insensitive lookups. Output path collisions that differ only in case are detected (`FS4002`).
 - **Unicode normalization:** paths are compared byte-wise. Names that differ only in Unicode normalization (NFC versus NFD) are detected and reported.
 - **Invalid output names:** Windows reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`), trailing dots or spaces, and control characters are rejected for output paths (`FS7003`).
@@ -337,7 +339,7 @@ Benchmarks run on synthetic projects of fixed sizes (generated deterministically
 
 ### 7.1 Boundaries
 
-The existing M0 crates follow the layering in section 6 of [ARCHITECTURE.md](ARCHITECTURE.md). An automated import-boundary check is planned with M1 CI. Later implementation must preserve downward-only dependencies. The CLI depends only on the engine's public interface. Packages are small and cohesive. "utils" or "common" packages are not allowed to become dumping grounds.
+The existing M0 crates follow the layering in section 6 of [ARCHITECTURE.md](ARCHITECTURE.md). The M1 CI script `.github/scripts/check.ps1` enforces explicit Cargo crate dependencies, including dev, build, and target-specific dependencies (`D-051`). Source-level framework import checks remain later adapter work. Later implementation must preserve downward-only dependencies. The CLI depends only on the engine's public interface. Packages are small and cohesive. "utils" or "common" packages are not allowed to become dumping grounds.
 
 ### 7.2 Error handling
 
@@ -384,7 +386,7 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | JSON document kinds | `frameshift.version` and usage `frameshift.error` implemented (`D-050`); `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, and `frameshift.manifest` planned |
 | Output metadata | `.frameshift/` directory (with `SUMMARY.md`, `manifest.json`, `report.json`, `unmigrated/`), `src/frameshift-compat/` helpers |
 | Configuration file | `frameshift.jsonc` (`D-027`) |
-| Environment variable prefix | `FRAMESHIFT_` (no public runtime options defined). `FRAMESHIFT_RUSTC_VERSION` is private Cargo-injected build metadata, not a runtime option (`D-050`). |
+| Environment variable prefix | `FRAMESHIFT_` (no public runtime options defined). `FRAMESHIFT_RUSTC_VERSION` is private Cargo-injected compiler metadata (`D-050`). `FRAMESHIFT_BUILD_COMMIT` is an optional validated build input (`D-051`). Neither is read at runtime. Repository variables prefixed `FRAMESHIFT_` control release automation only. |
 | Finding codes | `FS` followed by four digits, by area (see [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md)) |
 | Source adapter IDs | Lowercase framework name, for example `nextjs` |
 | Target IDs | Lowercase, hyphen-separated, for example `astro-preact` |

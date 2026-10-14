@@ -1,0 +1,84 @@
+name: Package
+on:
+  workflow_call:
+    inputs:
+      ref: { required: true, type: string }
+      publish: { required: true, type: boolean }
+  workflow_dispatch:
+    inputs:
+      ref: { description: 'Existing Release Please tag or commit for a validation build', required: true, type: string }
+      publish: { description: 'Validate release eligibility, assets upload only through Release workflow', default: false, type: boolean }
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, os: linux, arch: x86_64, target: x86_64-unknown-linux-musl }
+          - { runner: ubuntu-24.04-arm, os: linux, arch: arm64, target: aarch64-unknown-linux-musl }
+          - { runner: windows-2025, os: windows, arch: x86_64, target: x86_64-pc-windows-msvc }
+          - { runner: windows-11-arm, os: windows, arch: arm64, target: aarch64-pc-windows-msvc }
+          - { runner: macos-15, os: macos, arch: arm64, target: aarch64-apple-darwin }
+          - { runner: macos-15-intel, os: macos, arch: x86_64, target: x86_64-apple-darwin }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - name: Install pinned toolchain
+        shell: bash
+        run: rustup toolchain install 1.98.0 --profile minimal --target '${{ matrix.target }}'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.5'
+          cache: false
+      - name: Build, smoke-test, and archive
+        shell: pwsh
+        env:
+          RELEASE_REF: ${{ inputs.ref }}
+          PUBLISH: ${{ inputs.publish }}
+          RELEASE_READY: ${{ vars.FRAMESHIFT_M1_RELEASE_READY }}
+          BUILD_OS: ${{ matrix.os }}
+          BUILD_ARCH: ${{ matrix.arch }}
+          BUILD_TARGET: ${{ matrix.target }}
+        run: ./.github/scripts/package.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-${{ matrix.os }}-${{ matrix.arch }}
+          path: target/archives/*
+          if-no-files-found: error
+          retention-days: 3
+
+  collect:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.25.5'
+          cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: target/archives
+      - name: Check platform set and create checksums
+        run: |
+          test "$(find target/archives -type f | wc -l)" -eq 6
+          version="$(cat version.txt)"
+          go -C tools/frameshift-release run . checksums ../../target/archives "$version"
+          (cd target/archives && sha256sum --check "frameshift-$version-checksums.txt")
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages-with-checksums
+          path: target/archives/*
+          retention-days: 3

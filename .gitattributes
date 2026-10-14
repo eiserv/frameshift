@@ -11,3 +11,7 @@ tools/frameshift-e2/fixtures/** -text
 # CLI golden output also has identical LF bytes on every platform.
 crates/frameshift-cli/tests/golden/** -text
 schemas/*.json text eol=lf
+*.yml text eol=lf
+*.ps1 text eol=lf
+/*.json text eol=lf
+version.txt text eol=lf

@@ -1,10 +1,22 @@
-//! Records compiler identity without inspecting Git or the source environment.
+//! Embeds compiler identity and an explicit optional commit without inspecting Git.
 
 use std::{env, process::Command};
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=RUSTC");
+    println!("cargo:rerun-if-env-changed=FRAMESHIFT_BUILD_COMMIT");
+    if let Some(commit) = env::var_os("FRAMESHIFT_BUILD_COMMIT") {
+        let commit = commit.to_str().expect("build commit must be ASCII");
+        assert!(
+            commit.len() == 40
+                && commit
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)),
+            "build commit must be a complete lowercase Git SHA-1"
+        );
+        println!("cargo:rustc-env=FRAMESHIFT_BUILD_COMMIT={commit}");
+    }
     let compiler = env::var_os("RUSTC").expect("Cargo must identify the Rust compiler");
     let output = Command::new(compiler)
         .arg("--version")

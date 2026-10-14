@@ -25,6 +25,16 @@ fn expected(name: &str) -> Vec<u8> {
         .unwrap()
         .replace("@ENGINE_VERSION@", info.engine_version)
         .replace("@TOOLCHAIN@", info.toolchain)
+        .replace(
+            "@BUILD_COMMIT_TEXT@",
+            info.build_commit.unwrap_or("unknown"),
+        )
+        .replace(
+            "@BUILD_COMMIT_JSON@",
+            &info
+                .build_commit
+                .map_or_else(|| "null".to_owned(), |commit| format!("\"{commit}\"")),
+        )
         .into_bytes()
 }
 
@@ -153,6 +163,7 @@ fn invalid_arguments_and_planned_commands_fail_without_echoing_input() {
 fn runtime_environment_and_current_directory_do_not_change_version() {
     let baseline = invoke(&["version", "--format", "json"]);
     let changed = Command::new(env!("CARGO_BIN_EXE_frameshift"))
+        .env("FRAMESHIFT_BUILD_COMMIT", "malicious-runtime-override")
         .args(["version", "--format", "json"])
         .current_dir(std::env::temp_dir())
         .env("FRAMESHIFT_RUSTC_VERSION", "not the build compiler")
@@ -219,10 +230,24 @@ fn update_golden_files() {
     for &(arguments, name, status) in GOLDENS {
         let output = invoke(arguments);
         assert_eq!(output.status.code(), Some(status));
-        let text = String::from_utf8(output.stdout)
+        let mut text = String::from_utf8(output.stdout)
             .unwrap()
             .replace(info.toolchain, "@TOOLCHAIN@")
             .replace(info.engine_version, "@ENGINE_VERSION@");
+        if name == "version.txt" {
+            text = text.replace(
+                info.build_commit.unwrap_or("unknown"),
+                "@BUILD_COMMIT_TEXT@",
+            );
+        } else if name == "version.json" {
+            let commit = info
+                .build_commit
+                .map_or_else(|| "null".to_owned(), |commit| format!("\"{commit}\""));
+            text = text.replace(
+                &format!("\"buildCommit\": {commit}"),
+                "\"buildCommit\": @BUILD_COMMIT_JSON@",
+            );
+        }
         std::fs::write(fixture_path(name), text).unwrap();
     }
 }
