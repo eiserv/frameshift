@@ -141,7 +141,8 @@ The vertical chain shows layer order, not single-step dependencies. A layer may 
 
 Boundary rules:
 
-- **Foundation** has no knowledge of frameworks. It provides diagnostics, stable identifiers, the internal path model (normalized, slash-separated, root-relative), hashing, resource limits, and collections with deterministic iteration.
+- **Foundation** has no knowledge of frameworks. Its full scope is diagnostics, stable identifiers, the internal path model (canonical, slash-separated, root-relative), hashing, resource limits, and collections with deterministic iteration. The text and path values are implemented; the remaining foundation contracts are planned.
+- The implemented path values are `SourcePath` and the stronger `OutputPath` (`D-053`, `D-054`). They require canonical slash-separated root-relative UTF-8, reject ambiguous forms without normalization, and preserve source spelling. Their complete value contract and filesystem limits are in section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md); native conversion, collision detection, and safe writes remain future subsystem work.
 - **Input** is the only layer that touches the source filesystem. Every later layer reads the snapshot.
 - **Syntax** knows file formats but not frameworks.
 - **Semantics** knows language semantics (modules, scopes) in general. Framework knowledge enters through *source adapters*, which extract framework facts.

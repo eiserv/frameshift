@@ -52,6 +52,8 @@ Milestones are defined by capabilities, not dates. See [docs/ROADMAP.md](docs/RO
 
 ## Available CLI shell
 
+The engine foundation also exposes strict canonical `SourcePath` values and separately validated portable `OutputPath` values through `frameshift_engine::foundation` (`D-053`, `D-054`). They preserve source spelling and reject ambiguous structure without normalization. These in-memory types do not inspect a filesystem or establish safe write locations. See section 14 of [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
+
 ```text
 cargo run -p frameshift-cli --offline --locked -- help
 cargo run -p frameshift-cli --offline --locked -- version

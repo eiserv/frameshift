@@ -77,6 +77,8 @@ flowchart LR
 
 M2 and M3 can proceed in parallel, and so can M8, M9, and M10. M5 is deliberately early: an accurate analysis report is useful on its own, and it validates the model and the metrics before any transformation work starts.
 
+M1's canonical source and portable output path values are implemented (`D-053`, `D-054`, section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Findings, stable identifiers, hashing and remaining shared foundation contracts, and explicit M1 acceptance are still outstanding. Filesystem discovery and native path conversion stay in M2; output collision detection and safe writes stay in planning and execution.
+
 ### Minimum supported rule set
 
 At V1 completion, every `A` and `R` entry of the compatibility matrix in section 17 of [MIGRATION_SPEC.md](MIGRATION_SPEC.md) is handled, except entries marked "later". In summary:

@@ -15,6 +15,7 @@ mod coverage;
 mod edits;
 mod lexical;
 mod mutate;
+mod paths;
 mod record;
 mod runtime;
 mod seeds;

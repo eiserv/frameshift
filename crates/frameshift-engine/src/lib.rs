@@ -1,5 +1,6 @@
-//! Public facade for Frameshift's implemented, in-memory text operations.
+//! Public facade for Frameshift's implemented, in-memory text and path operations.
 //!
+//! The foundation API exposes canonical source and portable output path values.
 //! The text API exposes source positions, lexical primitives, a JavaScript
 //! parser for Script and Module source text with explicit JSX, TypeScript,
 //! and TSX dialects, regular-expression validation, pinned Unicode identifier
@@ -12,7 +13,7 @@
 
 pub mod version;
 
-/// Framework-independent source text, spans, positions, and text limits.
+/// Framework-independent source text, canonical paths, positions, and limits.
 pub use frameshift_core as foundation;
 /// Astro printing, JSX conversion, and emitted-text provenance.
 pub use frameshift_emit as emit;

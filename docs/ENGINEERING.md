@@ -313,7 +313,7 @@ Benchmarks run on synthetic projects of fixed sizes (generated deterministically
 ## 5. Portability
 
 - **Targets:** Linux, Windows, and macOS on x86_64 and ARM64, with support tiers defined in [RELEASES.md](RELEASES.md).
-- **Paths:** internally normalized, slash-separated, and relative to the root. Native host forms (drive letters, UNC paths, backslashes used as separators) stay at filesystem boundaries. Source names are preserved for analysis; portable output names have a separate stronger validation contract (`D-053`, not implemented yet). Long paths on Windows must be tested.
+- **Paths:** internal values are canonical, slash-separated, and relative to the root. `SourcePath` and the stronger `OutputPath` implement strict validation without normalization (`D-053`, `D-054`, section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Native host conversion (drive letters, UNC paths, backslashes used as separators) stays at future filesystem boundaries. Source names are preserved for analysis where the canonical grammar can represent them; other names must be reported explicitly by discovery. Long paths at the actual Windows filesystem boundary remain to be tested.
 - **Case sensitivity:** never rely on case-insensitive lookups. Output path collisions that differ only in case are detected (`FS4002`).
 - **Unicode normalization:** paths are compared byte-wise. Names that differ only in Unicode normalization (NFC versus NFD) are detected and reported.
 - **Invalid output names:** Windows reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`), trailing dots or spaces, and control characters are rejected for output paths (`FS7003`).

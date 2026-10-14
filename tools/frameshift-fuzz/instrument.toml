@@ -1,6 +1,9 @@
 # Cargo configuration for coverage-instrumented builds of frameshift-fuzz
 # (D-044). Pass it with `--config tools/frameshift-fuzz/instrument.toml` and
 # a separate `--target-dir`, so ordinary builds keep their artifacts.
+# Specify `--target <host triple>` even for a native build. Cargo then applies
+# instrumentation to target crates only, not host build scripts, which do not
+# link the fuzz runtime or the Windows section markers.
 #
 # The sancov pass of the pinned stable rustc gives every basic block an 8-bit
 # counter. One code generation unit per crate is required: with several, the
