@@ -9,6 +9,17 @@
 //! inspection, migration, or verification pipeline. Future CLI code must depend on this facade rather than lower
 //! layers.
 
+/// Framework-independent source text, spans, positions, and text limits.
+pub use frameshift_core as foundation;
+/// Astro printing, JSX conversion, and emitted-text provenance.
+pub use frameshift_emit as emit;
+/// Language parsing, lexical scanning, and character reference decoding.
+pub use frameshift_syntax as syntax;
+/// Validated span edits and rewrite provenance.
+pub use frameshift_transform as transform;
+
+// Retain the M0 imports while development tools adopt the layer namespaces.
+
 pub use frameshift_core::{Position, SourceText, Span, TextError, TextLimits};
 pub use frameshift_emit::{
     Anchor, Assumption, AssumptionKind, AstroComponent, AttributeItem, AttributeName,

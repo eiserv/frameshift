@@ -160,6 +160,8 @@ Statuses change through an edit to this file under the integration workflow in D
 
 - **Eighteenth one-run exception (2026-10-14):** In the same Claude Code session, the project owner asked to verify that E1 and E2 are complete, to review the maintainability of the project, and to commit and push a short fix of any small gap directly to `main`. This run fixes unbounded recursion in the JSX conversion, adds the `astro` fuzz target, and records the review in section 11.1 of [IMPLEMENTATION.md](IMPLEMENTATION.md). This exception has the same limits as the first one.
 
+- **Nineteenth one-run exception (2026-10-14):** Through the Codex chat, the project owner explicitly authorized continuing development, interviewing for outstanding decisions, and committing and pushing verified changes directly to `main` once the work is complete. This run starts M1 with the grouped engine facade and the help and version CLI. This exception has the same limits as the first one.
+
 ### D-011: Release management with Release Please
 
 - **Status:** Accepted (2026-10-11).
