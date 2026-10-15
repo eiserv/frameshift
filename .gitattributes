@@ -14,5 +14,6 @@ schemas/*.json text eol=lf
 *.yml text eol=lf
 *.ps1 text eol=lf
 /*.json text eol=lf
+.github/*.json text eol=lf
 version.txt text eol=lf
 LICENSE text eol=lf

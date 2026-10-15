@@ -29,6 +29,8 @@ Frameshift will never present an incomplete migration as a success, and it never
 
 The first supported path targets Next.js App Router projects that are mostly static. Static components become Astro components that ship no JavaScript. Interactive components become Preact islands. Routes, content, appearance, accessibility, and behavior are preserved, and the output is deployable as a static site. Request-time server features such as middleware, Server Actions, and cookies are detected and explained, not migrated. See [docs/MIGRATION_SPEC.md](docs/MIGRATION_SPEC.md).
 
+Runtime dependencies are reviewed explicitly. The SHA-256 dependency is pinned to RustCrypto `sha2` 0.11.1 with default features disabled; its exact transitive graph, third-party notices, and development-only advisory checks are recorded under `D-058` in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md). On a fresh machine, prepare the dependency cache with `cargo fetch --locked` before the documented offline build and test commands. Product runtime remains offline.
+
 ## Development stages
 
 | Stage | Theme |

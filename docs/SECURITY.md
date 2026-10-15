@@ -187,7 +187,7 @@ Deferred. If it is ever added, it is opt-in, sends minimal redacted context, nev
 - **Minimal dependencies** under the policy in section 3 of [ENGINEERING.md](ENGINEERING.md). Each runtime dependency has a decision record.
 - **Pinned toolchains and tools.** The compiler version is pinned. GitHub Actions are pinned to full commit SHAs.
 - **Least-privilege CI.** Default read-only workflow permissions. Write permissions only for release jobs that need them. Secrets available only to the jobs that use them (see [RELEASES.md](RELEASES.md)).
-- **Vulnerability scanning and dependency audits** in CI (for example cargo-audit and cargo-deny, after evaluation).
+- **Implemented Cargo dependency checks (`D-058`).** CI restricts registry packages to the exact reviewed graph, including features and build scripts, and runs pinned `cargo-audit` 0.22.2 with `--deny warnings`. Known vulnerabilities and advisory warnings fail CI. These checks do not prove absence of unknown vulnerabilities. Broader license automation and cargo-deny remain unevaluated. Dependency preparation and advisory fetching are development network operations, not product runtime behavior.
 - **Release integrity.** SHA-256 checksums for every artifact from the first release. Reproducibility checks. Signing and provenance attestations evaluated for the public phase (`DF-004`).
 - **Branch protection.** Pull requests required for `main`, with status checks required before merging.
 - **Secret scanning** of the repository and its history before going public.

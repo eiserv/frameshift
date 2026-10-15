@@ -5,6 +5,7 @@ $version = (Get-Content -Raw version.txt).Trim()
 if ($env:PUBLISH -eq 'true' -and ($env:RELEASE_READY -ne 'true' -or $env:RELEASE_REF -cne "v$version")) { throw 'Publication requires completed M1 and an exact release tag.' }
 $env:RUSTFLAGS = "--remap-path-prefix=$((Get-Location).Path)=."
 if ($env:BUILD_OS -eq 'linux') { $env:RUSTFLAGS += ' -Clinker=rust-lld -Clinker-flavor=ld.lld' }
+cargo fetch --locked
 cargo build -p frameshift-cli --release --offline --locked --target $env:BUILD_TARGET
 $binary = "target/$env:BUILD_TARGET/release/frameshift"
 if ($env:BUILD_OS -eq 'windows') { $binary += '.exe' }
