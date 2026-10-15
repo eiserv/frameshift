@@ -72,6 +72,10 @@ jobs:
       - run: cargo build --workspace --offline --locked
       - run: cargo test --workspace --offline --locked
       - run: cargo test --workspace --release --offline --locked
+      - name: Check portable SHA-256 backend
+        env:
+          RUSTFLAGS: '--cfg sha2_backend="soft"'
+        run: cargo test -p frameshift-engine --offline --locked --test hashes
       - run: cargo run -p frameshift-bench --offline --locked -- --check
       - run: cargo run -p frameshift-e2 --offline --locked -- check
       - name: Validate Go development helpers

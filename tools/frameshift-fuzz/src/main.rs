@@ -13,6 +13,7 @@
 mod astro;
 mod coverage;
 mod edits;
+mod hashes;
 mod identifiers;
 mod lexical;
 mod mutate;
