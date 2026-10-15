@@ -28,6 +28,8 @@ The coverage-guided fuzzer has nine targets, including `paths` for arbitrary-byt
 
 ### 3.1 Unit tests
 
+The eleven finding facade tests (`D-057`) cover validated Unicode/BOM/CRLF/EOF locations, invalid spans, optional typed associations, exact prose limits and error precedence, complete comparison of every record field, preservation of evidence on failed insertion, input-order independence with duplicates, and report-local numbering above 9999 (IMPLEMENTATION.md section 17).
+
 The eleven implemented public-facade path contract tests (`D-054`) exercise canonical source paths, separate portable output validation, exact bytes and offsets, resource boundaries, and deterministic collection keys without filesystem access. Their scope is recorded in section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md). Native path conversion, actual long-path I/O, collision detection, and containment tests remain future filesystem work.
 
 Pure functions and small components: path normalization, semver matching, gitignore matching, the static evaluator, metric arithmetic, the edit engine, and individual rule preconditions. Fast, exhaustive where the input space is small.

@@ -13,7 +13,7 @@
 
 pub mod version;
 
-/// Framework-independent source text, canonical paths, stable identifiers, and limits.
+/// Framework-independent source text, paths, identifiers, findings, and limits.
 pub use frameshift_core as foundation;
 /// Astro printing, JSX conversion, and emitted-text provenance.
 pub use frameshift_emit as emit;

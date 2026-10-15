@@ -150,6 +150,8 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 
 ### 7.8 Terminal and report injection
 
+The implemented finding records (`D-057`, IMPLEMENTATION.md section 17) retain original paths and prose. Messages reject controls and line separators, but explanation and remediation can contain controls and line breaks. They are evidence values, not escaped output or automatic secret redaction. Consumers must apply the rendering rules below.
+
 - All source-derived strings printed to a terminal have control characters escaped, including ANSI escape sequences and carriage returns.
 - Markdown output escapes source-derived text. HTML rendering, if ever added, escapes by context.
 
