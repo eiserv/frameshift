@@ -94,7 +94,8 @@ impl FindingCode {
 ///
 /// Name segments start with a lowercase ASCII letter, followed by lowercase
 /// ASCII letters or digits, with single internal hyphens. The migration path
-/// has exactly one `-to-` separator between two such names. No normalization,
+/// has exactly one `-to-` occurrence, including overlapping occurrences,
+/// between two such names. No normalization,
 /// version, registry lookup, or framework-specific validation is performed.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RuleId(String);
@@ -109,7 +110,12 @@ impl RuleId {
         let Some((source, target)) = path.split_once("-to-") else {
             return Err(IdentifierError::InvalidRuleId);
         };
-        if !name(source) || !name(target) || target.contains("-to-") || !dotted(rule, 2, 2) {
+        let separators = path
+            .as_bytes()
+            .windows(4)
+            .filter(|window| *window == b"-to-")
+            .count();
+        if !name(source) || !name(target) || separators != 1 || !dotted(rule, 2, 2) {
             return Err(IdentifierError::InvalidRuleId);
         }
         copy(value).map(Self)

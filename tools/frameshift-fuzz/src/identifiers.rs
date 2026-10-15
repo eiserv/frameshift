@@ -165,7 +165,11 @@ fn rule_valid(text: &str) -> bool {
         return false;
     }
     let path: Vec<_> = pieces[0].split("-to-").collect();
-    path.len() == 2 && path.into_iter().all(segment) && dotted(pieces[1], 2, 2)
+    path.len() == 2
+        && !path[0].ends_with("-to")
+        && !path[1].starts_with("to-")
+        && path.into_iter().all(segment)
+        && dotted(pieces[1], 2, 2)
 }
 
 fn route_valid(text: &str) -> bool {
@@ -200,7 +204,8 @@ mod tests {
     #[test]
     fn generated_identifiers_and_unit_fragments_satisfy_independent_contracts() {
         let parts = [
-            "a", "b1", "-", "#", "%23", "é", "\0", "\u{1b}", "", "/", "..", "-to-", "a--b",
+            "a", "b1", "-", "#", "%23", "é", "\0", "\u{1b}", "", "/", "..", "-to-", "a--b", "to-b",
+            "a-to",
         ];
         for first in parts {
             for last in parts {

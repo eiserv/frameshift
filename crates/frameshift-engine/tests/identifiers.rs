@@ -75,6 +75,29 @@ fn catalog_ids_preserve_valid_names_and_expose_rule_parts() {
 }
 
 #[test]
+fn rejects_overlapping_migration_separators_without_rejecting_unambiguous_names() {
+    for value in ["a-to-to-b/x.y", "a-to-to-to-b/x.y", "a-to-b-to-c/x.y"] {
+        assert_eq!(
+            RuleId::new(value, IdentifierLimits::default()),
+            Err(IdentifierError::InvalidRuleId)
+        );
+    }
+    for value in [
+        "ato-to-b/x.y",
+        "a-to-tob/x.y",
+        "a-to-b-to/x.y",
+        "to-a-to-b/x.y",
+    ] {
+        assert_eq!(
+            RuleId::new(value, IdentifierLimits::default())
+                .unwrap()
+                .as_str(),
+            value
+        );
+    }
+}
+
+#[test]
 fn every_specified_feature_catalog_id_and_family_is_representable() {
     let mut catalog = false;
     let mut count = 0;
