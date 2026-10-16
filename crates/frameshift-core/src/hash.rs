@@ -25,6 +25,17 @@ impl Default for HashLimits {
     }
 }
 
+impl HashLimits {
+    /// Returns the enforced bound: the lesser of `max_bytes` and 2^61 - 1.
+    pub const fn effective_max_bytes(self) -> u64 {
+        if self.max_bytes < MAX_BYTES {
+            self.max_bytes
+        } else {
+            MAX_BYTES
+        }
+    }
+}
+
 /// A hashing or canonical digest parsing failure, without input contents.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HashError {
@@ -166,7 +177,7 @@ impl Sha256Hasher {
         Self {
             state: Sha256::new(),
             bytes: 0,
-            limit: limits.max_bytes.min(MAX_BYTES),
+            limit: limits.effective_max_bytes(),
         }
     }
 
