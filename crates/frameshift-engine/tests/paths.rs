@@ -1,6 +1,6 @@
 //! Public facade contracts for canonical source and portable output path values.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 
 use frameshift_engine::foundation::{OutputPath, PathError, PathLimits, SourcePath};
 
@@ -317,6 +317,10 @@ fn strengthening_and_weakening_preserve_storage_and_spelling() {
 }
 
 #[test]
+#[expect(
+    clippy::disallowed_types,
+    reason = "checks Hash agreement with Eq; the set is never iterated (D-060)"
+)]
 fn ordered_collections_use_original_bytes_and_exact_identity() {
     let names = ["é", "e\u{301}", "z", "A", "a", "src/a", "src/A", "🦀"];
     let mut expected = names.to_vec();
@@ -331,7 +335,7 @@ fn ordered_collections_use_original_bytes_and_exact_identity() {
         outputs.iter().map(OutputPath::as_str).collect::<Vec<_>>(),
         expected
     );
-    let hashes: HashSet<_> = names
+    let hashes: std::collections::HashSet<_> = names
         .iter()
         .flat_map(|name| [source(name), source(name)])
         .collect();

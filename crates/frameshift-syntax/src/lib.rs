@@ -5,6 +5,7 @@ mod ast;
 mod identifier;
 mod jsx;
 mod lexical;
+mod lookup;
 mod numeric;
 mod parser;
 mod punctuator;

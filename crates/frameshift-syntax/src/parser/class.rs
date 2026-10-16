@@ -4,8 +4,6 @@
 //! before their declaration, so references are resolved when the class body
 //! ends; unresolved names move to the enclosing class.
 
-use std::collections::HashMap;
-
 use super::{
     Context, Goal, ParseError, ParseErrorKind, Parser, Permission, Strictness,
     expression::{PostfixMode, PropertyKey},
@@ -17,6 +15,7 @@ use super::{
 use crate::{
     ast::{MethodKind, NodeId, SyntaxNodeKind},
     identifier::{IdentifierKind, IdentifierToken},
+    lookup::LookupMap,
     punctuator::Punctuator,
     value::{identifier_equals, string_literal_equals},
 };
@@ -49,7 +48,7 @@ struct PrivateDeclaration {
 
 #[derive(Default)]
 pub(super) struct ClassScope<'source> {
-    declared: HashMap<Name<'source>, PrivateDeclaration>,
+    declared: LookupMap<Name<'source>, PrivateDeclaration>,
     pub(super) references: Vec<(Name<'source>, usize)>,
 }
 

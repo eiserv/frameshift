@@ -21,8 +21,6 @@ mod speculation;
 mod statement;
 mod typescript;
 
-use std::collections::HashMap;
-
 use frameshift_core::{SourceText, Span};
 
 pub use error::{ParseError, ParseErrorKind, StrictModeError};
@@ -33,6 +31,7 @@ use crate::{
     },
     identifier::{IdentifierToken, scan_js_identifier},
     lexical::{Comment, LexicalError, LexicalLimits, SourceGoal, scan_hashbang, scan_js_trivia},
+    lookup::LookupMap,
     punctuator::{
         GreaterThanMode, JsLexicalGoal, Punctuator, PunctuatorContext, PunctuatorToken,
         scan_js_punctuator,
@@ -295,7 +294,7 @@ struct Parser<'source> {
     // Outcomes of TypeScript speculation that repeat in the same state: false
     // for a reading that failed, and the answer of a lookahead
     // (`speculation.rs`).
-    speculations: HashMap<Attempt, bool>,
+    speculations: LookupMap<Attempt, bool>,
 }
 
 // Saved state for a speculative look at later tokens.
@@ -384,7 +383,7 @@ impl<'source> Parser<'source> {
             list_buffers: Vec::new(),
             bound_names: Vec::new(),
             expression_only_errors: Vec::new(),
-            speculations: HashMap::new(),
+            speculations: LookupMap::default(),
         }
     }
 

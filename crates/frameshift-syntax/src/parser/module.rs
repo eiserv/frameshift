@@ -1,7 +1,5 @@
 //! Import and export declarations at the top level of a module.
 
-use std::collections::{HashMap, HashSet};
-
 use frameshift_core::Span;
 
 use super::{
@@ -11,6 +9,7 @@ use super::{
 use crate::{
     ast::{FunctionKind, NodeId, SyntaxNodeKind},
     identifier::{IdentifierKind, ReservedWordClass},
+    lookup::{LookupMap, LookupSet},
     punctuator::Punctuator,
     value::{
         identifier_chars, string_literal_is_well_formed, string_literal_units, string_literal_value,
@@ -20,7 +19,7 @@ use crate::{
 #[derive(Default)]
 pub(super) struct ModuleState<'source> {
     // Exported names by StringValue, which must be unique.
-    exported_names: HashMap<String, usize>,
+    exported_names: LookupMap<String, usize>,
     // Local bindings exported by `export { name }`, checked when the module ends.
     exported_bindings: Vec<(Name<'source>, usize)>,
 }
@@ -266,7 +265,7 @@ impl<'source> Parser<'source> {
         let attributes = self.within_braces(|parser| {
             parser.expect_punctuator(Punctuator::LeftBrace, parser.goal_after_expression())?;
             let mut attributes = Vec::new();
-            let mut keys = HashSet::new();
+            let mut keys = LookupSet::default();
             loop {
                 if parser.at_char('}')? {
                     break;

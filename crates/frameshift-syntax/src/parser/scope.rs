@@ -6,9 +6,8 @@
 //! of them can see the conflict. Scopes are discarded after parsing; the
 //! semantic layer builds its own scope graph.
 
-use std::collections::HashMap;
-
 use super::{ParseError, ParseErrorKind, Parser, Strictness, names::Name};
+use crate::lookup::LookupMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ScopeKind {
@@ -54,7 +53,7 @@ impl Binding {
 
 struct Scope<'source> {
     kind: ScopeKind,
-    names: HashMap<Name<'source>, Binding>,
+    names: LookupMap<Name<'source>, Binding>,
 }
 
 #[derive(Default)]
@@ -91,7 +90,7 @@ impl<'source> Parser<'source> {
             .map_err(|_| self.error(self.cursor, ParseErrorKind::AllocationFailed))?;
         self.scopes.stack.push(Scope {
             kind,
-            names: HashMap::new(),
+            names: LookupMap::default(),
         });
         Ok(())
     }

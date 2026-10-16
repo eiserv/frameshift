@@ -1,0 +1,7 @@
+# Hash-based collections iterate in an unspecified order. Workspace code uses
+# ordered collections, sorted vectors, or KeyTable for anything it iterates; a
+# lookup-only use states its reason with `#[expect]` (D-060).
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "iteration order is unspecified; use BTreeMap, a sorted Vec, or KeyTable, or justify a lookup-only use (D-060)" },
+    { path = "std::collections::HashSet", reason = "iteration order is unspecified; use BTreeSet, a sorted Vec, or KeyTable, or justify a lookup-only use (D-060)" },
+]

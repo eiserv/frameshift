@@ -2,11 +2,10 @@
 //! Unicode and UnicodeSets mode, and Annex B.1.2 without either flag.
 //! The parser is iterative, so nesting depth cannot exhaust the call stack.
 
-use std::collections::HashMap;
-
 use frameshift_core::Span;
 
 use crate::lexical::{LexicalError, LexicalErrorKind, error};
+use crate::lookup::LookupMap;
 use crate::regexp::{RegExpFlag, RegExpFlags};
 use crate::regexp_property::{PropertyKind, classify};
 use crate::unicode::{is_js_identifier_part, is_js_identifier_start};
@@ -197,7 +196,7 @@ struct Parser<'a> {
     pattern_alternative: usize,
     capturing_groups: u32,
     /// The latest `(` offset of each group name, decoded from escapes.
-    names: HashMap<String, usize>,
+    names: LookupMap<String, usize>,
     name_references: Vec<(usize, String)>,
     /// Unicode-mode decimal escapes that exceeded the groups seen so far.
     decimal_references: Vec<(usize, u32)>,
@@ -217,7 +216,7 @@ impl<'a> Parser<'a> {
             groups: Vec::new(),
             pattern_alternative: body.start(),
             capturing_groups: 0,
-            names: HashMap::new(),
+            names: LookupMap::default(),
             name_references: Vec::new(),
             decimal_references: Vec::new(),
             has_named_groups: false,
