@@ -41,7 +41,7 @@ Some elements are counted and listed but excluded from the weighted headline met
 | Dependency | Its effect on migration shows up in the units that use it. Counting it as a unit as well would count the same risk twice. | Dependency section, with compatibility classes |
 | Verbatim file (`public/` assets, copied data files) | Copying is trivial and nearly certain. Hundreds of images would inflate feasibility without reflecting migration difficulty. | File accounting |
 | Out-of-scope file (tests, CI workflows, linter configuration in V1) | Explicitly outside the stage's scope, and reported as such rather than mixed into feasibility | Out-of-scope section with counts and manual tasks |
-| Ignored path (`.git/`, `node_modules/`, build outputs, environment files, `.gitignore` matches) | Not part of the project source, or never opened for security reasons | Ignored list with reasons |
+| Ignored path (`.git/`, `node_modules/`, build outputs, environment files, `.gitignore` matches) | Not part of the project source, or never opened for security reasons | Ignored list with reasons: `vcs`, `dependencies`, `build-output`, `environment`, or `gitignore` (implemented in discovery, `D-064`) |
 
 ### 2.3 File accounting invariant
 
@@ -229,7 +229,29 @@ The following assessment and outcome propagation remains planned. Severities cor
 | `FS7xxx` | Output and filesystem safety | `FS7001` output location exists. `FS7002` output location inside the source. `FS7003` unsafe output path rejected. `FS7004` managed output was modified since generation. |
 | `FS9xxx` | Internal | `FS9001` internal error. Results of this run are not trustworthy. |
 
-Finding code syntax is implemented independently of this future catalog: exactly `FS` followed by four ASCII digits (`D-055`). A valid value alone does not establish that a code is assigned. Codes are never reused for a different meaning. `frameshift explain <code>` prints the full documentation for a code (see [CLI.md](CLI.md)).
+The discovery walker emits the following assigned codes (`D-064`, `D-065`, section 22 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Locations are the named path or, for entries directly in the root, project scope. Severities follow the status mapping above: `unknown` where content is not analyzed, `error` for operational failures, and `info` where nothing is lost.
+
+| Code | Severity | Meaning |
+| --- | --- | --- |
+| `FS1001` | unknown | An entry name or path cannot be represented as a canonical source path; reported at its parent directory without the name. A directory is not traversed. |
+| `FS1002` | info | Device file, FIFO, or socket skipped. |
+| `FS1003` | unknown | Link target leaves the project root. |
+| `FS1004` | unknown | File exceeds the per-file size limit; accounted for, not read. |
+| `FS1005` | info | Link not followed; its target inside the project is recorded. |
+| `FS1006` | unknown | Link target not resolved: absolute, through another link or an untraversed directory, unreadable, unrepresentable, or discovery incomplete. |
+| `FS1007` | info | Link target does not exist. |
+| `FS1008` | unknown | Windows reparse point that is not a link (for example a cloud placeholder) not followed. |
+| `FS1009` | unknown | Directory exceeds the depth limit and was not traversed. |
+| `FS1011` | unknown | File count limit reached; discovery stopped. |
+| `FS1012` | unknown | Total size limit reached; discovery stopped. |
+| `FS1013` | unknown | Entry limit reached; discovery stopped. |
+| `FS1014` | unknown | `.gitignore` byte limit reached; discovery stopped. |
+| `FS1015` | unknown | `.gitignore` matching work limit reached; discovery stopped. |
+| `FS1016` | error | Directory could not be read; its contents were not discovered. |
+| `FS1017` | error | Entry could not be inspected. |
+| `FS1018` | error | `.gitignore` file could not be read; its directory was not traversed. |
+
+`FS1010` (lockfile format not parsed) stays reserved for the lockfile parsers. Finding code syntax is implemented independently of this future catalog: exactly `FS` followed by four ASCII digits (`D-055`). A valid value alone does not establish that a code is assigned. Codes are never reused for a different meaning. `frameshift explain <code>` prints the full documentation for a code (see [CLI.md](CLI.md)).
 
 ## 9. Report contents
 

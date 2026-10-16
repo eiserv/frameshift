@@ -255,7 +255,7 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | Yarn classic lockfile | Runtime | Build | Small format |
 | npm semver range matching | Runtime | Build | Needed for knowledge base matching. The grammar is well documented. |
 | Unicode identifier properties and property value names | Runtime data | Build: generated tables from the pinned Unicode Character Database (`D-036`, `D-037`, implemented) | A standard-library-only development tool generates `ID_Start` and `ID_Continue` ranges and the General_Category and Script value names that regular-expression property escapes accept. Rust's own Unicode predicates use other properties and an unpinned version. Unicode's terms require a notice before distribution. |
-| gitignore and glob matching | Runtime | Build | Specified behavior, small |
+| gitignore and glob matching | Runtime | Build (`D-065`, `.gitignore` matching implemented in `frameshift-input`) | Specified behavior, small. Written from gitignore(5) and checked black-box against Git; glob matching for other uses remains unbuilt |
 | SHA-256 hashing | Runtime | Adopt RustCrypto `sha2` 0.11.1 behind a Frameshift facade (`D-058`) | Defaults disabled. The exact nine-package graph, features, unsafe and CPU-detection boundary, licenses, and limitations of the dependency review are in IMPLEMENTATION.md section 18. No independent audit of these exact releases is claimed. |
 | Parallelism | Runtime | Build on the standard library (scoped threads, channels) | A small, deterministic worker pool is enough. No work-stealing scheduler needed. |
 | Argument parsing | Runtime | Build | Small, and the CLI contract must be exact |
@@ -313,7 +313,7 @@ Benchmarks run on synthetic projects of fixed sizes (generated deterministically
 ## 5. Portability
 
 - **Targets:** Linux, Windows, and macOS on x86_64 and ARM64, with support tiers defined in [RELEASES.md](RELEASES.md).
-- **Paths:** internal values are canonical, slash-separated, and relative to the root. `SourcePath` and the stronger `OutputPath` implement strict validation without normalization (`D-053`, `D-054`, section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Native host conversion (drive letters, UNC paths, backslashes used as separators) stays at future filesystem boundaries. Source names are preserved for analysis where the canonical grammar can represent them; other names must be reported explicitly by discovery. Long paths at the actual Windows filesystem boundary remain to be tested.
+- **Paths:** internal values are canonical, slash-separated, and relative to the root. `SourcePath` and the stronger `OutputPath` implement strict validation without normalization (`D-053`, `D-054`, section 14 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Discovery converts native names at the source boundary (`D-064`): it canonicalizes the root (on Windows into a verbatim `\\?\` path, so trailing dots, spaces, and device names keep their meaning), joins native names below it, and preserves every name that the canonical grammar can represent; other names are counted and reported (`FS1001`). Output-side conversion stays at the future executor boundary. Long paths at the actual Windows filesystem boundary remain to be tested beyond the verbatim root.
 - **Case sensitivity:** never rely on case-insensitive lookups. Output path collisions that differ only in case are detected (`FS4002`).
 - **Unicode normalization:** paths are compared byte-wise. Names that differ only in Unicode normalization (NFC versus NFD) are detected and reported.
 - **Invalid output names:** Windows reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`, `LPT1` to `LPT9`), trailing dots or spaces, and control characters are rejected for output paths (`FS7003`).
@@ -325,7 +325,7 @@ Benchmarks run on synthetic projects of fixed sizes (generated deterministically
 ## 6. Determinism rules for code
 
 1. Never let output depend on hash map iteration order. Sort keys before serializing or iterating for output.
-2. Never let output depend on filesystem enumeration order. Sort directory entries.
+2. Never let output depend on filesystem enumeration order. Sort directory entries. The discovery walker sorts every listing and visits entries in byte-wise path order (`D-064`).
 3. Never use wall-clock time, random numbers, process IDs, or host names in engine results. Timestamps appear only in the report's `run` section.
 4. Store parallel results by precomputed index, never by completion order.
 5. Sort with a total order. Ties are broken by stable keys (path, then offset, then ID).
@@ -398,8 +398,8 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | Unit IDs | `<kind>:<subject>[#<export>]`, with original subject/export bytes percent-encoded under `D-056`; ordinary example `component:components/Hero.tsx#Hero` |
 | Target profile IDs | Framework and major versions, for example `astro7-preact10` |
 | Versions of embedded data | Knowledge base `YYYY.MM.N`, weights `weights-vN` |
-| Limit names | Dotted lowercase names in the catalog name grammar, for example `run.max-files` and `parse.lexical.max-comments` (`D-061`) |
-| Product fixtures | `fixtures/discovery/<case>/`, `fixtures/features/<feature-id>[--<variant>]/`, and `fixtures/composites/<site>/`, for example `fixtures/features/nextjs.api.link/` (`D-062`, none exist yet) |
+| Limit names | Dotted lowercase names in the catalog name grammar, for example `run.max-files`, `ignore.max-match-work`, and `parse.lexical.max-comments` (`D-061`) |
+| Product fixtures | `fixtures/discovery/<case>/`, `fixtures/features/<feature-id>[--<variant>]/`, and `fixtures/composites/<site>/`, for example `fixtures/features/nextjs.api.link/` (`D-062`; the six discovery cases exist) |
 | Release artifacts | See [RELEASES.md](RELEASES.md) |
 
 Catalog identifier values implement the exact grammar and inclusive limits in section 15 of [IMPLEMENTATION.md](IMPLEMENTATION.md) (`D-055`). Stable identity does not depend on a version or registry lookup.

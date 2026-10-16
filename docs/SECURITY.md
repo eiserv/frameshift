@@ -93,14 +93,15 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 ### 7.1 Read-only source access and traversal
 
 - Source files are opened for reading only. No command has an option to write into the source.
-- Discovery never leaves the root. Symbolic links are not followed by default. Links resolving inside the root are recorded as references. Links resolving outside are excluded with `FS1003`. Windows junctions and reparse points are treated like links.
-- Device files, named pipes, and sockets are skipped and reported.
+- Discovery never leaves the root. Symbolic links are not followed. Links resolving inside the root are recorded as references (`FS1005`). Links resolving outside are excluded with `FS1003`; absolute targets and targets through other links are not resolved (`FS1006`). Windows junctions and every other reparse point are treated like links, so cloud placeholders are never opened (`FS1008`). Implemented by the discovery walker (`D-064`, section 22 of [IMPLEMENTATION.md](IMPLEMENTATION.md)); traversal is path based (section 13).
+- Device files, named pipes, and sockets are skipped and reported (`FS1002`, implemented).
+- Discovery opens no file except `.gitignore` files, which it opens read-only and rejects when they turn out to be links or are not the listed file.
 - All reads go through the snapshot, so a file is read once. Its hash then identifies it for the rest of the run, which also prevents time-of-check to time-of-use races between stages.
-- `node_modules/` is never read.
+- `node_modules/` is never read (implemented as a built-in ignore at every depth).
 
 ### 7.2 Resource limits
 
-- Deterministic limits on maximum file size for parsing, total files, total bytes, directory depth, syntax nesting depth, and token counts per file. Defaults are documented, and a limit that is reached produces a finding. The run-wide input limits, atomic budgets, and the checked set of all subsystem limits are implemented as values (`D-061`, section 21 of [IMPLEMENTATION.md](IMPLEMENTATION.md)); discovery enforces them from M2. No environment variable or project file changes a limit.
+- Deterministic limits on maximum file size for parsing, total files, total bytes, directory depth, entries read, `.gitignore` bytes and matching work, syntax nesting depth, and token counts per file. Defaults are documented, and a limit that is reached produces a finding. The run-wide input limits, atomic budgets, and the checked set of all subsystem limits are implemented as values (`D-061`, section 21 of [IMPLEMENTATION.md](IMPLEMENTATION.md)), and discovery enforces the input limits; a cumulative limit stops discovery and marks the inventory incomplete (`D-064`). No environment variable or project file changes a limit.
 - Parsers either avoid recursion where input controls the depth, or enforce an explicit depth bound well below the stack limit.
 - Future parser recovery has explicit per-file diagnostic and recovery-work limits, guarantees forward progress, and stops if lexical context cannot be synchronized safely (`D-034`). Recovery never makes an erroneous file eligible for transformation.
 - Limits are based on size and counts, not time, so results stay deterministic. External tools in verification have timeouts, because their behavior is outside Frameshift's control.
@@ -142,7 +143,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 
 ### 7.7 Secrets and privacy
 
-- Environment files (`.env`, `.env.local`, `.env.*`) are neither read nor copied. Analysis uses only references in code (`process.env.X`). The output gets a manual task to recreate environment configuration. Example files intended for sharing (such as `.env.example`) are treated as ordinary source files.
+- Environment files (`.env`, `.env.local`, `.env.*`) are neither read nor copied. Analysis uses only references in code (`process.env.X`). The output gets a manual task to recreate environment configuration. Example files intended for sharing, whose last dot-separated segment is `example`, `sample`, or `template` (such as `.env.example`), are treated as ordinary source files. Discovery implements this rule ASCII-case-insensitively, so `.ENV` on a case-insensitive filesystem is not opened either (`D-064`).
 - JSON reports and plans contain no source snippets unless `--include-snippets` is given. Terminal output may show short snippets, because it stays on the user's machine.
 - Documents contain only paths relative to the source root. They never contain absolute paths, user names, host names, or environment values.
 - Source code is never sent anywhere. Frameshift has no network client.
@@ -239,6 +240,7 @@ Use the root [security policy](../SECURITY.md). Once enabled, GitHub private vul
 
 ## 13. Known limitations
 
+- **Path-based discovery.** The standard library offers no directory-relative opens, so discovery lists directories by path. A directory replaced by a link while the run is in progress is detected only if it is still replaced when the walker rechecks it after listing; an adversary who swaps it back in between could make discovery list a directory outside the root. This requires an active local process that modifies the tree during the run, which is outside the static-repository threat model. `.gitignore` files, the only files discovery opens, are checked after opening (`D-064`).
 - **No operating system sandbox in V1.** Build-level verification executes third-party code with the user's privileges, limited only by temporary copies, a scrubbed environment, and disabled lifecycle scripts. Users must treat `--allow-exec` like running `npm install` and a build on the project themselves.
 - **Static analysis is not malware detection.** Frameshift does not decide whether a project is malicious. It only avoids executing it.
 - **Manifests are not signatures.** They detect accidental modification, not deliberate forgery.
