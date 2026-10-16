@@ -14,6 +14,7 @@ mod astro;
 mod collections;
 mod coverage;
 mod edits;
+mod gitignore;
 mod hashes;
 mod identifiers;
 mod lexical;

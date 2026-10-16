@@ -325,6 +325,28 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
             "é",
             "\n",
         ],
+        Target::Gitignore => &[
+            "*",
+            "**",
+            "?",
+            "[",
+            "]",
+            "!",
+            "^",
+            "\\",
+            "/",
+            "#",
+            " ",
+            "\n",
+            "\r\n",
+            "\0\0",
+            "[:alpha:]",
+            "[:space:]",
+            "**/",
+            "/**",
+            "\n1",
+            "é",
+        ],
         Target::Identifiers => &[
             "FS",
             "0001",
@@ -409,6 +431,22 @@ pub fn inputs(target: Target) -> Vec<Vec<u8>> {
             "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
             "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
             "SHA256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .collect(),
+        // A `.gitignore` file, a double NUL, then paths whose first byte
+        // selects a directory when odd (`1`) or another entry when even (`0`).
+        Target::Gitignore => [
+            "",
+            "*.log\n!keep.log\n\0\x000debug.log\n0keep.log\n1logs",
+            "/dist/\nbuild\n\0\x001dist\n0src/dist\n1src/build",
+            "**/foo\nfoo/**\na/**/b\n\0\x000a/b/foo\n0foo/x/y\n0a/x/y/b\n0ab",
+            "[a-c]x\n[!a]y\n[[:alpha:]]z\n[]a]\n\0\x000bx\n0by\n0az\n0]",
+            "\u{feff}# c\r\na\\ \r\n\\#h\r\n\0\x000a \n0#h\n0a",
+            "x/*\n*/\n**\\/x\n\0\x000x/a\n1a\n0a/x\n0x",
+            "[ax\na\\\n[[:foo:]]\n\0\x000ax\n0a\\\n0f",
+            "caf?\né\n\0\x000café\n0e\u{301}\n0é",
         ]
         .iter()
         .map(|text| (*text).to_owned())

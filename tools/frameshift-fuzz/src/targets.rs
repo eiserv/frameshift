@@ -14,7 +14,7 @@ use frameshift_engine::{
     validate_js_regexp,
 };
 
-use crate::{astro, collections, edits, hashes, identifiers, lexical, paths, seeds};
+use crate::{astro, collections, edits, gitignore, hashes, identifiers, lexical, paths, seeds};
 
 /// A fuzzed engine entry point with its contracts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +41,8 @@ pub enum Target {
     Hashes,
     /// Key tables, dense result slots, and atomic budgets.
     Collections,
+    /// `.gitignore` parsing, matching, and work charges.
+    Gitignore,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -57,7 +59,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -69,6 +71,7 @@ impl Target {
         Self::Identifiers,
         Self::Hashes,
         Self::Collections,
+        Self::Gitignore,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -85,6 +88,7 @@ impl Target {
             Self::Identifiers => "identifiers",
             Self::Hashes => "hashes",
             Self::Collections => "collections",
+            Self::Gitignore => "gitignore",
         }
     }
 
@@ -129,6 +133,9 @@ impl Target {
             Self::Collections => {
                 "key tables, dense slots, and budgets against independent models; order independence and atomic failures"
             }
+            Self::Gitignore => {
+                ".gitignore parsing and matching against a recursive model; work charges, atomic budgets, and repetition"
+            }
         }
     }
 
@@ -144,7 +151,7 @@ impl Target {
             | Self::Identifiers
             | Self::Hashes
             | Self::Collections => 4_096,
-            Self::RegExp | Self::References => 1_024,
+            Self::RegExp | Self::References | Self::Gitignore => 1_024,
             Self::Lexical => 512,
         }
     }
@@ -174,6 +181,7 @@ impl Target {
             Self::Identifiers => identifiers::run(input),
             Self::Hashes => hashes::run(input),
             Self::Collections => collections::run(input),
+            Self::Gitignore => gitignore::run(input),
         }
     }
 }
