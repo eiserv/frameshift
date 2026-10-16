@@ -335,6 +335,8 @@ Benchmarks run on synthetic projects of fixed sizes (generated deterministically
 9. Derive identifiers from content or stable paths, never from shared counters across concurrent workers.
 10. Use explicit, recorded versions for every embedded data set (knowledge base, target profiles, weights).
 
+Enforcement (`D-060`, `D-061`): the root `clippy.toml` disallows `std::collections::HashMap` and `HashSet` in the whole workspace. Use ordered collections or sorted vectors for anything iterated, and `KeyTable` with `DenseSlots` for identities assigned before parallel work. A lookup-only hash table needs a justified `#[expect(clippy::disallowed_types)]`; the parser confines its tables to non-iterable wrappers. Resource limits are explicit values in the engine's `Limits` set, and cumulative budgets are charged in canonical order by a single owner.
+
 ## 7. Code quality and structure
 
 ### 7.1 Boundaries
@@ -396,6 +398,8 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | Unit IDs | `<kind>:<subject>[#<export>]`, with original subject/export bytes percent-encoded under `D-056`; ordinary example `component:components/Hero.tsx#Hero` |
 | Target profile IDs | Framework and major versions, for example `astro7-preact10` |
 | Versions of embedded data | Knowledge base `YYYY.MM.N`, weights `weights-vN` |
+| Limit names | Dotted lowercase names in the catalog name grammar, for example `run.max-files` and `parse.lexical.max-comments` (`D-061`) |
+| Product fixtures | `fixtures/discovery/<case>/`, `fixtures/features/<feature-id>[--<variant>]/`, and `fixtures/composites/<site>/`, for example `fixtures/features/nextjs.api.link/` (`D-062`, none exist yet) |
 | Release artifacts | See [RELEASES.md](RELEASES.md) |
 
 Catalog identifier values implement the exact grammar and inclusive limits in section 15 of [IMPLEMENTATION.md](IMPLEMENTATION.md) (`D-055`). Stable identity does not depend on a version or registry lookup.

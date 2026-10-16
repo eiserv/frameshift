@@ -10,6 +10,8 @@ go.mod text eol=lf
 tools/frameshift-e2/fixtures/** -text
 # CLI golden output also has identical LF bytes on every platform.
 crates/frameshift-cli/tests/golden/** -text
+# Product fixtures keep CRLF, BOM, and Unicode spelling exactly (D-062).
+fixtures/** -text
 schemas/*.json text eol=lf
 *.yml text eol=lf
 *.ps1 text eol=lf
