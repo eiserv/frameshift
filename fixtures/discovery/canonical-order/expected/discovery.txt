@@ -1,0 +1,16 @@
+complete: false
+stop: files
+unrepresentable: 0
+files:
+  6 Z.txt
+  10 a b/c.txt
+  8 a-b.txt
+  6 a.txt
+  8 a/x.txt
+entries:
+  a: directory
+  a b: directory
+  b: directory
+findings:
+  F0001 unknown FS1011 b/c.d: File count limit reached; discovery stopped
+    Admitting this file would exceed the limit of 5 files (run.max-files). Discovery stopped here, in canonical path order, so the inventory is incomplete.

@@ -1,0 +1,28 @@
+complete: true
+stop: none
+unrepresentable: 0
+files:
+  13 .env.Template
+  13 .env.example
+  13 .env.local.sample
+  9 .envrc
+  96 app/layout.tsx
+  64 app/page.tsx
+  46 package.json
+  30 packages/theme/index.ts
+entries:
+  .env: ignored environment entry
+  .env.local: ignored environment entry
+  .env.production.local: ignored environment entry
+  .git: ignored vcs directory
+  .hg: ignored vcs directory
+  .next: ignored build-output directory
+  .svn: ignored vcs entry
+  app: directory
+  app/.ENV.Development: ignored environment entry
+  node_modules: ignored dependencies directory
+  packages: directory
+  packages/theme: directory
+  packages/theme/.git: ignored vcs entry
+  packages/theme/node_modules: ignored dependencies directory
+findings:

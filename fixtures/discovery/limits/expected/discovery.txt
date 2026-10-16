@@ -1,0 +1,21 @@
+complete: false
+stop: files
+unrepresentable: 0
+files:
+  8 one/two/shallow.txt
+  6 small.txt
+  2 zz/1.txt
+  2 zz/2.txt
+entries:
+  big.bin: oversized 50
+  one: directory
+  one/two: directory
+  one/two/three: not-traversed depth-limit
+  zz: directory
+findings:
+  F0001 unknown FS1004 big.bin: File exceeds the size limit
+    The file has 50 bytes, more than the limit of 20 bytes per file (run.max-file-bytes). It is accounted for but not read, analyzed, or migrated.
+  F0002 unknown FS1009 one/two/three: Directory exceeds the depth limit
+    The directory lies at depth 3, deeper than the limit of 2 (run.max-directory-depth). Its contents were not discovered, so the inventory is incomplete.
+  F0003 unknown FS1011 zz/3.txt: File count limit reached; discovery stopped
+    Admitting this file would exceed the limit of 4 files (run.max-files). Discovery stopped here, in canonical path order, so the inventory is incomplete.

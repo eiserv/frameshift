@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "discovery",
+  "description": "Symbolic links are never followed (D-064): targets inside the root are recorded, a target outside the root, a missing target, and a target through another link are reported, and a linked .gitignore is not read. The harness creates the links and skips the case where the host does not permit them.",
+  "createdAtTestTime": [
+    { "kind": "symlink", "path": "public/logo.svg", "target": "../assets/logo.svg" },
+    { "kind": "symlink", "path": "public/icons", "target": "../assets/icons" },
+    { "kind": "symlink", "path": "public/menu.svg", "target": "icons/menu.svg" },
+    { "kind": "symlink", "path": "public/home", "target": ".." },
+    { "kind": "symlink", "path": "public/escape", "target": "../../outside.txt" },
+    { "kind": "symlink", "path": "public/missing", "target": "../assets/none.svg" },
+    { "kind": "symlink", "path": "notes/.gitignore", "target": "../content/.gitignore" }
+  ]
+}

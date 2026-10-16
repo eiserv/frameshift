@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "discovery",
+  "description": "Canonical order: siblings sort by name bytes with a slash appended to directories, so a.txt precedes a/x.txt and b/c.d precedes b/c/d.txt, and the file limit stops at the same file on every platform (D-064).",
+  "limits": { "run.max-files": 5 }
+}

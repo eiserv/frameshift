@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "discovery",
+  "description": "Nested .gitignore files with Git's semantics (D-065): a byte order mark and CRLF line ends, comments, trailing and escaped spaces, escapes, negation, anchoring, directory-only patterns, **, bracket expressions, deeper files deciding first, and ignored directories whose contents cannot be re-included. The admitted files equal git ls-files -o --exclude-standard on the same tree."
+}

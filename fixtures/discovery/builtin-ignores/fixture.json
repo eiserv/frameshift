@@ -1,0 +1,10 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "discovery",
+  "description": "Built-in ignores at every depth, matched ASCII-case-insensitively before .gitignore: version control entries (.git directories and files, .hg, .svn), node_modules, .next, and environment files except names ending in .example, .sample, or .template (D-064). Git cannot store .git entries, so the harness creates them.",
+  "createdAtTestTime": [
+    { "kind": "directory", "path": ".git" },
+    { "kind": "file", "path": ".git/HEAD", "content": "ref: refs/heads/main\n" },
+    { "kind": "file", "path": "packages/theme/.git", "content": "gitdir: ../../.git/modules/theme\n" }
+  ]
+}

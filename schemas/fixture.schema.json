@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frameshift product fixture metadata",
+  "description": "Human-written metadata of a product fixture below fixtures/ (D-062). Only discovery cases exist; feature and composite fixtures extend this schema with their first case. No tool writes these files.",
+  "type": "object",
+  "required": ["kind", "description"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "kind": { "const": "discovery" },
+    "description": { "type": "string", "minLength": 1 },
+    "limits": {
+      "description": "Overrides of engine limits by their canonical names from Limits::entries.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "enum": [
+          "ignore.max-match-work",
+          "ignore.max-total-bytes",
+          "path.max-components",
+          "path.max-path-bytes",
+          "run.max-directory-depth",
+          "run.max-entries",
+          "run.max-file-bytes",
+          "run.max-files",
+          "run.max-total-bytes"
+        ]
+      },
+      "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "createdAtTestTime": {
+      "description": "Inputs the harness creates in a temporary copy of source/, in order, because they cannot or should not be committed.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["kind", "path"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "const": "directory" },
+              "path": { "$ref": "#/$defs/path" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "path", "content"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "const": "file" },
+              "path": { "$ref": "#/$defs/path" },
+              "content": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "path", "bytes"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "const": "sparse-file" },
+              "path": { "$ref": "#/$defs/path" },
+              "bytes": { "type": "integer", "minimum": 0 }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["kind", "path", "target"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": { "const": "symlink" },
+              "path": { "$ref": "#/$defs/path" },
+              "target": { "type": "string", "minLength": 1 }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "description": "A canonical path relative to source/, with slash separators.",
+      "type": "string",
+      "pattern": "^[^/\\\\]+(/[^/\\\\]+)*$"
+    }
+  }
+}

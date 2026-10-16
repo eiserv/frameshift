@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "discovery",
+  "description": "A file over the per-file limit is accounted but not admitted and a directory below the depth limit is not traversed, while the walk continues; the file count limit then stops discovery (D-064).",
+  "limits": { "run.max-file-bytes": 20, "run.max-directory-depth": 2, "run.max-files": 4 }
+}
