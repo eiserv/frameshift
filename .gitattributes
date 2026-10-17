@@ -15,3 +15,4 @@ schemas/*.json text eol=lf
 *.ps1 text eol=lf
 /*.json text eol=lf
 version.txt text eol=lf
+LICENSE text eol=lf

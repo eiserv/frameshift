@@ -164,7 +164,7 @@ Invariants that must always hold are tested with generated inputs:
 
 - A private list of real-world Next.js projects (repository URL, pinned commit, license) is maintained for evaluation. Agents propose projects with a reason for each, and the project owner approves the list (`D-030`).
 - Projects are fetched on demand into a cache outside the repository and are never committed.
-- Only projects whose licenses permit this use are included. During the private phase, no results containing third-party code leave the development environment or CI, consistent with [SECURITY.md](SECURITY.md).
+- Only projects whose licenses permit this use are included. Results containing third-party code or non-public evaluation data stay outside public source, issues, logs, and CI artifacts, consistent with [SECURITY.md](SECURITY.md). Public repository visibility does not authorize publishing corpus contents.
 - Evaluation runs `inspect`, `analyze`, `migrate`, and `verify` up to the highest feasible level. Results are aggregated into a private evaluation report for each release.
 - Interesting failures are minimized into fictional regression fixtures (section 3.8).
 
@@ -187,7 +187,7 @@ The evaluation report records these measures for each release, so accuracy is tr
 
 ## 7. CI tiers
 
-GitHub Actions minutes for private repositories are limited, and macOS minutes cost more. Tiers keep pull request feedback fast while still covering everything before release.
+Standard GitHub-hosted runner execution is free for public repositories; larger runners and artifact storage have separate billing rules. The existing six-target PR matrix stays enabled. The following tiers describe the broader planned verification coverage, not a reduction of current checks.
 
 | Tier | When | Contents |
 | --- | --- | --- |

@@ -1,11 +1,11 @@
 # Releases and CI/CD
 
-**Status: CI and gated release foundation implemented (`D-051`, `D-052`).** Workflows, release configuration, and a release manifest exist. No release has been published. Release PRs are enabled; publication is disabled until M1 is accepted. Section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) records actual local and remote evidence. The remaining signing, immutable release, binary reproducibility, scheduled verification, and product smoke-test requirements below are plans for later milestones.
+**Status: CI and gated release foundation implemented (`D-051`, `D-052`).** Workflows, release configuration, and a release manifest exist. No release has been published. Release PR tooling is implemented and temporarily paused for the environment-secret transition; publication is disabled until M1 is accepted. Section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) records actual local and remote evidence. The remaining signing, immutable release, binary reproducibility, scheduled verification, and product smoke-test requirements below are plans for later milestones.
 
 ### Current controls and commands
 
 - `.github/workflows/ci.yml`: pull requests, pushes to main, and manual runs. Native tests on all six platforms, formatting, Clippy, commit conventions, Cargo boundaries, corpus and E2 checks, cross-platform E2 hash comparison, and read-only packaging validation. `CI required` is the aggregate branch-protection check.
-- `.github/workflows/release.yml`: push to main or manual run. `FRAMESHIFT_RELEASE_APP_READY=true` enables release PRs. `FRAMESHIFT_RELEASE_APP_ID` identifies the private App, and `FRAMESHIFT_RELEASE_APP_PRIVATE_KEY` is its key, read only by the Release Please job through the `release` environment, which admits only `main` (section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) records where the key is actually stored). Tokens are short-lived and restricted to `eiserv/frameshift`.
+- `.github/workflows/release.yml`: push to main or manual run on main only. `FRAMESHIFT_RELEASE_APP_READY=true` enables release PRs. It is temporarily false until the environment-aware workflow is merged to main; re-enable it and verify a Release run afterwards (`D-066`). `FRAMESHIFT_RELEASE_APP_ID` identifies the private App, and `FRAMESHIFT_RELEASE_APP_PRIVATE_KEY` is stored only as a secret of the `release` environment, which admits only `main`. The repository secret has been deleted (section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Tokens are short-lived and restricted to `eiserv/frameshift`.
 - `FRAMESHIFT_M1_RELEASE_READY=false`: Release Please skips tags and releases. Packaging cannot upload release assets until this repository variable is deliberately set to `true` after M1 acceptance. No workflow merges release PRs.
 - `.github/workflows/package.yml`: a read-only reusable six-target build and archive validation, also manually dispatchable with an existing tag or commit. Its `publish` input validates release eligibility but cannot upload assets itself. Actual uploads occur only in the gated Release workflow, after packaging succeeds. Failed release uploads are retried by rerunning the Release workflow's failed jobs.
 - `.github/scripts/check.ps1`: local Cargo boundaries, version consistency, and Action pins. With `-Conventions`, uses a GitHub event file to check PR titles and commit subjects. Native shell subjects are data, never executed.
@@ -26,7 +26,7 @@ sequenceDiagram
   participant Main as main branch
   participant RP as Release Please job
   participant Pkg as Packaging job
-  participant Rel as GitHub Release (private)
+  participant Rel as GitHub Release
   Dev->>PR: Branch with Conventional Commits
   PR->>CI: Validate (format, lint, tests, builds, commit format)
   PR->>Main: Squash merge (PR title becomes the commit)
@@ -163,7 +163,7 @@ Pins were resolved from official repository tags on 2026-10-14 and locally check
 | --- | --- | --- |
 | CI | Pull requests (`opened`, `synchronize`, `reopened`, `edited` for title checks), pushes to `main` | Validation |
 | Release | Pushes to `main`, manual dispatch | Release Please, then packaging |
-| Package (reusable) | Called by CI and Release, manual dispatch with an existing tag or commit | Build, archive, checksum, smoke-test; private workflow artifacts |
+| Package (reusable) | Called by CI and Release, manual dispatch with an existing tag or commit | Build, archive, checksum, smoke-test; workflow artifacts with repository visibility |
 | Scheduled verification (planned) | Schedule | Long-running test tiers (see section 7 of [TESTING.md](TESTING.md)) |
 
 ### 6.2 CI
@@ -171,7 +171,7 @@ Pins were resolved from official repository tags on 2026-10-14 and locally check
 - Formatting and linting with the language's standard tools.
 - Static analysis: Clippy with the project's lint configuration (including the ban on wildcard arms over closed enumerations and on `unsafe` code outside the reviewed development-only allocator, coverage runtime, and section markers, `D-040` and `D-044`), and explicit Cargo dependency boundary checks. External dependency auditing and vulnerability scanning are planned before adopting runtime libraries.
 - Unit, fixture, golden, classification, negative, safety, determinism, and CLI end-to-end tests.
-- Cross-platform test matrix (Linux, Windows, macOS, and ARM64 runners where available), scaled by the tiers in [TESTING.md](TESTING.md) to respect the Actions minutes available to private repositories.
+- Cross-platform test matrix (Linux, Windows, macOS, and ARM64 runners where available), with all six targets required on every PR (`D-051`). Standard hosted runner execution becomes free after public visibility; storage and larger runners have separate billing rules.
 - Cross-builds for every release target, to catch platform-specific build breaks early.
 - Conventional Commit validation of the pull request title and of every commit subject in the pull request. This is a plain pattern check inside the workflow and needs no third-party action.
 - Regression testing through the fixture corpus.
@@ -184,7 +184,7 @@ Pins were resolved from official repository tags on 2026-10-14 and locally check
 4. Generate the checksum file.
 5. Verify archive contents and checksums before upload.
 6. Upload assets to the release with the GitHub CLI.
-7. Every CI run executes packaging for all six platforms and stores the results as private workflow artifacts with three-day retention. Before writing an archive, the Go helper reads it back and checks every entry's bytes and mode. The workflow creates each archive twice and compares its hashes.
+7. Every CI run executes packaging for all six platforms and stores the results as workflow artifacts with repository visibility with three-day retention. Before writing an archive, the Go helper reads it back and checks every entry's bytes and mode. The workflow creates each archive twice and compares its hashes.
 
 ## 7. Platforms
 
@@ -225,7 +225,7 @@ Each archive contains one top-level directory, `frameshift-<version>-<os>-<arch>
 
 - the binary (`frameshift` or `frameshift.exe`);
 - `README.md`;
-- `LICENSE`, once a license has been chosen (`DF-003`);
+- `LICENSE`, the mandatory GNU AGPLv3 text (`AGPL-3.0-or-later`, `D-066`);
 - `THIRD_PARTY_NOTICES.md`, if any third-party code or data is shipped. The Unicode-derived identifier tables (`D-036`) already require it.
 
 ### 8.3 Checksums
@@ -252,7 +252,7 @@ Each archive contains one top-level directory, `frameshift-<version>-<os>-<arch>
 | --- | --- | --- | --- |
 | SHA-256 checksums | Integrity against corruption | Do not prove origin on their own | From the first release |
 | GitHub artifact attestations (Sigstore-based build provenance) | Verifiable link between artifact, workflow, and commit | Private repositories require GitHub Enterprise Cloud | Public phase, or earlier if the plan allows |
-| Immutable releases | Assets and tags cannot change after publication. Release attestations. | Assets must be attached before publication, which requires a draft-release flow | Experiment E5, then enabled no later than the public phase |
+| Immutable releases | Assets and tags cannot change after publication. Release attestations. | Assets must be attached before publication, which requires a draft-release flow | Experiment E5 in M11, before claiming immutable binary releases |
 | Keyless signing of the checksum file | Origin verification independent of the GitHub interface | Adds a development tool | Evaluate for the public phase |
 | macOS Developer ID signing and notarization | Gatekeeper accepts binaries downloaded through browsers | Apple Developer Program membership | Deferred (`DF-004`) |
 | Windows Authenticode signing | SmartScreen reputation | Certificate cost | Deferred (`DF-004`) |
@@ -277,12 +277,13 @@ How Release Please handles tag creation for draft releases must be validated in 
 - Release workflows use a concurrency group, so overlapping runs cannot race.
 - Workflow logs never print tokens or environment dumps.
 
-## 12. Private phase restrictions
+## 12. Source visibility and release publication
 
-- Releases exist only in the private repository's GitHub Releases. They are accessible only to people with repository access, for example through `gh release download` with authentication.
-- No public package registries, Homebrew taps, Scoop buckets, container registries, or download mirrors.
-- No public release announcements.
-- See section 10 of [SECURITY.md](SECURITY.md) for the general private phase rules.
+- Source-publication preparation is accepted in `D-066`; the owner makes the final visibility change separately. See section 11 of [SECURITY.md](SECURITY.md) for the switch procedure and checks.
+- Source visibility does not enable the M1 release gate. Release PRs are deliberately merged only after the integrated M1 shell is accepted, required CI passes, and publication is authorized.
+- The upload job supports both repository visibilities. Every archive includes LICENSE and third-party notices; README identifies corresponding source by the binary's embedded commit. Public binaries require publicly accessible corresponding source.
+- Workflow logs and artifacts follow repository visibility. They contain only Frameshift binaries, public documentation, fictional fixture output hashes, and related checksums. Never upload private evaluation data or analyzed project code.
+- No package registries, Homebrew taps, Scoop buckets, container registries, mirrors, or announcements are authorized by the source visibility change.
 
 ## 13. Release checklist
 

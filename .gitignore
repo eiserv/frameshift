@@ -1,2 +1,7 @@
 /target/
 /.claude/
+*.pem
+*.key
+.env
+.env.*
+!.env.example
