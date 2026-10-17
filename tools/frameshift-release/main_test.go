@@ -16,7 +16,7 @@ func TestArchivesRepeatAndPreserveInputs(t *testing.T) {
 	for _, platform := range []string{"linux", "macos", "windows"} {
 		t.Run(platform, func(t *testing.T) {
 			root := t.TempDir()
-			for name, data := range map[string]string{"binary": "fictional executable\x00", "README.md": "Frameshift\n", "THIRD_PARTY_NOTICES.md": "Notices\n"} {
+			for name, data := range map[string]string{"binary": "fictional executable\x00", "README.md": "Frameshift\n", "LICENSE": "Fictional license text\n", "THIRD_PARTY_NOTICES.md": "Notices\n"} {
 				if err := os.WriteFile(filepath.Join(root, name), []byte(data), 0600); err != nil {
 					t.Fatal(err)
 				}
@@ -55,6 +55,25 @@ func TestArchivesRepeatAndPreserveInputs(t *testing.T) {
 				t.Fatal("archive depends on output directory")
 			}
 		})
+	}
+}
+
+func TestPackRequiresLicense(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"binary", "README.md", "THIRD_PARTY_NOTICES.md"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("fictional input\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, platform := range []string{"linux", "macos", "windows"} {
+		out := t.TempDir()
+		if err := pack(filepath.Join(root, "binary"), root, out, "0.0.0", platform, "arm64", time.Unix(1791928801, 0).UTC()); err == nil {
+			t.Fatal("created an archive without its license")
+		}
+		files, err := os.ReadDir(out)
+		if err != nil || len(files) != 0 {
+			t.Fatal("failed packaging left output files")
+		}
 	}
 }
 

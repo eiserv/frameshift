@@ -1,7 +1,7 @@
 # Third-party notices
 
 Frameshift includes generated character tables. No third-party Rust or Go code is linked.
-These notices grant rights in the named third-party materials only. Frameshift itself has no chosen license and remains private.
+These notices grant rights in the named third-party materials only. Frameshift-owned code is licensed under AGPL-3.0-or-later; see LICENSE. The materials below retain their own terms.
 
 ## Unicode Character Database 18.0.0
 

@@ -86,18 +86,8 @@ func pack(binary, docs, out, version, platform, arch string, stamp time.Time) er
 	}{
 		{name, binary, 0755},
 		{"README.md", filepath.Join(docs, "README.md"), 0644},
+		{"LICENSE", filepath.Join(docs, "LICENSE"), 0644},
 		{"THIRD_PARTY_NOTICES.md", filepath.Join(docs, "THIRD_PARTY_NOTICES.md"), 0644},
-	}
-	if info, err := os.Lstat(filepath.Join(docs, "LICENSE")); err == nil {
-		if !info.Mode().IsRegular() {
-			return errors.New("license must be a regular file")
-		}
-		inputs = append(inputs, struct {
-			name, path string
-			mode       int64
-		}{"LICENSE", filepath.Join(docs, "LICENSE"), 0644})
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
 	}
 	entries := make([]entry, 0, len(inputs))
 	for _, input := range inputs {
