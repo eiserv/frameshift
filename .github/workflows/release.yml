@@ -11,6 +11,8 @@ concurrency:
 jobs:
   release-please:
     if: vars.FRAMESHIFT_RELEASE_APP_READY == 'true'
+    # The App key is an environment secret that only main may deploy with.
+    environment: release
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
