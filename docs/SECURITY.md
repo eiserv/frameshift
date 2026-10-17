@@ -192,7 +192,7 @@ Deferred. If it is ever added, it is opt-in, sends minimal redacted context, nev
 
 ## 10. Publication and data privacy
 
-The owner authorized preparation for public visibility and selected AGPL-3.0-or-later on 2026-10-17 (`D-012`, `D-066`). The final visibility change remains a separate owner action. This authorization covers Frameshift source, documentation, fictional fixtures, and their Git history. It does not authorize publishing credentials, analyzed projects, non-public evaluation data, or private reports.
+The owner authorized preparation for public visibility and selected AGPL-3.0-or-later on 2026-10-17 (`D-012`, `D-066`). The owner made the repository public on 2026-10-17. This authorization covers Frameshift source, documentation, fictional fixtures, and their Git history. It does not authorize publishing credentials, analyzed projects, non-public evaluation data, or private reports.
 
 - Keep real-world corpora, downloaded oracles, generated external-project outputs, and private evaluation records outside the repository and public CI artifacts.
 - Never upload analyzed project source to public issues, paste sites, or other external services.
@@ -213,7 +213,8 @@ The owner authorized preparation for public visibility and selected AGPL-3.0-or-
 - API read-back confirmed strict `CI required` checks, required pull requests, linear history, resolved conversations, and protection applying to administrators. Action SHAs are required; the allowlist contains GitHub-owned Actions and Release Please. Default tokens are read-only and cannot approve pull requests.
 - CONTRIBUTING.md keeps external code contributions closed until contribution terms are chosen. CODE_OF_CONDUCT.md defines expected conduct. The root SECURITY.md provides the security reporting entry point and pre-release support status.
 - Local Windows validation passed: workspace tests, all-target Clippy with warnings denied, rustfmt, Cargo boundary/version/Action-pin checks, actionlint 1.7.11, Go release-helper tests and vet, and Markdown link/style checks. A real Windows CLI archive contains LICENSE byte for byte. These checks do not substitute for native six-target CI.
-- Repository visibility is still private at this preparation checkpoint. Public-only security settings cannot yet be confirmed. Existing failed CI runs are not treated as green.
+- Repository visibility was private at this preparation checkpoint. Existing failed CI runs are not treated as green.
+- The owner made the repository public on 2026-10-17. Steps 1 and 2 below were then completed: fork pull request workflows require approval for all external contributors, secret scanning with push protection and private vulnerability reporting are enabled, and the read-back of section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) confirmed the remaining settings.
 
 ### Visibility switch and verification
 

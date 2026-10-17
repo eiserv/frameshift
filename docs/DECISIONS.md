@@ -178,7 +178,7 @@ Statuses change through an edit to this file under the integration workflow in D
 ### D-012: Repository privacy and publication authorization
 
 - **Status:** Accepted (2026-10-11).
-- **Decision (updated 2026-10-17):** The owner authorized preparing `eiserv/frameshift` for public visibility and selected `AGPL-3.0-or-later` (`D-066`). Preparation does not itself change remote visibility. The final visibility change is a separate owner action. Analyzed projects, non-public evaluation data, credentials, and private reports must never be published with the source. No telemetry, unrelated external uploads, or public mirrors are authorized. The preparation and visibility checklist is in section 11 of [SECURITY.md](SECURITY.md).
+- **Decision (updated 2026-10-17):** The owner authorized preparing `eiserv/frameshift` for public visibility and selected `AGPL-3.0-or-later` (`D-066`). Preparation did not itself change remote visibility; the owner made the repository public on 2026-10-17. Analyzed projects, non-public evaluation data, credentials, and private reports must never be published with the source. No telemetry, unrelated external uploads, or public mirrors are authorized. The preparation and visibility checklist is in section 11 of [SECURITY.md](SECURITY.md).
 
 ### D-013: Minimal external dependencies with build-versus-adopt criteria
 

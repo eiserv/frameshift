@@ -97,7 +97,7 @@ See [docs/CLI.md](docs/CLI.md) for the full specification.
 ## Project status
 
 - **Implementation:** started with the M0 foundation. The help and version CLI shell exists; migration commands remain planned. Rust is the primary implementation language. Other languages may be used for specific, important tasks where they offer a demonstrable quality advantage (see [docs/DECISIONS.md](docs/DECISIONS.md)).
-- **Repository:** `eiserv/frameshift` on GitHub. Public visibility is being prepared under `D-066`; this does not mark M1 complete or publish a release.
+- **Repository:** `eiserv/frameshift` on GitHub. The repository is public under `D-066`; this does not mark M1 complete or publish a release.
 - **License:** GNU Affero General Public License, version 3 or later (`AGPL-3.0-or-later`). See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - **Contributions:** external code contributions are not being accepted yet. See [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Security:** report suspected vulnerabilities privately through [SECURITY.md](SECURITY.md).
