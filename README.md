@@ -29,6 +29,8 @@ Frameshift will never present an incomplete migration as a success, and it never
 
 The first supported path targets Next.js App Router projects that are mostly static. Static components become Astro components that ship no JavaScript. Interactive components become Preact islands. Routes, content, appearance, accessibility, and behavior are preserved, and the output is deployable as a static site. Request-time server features such as middleware, Server Actions, and cookies are detected and explained, not migrated. See [docs/MIGRATION_SPEC.md](docs/MIGRATION_SPEC.md).
 
+Runtime dependencies are reviewed explicitly. The SHA-256 dependency is pinned to RustCrypto `sha2` 0.11.1 with default features disabled; its exact transitive graph, third-party notices, and development-only advisory checks are recorded under `D-058` in [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md). On a fresh machine, prepare the dependency cache with `cargo fetch --locked` before the documented offline build and test commands. Product runtime remains offline.
+
 ## Development stages
 
 | Stage | Theme |
@@ -52,7 +54,7 @@ Milestones are defined by capabilities, not dates. See [docs/ROADMAP.md](docs/RO
 
 ## Available CLI shell
 
-The engine foundation also exposes strict canonical `SourcePath` values and separately validated portable `OutputPath` values through `frameshift_engine::foundation` (`D-053`, `D-054`). They preserve source spelling and reject ambiguous structure without normalization. Stable `UnitId` values distinguish file, URL-pattern, and configuration subjects with unambiguous percent encoding (`D-056`, IMPLEMENTATION.md section 16). `FindingCode`, `RuleId`, and `FeatureId` values validate catalog spelling, independently of whether a catalog entry ships (`D-055`, IMPLEMENTATION.md section 15). Bounded finding records add project, file, and validated text scopes and deterministic report-local numbering (`D-057`, IMPLEMENTATION.md section 17). These in-memory types do not inspect a filesystem or establish safe write locations. See section 14 of [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
+The engine foundation also exposes strict canonical `SourcePath` values and separately validated portable `OutputPath` values through `frameshift_engine::foundation` (`D-053`, `D-054`). They preserve source spelling and reject ambiguous structure without normalization. Stable `UnitId` values distinguish file, URL-pattern, and configuration subjects with unambiguous percent encoding (`D-056`, IMPLEMENTATION.md section 16). `FindingCode`, `RuleId`, and `FeatureId` values validate catalog spelling, independently of whether a catalog entry ships (`D-055`, IMPLEMENTATION.md section 15). Bounded finding records add project, file, and validated text scopes and deterministic report-local numbering (`D-057`, IMPLEMENTATION.md section 17). The foundation also hashes exact bytes with bounded SHA-256 streaming and canonical `sha256:<64 lowercase hex>` values (`D-058`, `D-059`, IMPLEMENTATION.md sections 18 and 19). These in-memory types do not inspect a filesystem or establish safe write locations. See section 14 of [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
 
 ```text
 cargo run -p frameshift-cli --offline --locked -- help

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   conventions:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,11 +24,19 @@ jobs:
           persist-credentials: false
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - run: cargo fetch --locked
       - name: Check commit conventions and crate boundaries
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./.github/scripts/check.ps1 -Conventions
+      - name: Test dependency and release policy rejections
+        shell: pwsh
+        run: ./.github/scripts/test-check.ps1
+      - name: Audit locked Cargo dependencies
+        run: |
+          cargo install cargo-audit --version =0.22.2 --locked --no-default-features
+          cargo audit --deny warnings
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --offline --locked -- -D warnings
 
@@ -60,9 +68,14 @@ jobs:
         with:
           go-version: '1.25.5'
           cache: false
+      - run: cargo fetch --locked
       - run: cargo build --workspace --offline --locked
       - run: cargo test --workspace --offline --locked
       - run: cargo test --workspace --release --offline --locked
+      - name: Check portable SHA-256 backend
+        env:
+          RUSTFLAGS: '--cfg sha2_backend="soft"'
+        run: cargo test -p frameshift-engine --offline --locked --test hashes
       - run: cargo run -p frameshift-bench --offline --locked -- --check
       - run: cargo run -p frameshift-e2 --offline --locked -- check
       - name: Validate Go development helpers

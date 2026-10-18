@@ -19,31 +19,15 @@ if ($Conventions) {
     }
 }
 
-$metadata = cargo metadata --offline --locked --no-deps --format-version 1 | ConvertFrom-Json
-$allowed = @{
-    'frameshift-core' = @()
-    'frameshift-syntax' = @('frameshift-core')
-    'frameshift-transform' = @('frameshift-core')
-    'frameshift-emit' = @('frameshift-core', 'frameshift-syntax', 'frameshift-transform')
-    'frameshift-engine' = @('frameshift-core', 'frameshift-syntax', 'frameshift-transform', 'frameshift-emit')
-    'frameshift-cli' = @('frameshift-engine')
-}
+$metadata = cargo metadata --offline --locked --format-version 1 | ConvertFrom-Json
+$policy = Get-Content -Raw .github/dependencies.json | ConvertFrom-Json
 $releaseVersion = (Get-Content -Raw version.txt).Trim()
-foreach ($package in $metadata.packages) {
-    if ($package.version -ne $releaseVersion) { throw 'Workspace package version differs from the release version.' }
-    foreach ($dependency in $package.dependencies) {
-        if ($null -eq $dependency.path) { throw 'External Cargo dependencies require a new accepted decision and checker update.' }
-        if ($allowed.ContainsKey($package.name) -and $dependency.name -notin $allowed[$package.name]) {
-            throw "Forbidden dependency from $($package.name) to $($dependency.name)."
-        }
-    }
-    if (-not $allowed.ContainsKey($package.name) -and -not $package.manifest_path.Replace('\', '/').Contains('/tools/')) {
-        throw 'Unclassified product crate needs an explicit boundary policy.'
-    }
-}
+$releaseConfig = Get-Content -Raw release-please-config.json | ConvertFrom-Json
+. "$PSScriptRoot/dependencies.ps1"
+Assert-CargoPolicy $metadata $policy $releaseVersion $releaseConfig
 $manifest = Get-Content -Raw .release-please-manifest.json | ConvertFrom-Json
 if ($manifest.'.' -ne $releaseVersion) { throw 'Release manifest differs from workspace version.' }
 
 $invalidActions = Get-ChildItem .github/workflows/*.yml | Select-String -Pattern '^\s*-?\s*uses:\s+(?!\./)[^@\s]+@(?![0-9a-f]{40}(?:\s|$))'
 if ($invalidActions) { throw 'Every external Action must use a full commit SHA.' }
-Write-Output 'Crate boundaries, package versions, and Action pins are valid.'
+Write-Output 'Crate boundaries, dependency policy, release versions/selectors, and Action pins are valid.'

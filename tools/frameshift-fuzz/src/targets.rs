@@ -14,7 +14,7 @@ use frameshift_engine::{
     validate_js_regexp,
 };
 
-use crate::{astro, edits, identifiers, lexical, paths, seeds};
+use crate::{astro, edits, hashes, identifiers, lexical, paths, seeds};
 
 /// A fuzzed engine entry point with its contracts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +37,8 @@ pub enum Target {
     Paths,
     /// Stable catalog identifiers and percent-encoded unit identity.
     Identifiers,
+    /// SHA-256 streaming, bounded updates, and canonical digest parsing.
+    Hashes,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -53,7 +55,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -63,6 +65,7 @@ impl Target {
         Self::Astro,
         Self::Paths,
         Self::Identifiers,
+        Self::Hashes,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -77,6 +80,7 @@ impl Target {
             Self::Astro => "astro",
             Self::Paths => "paths",
             Self::Identifiers => "identifiers",
+            Self::Hashes => "hashes",
         }
     }
 
@@ -115,6 +119,9 @@ impl Target {
             Self::Identifiers => {
                 "catalog grammar and unit identity; independent acceptance and encoding, limits, and repetition"
             }
+            Self::Hashes => {
+                "SHA-256 streaming, failed-update preservation, byte limits, and independent digest grammar"
+            }
         }
     }
 
@@ -127,7 +134,8 @@ impl Target {
             | Self::Edits
             | Self::Astro
             | Self::Paths
-            | Self::Identifiers => 4_096,
+            | Self::Identifiers
+            | Self::Hashes => 4_096,
             Self::RegExp | Self::References => 1_024,
             Self::Lexical => 512,
         }
@@ -156,6 +164,7 @@ impl Target {
             Self::Astro => astro::run(input),
             Self::Paths => paths::run(input),
             Self::Identifiers => identifiers::run(input),
+            Self::Hashes => hashes::run(input),
         }
     }
 }

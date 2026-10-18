@@ -314,6 +314,16 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
         Target::References => &REFERENCE_TOKENS,
         Target::Edits => &EDIT_TOKENS,
         Target::Astro => &ASTRO_TOKENS,
+        Target::Hashes => &[
+            "sha256:",
+            "SHA256:",
+            "sha512:",
+            "0123456789abcdef",
+            "ABCDEF",
+            "\0",
+            "é",
+            "\n",
+        ],
         Target::Identifiers => &[
             "FS",
             "0001",
@@ -375,6 +385,19 @@ pub fn inputs(target: Target) -> Vec<Vec<u8>> {
         Target::Lexical => LEXICAL.iter().map(|text| (*text).to_owned()).collect(),
         Target::References => REFERENCES.iter().map(|text| (*text).to_owned()).collect(),
         Target::Edits => return edit_cases(),
+        Target::Hashes => [
+            "",
+            "abc",
+            "abc\0",
+            "\u{feff}abc\r\n",
+            "sha256:é",
+            "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "SHA256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .collect(),
         Target::Identifiers => [
             "FS0000",
             "FS9001",

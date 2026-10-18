@@ -1,0 +1,14 @@
+{
+  "decision": "D-058",
+  "packages": [
+    { "name": "block-buffer", "version": "0.12.1", "features": [], "buildScript": false },
+    { "name": "cfg-if", "version": "1.0.5", "features": [], "buildScript": false },
+    { "name": "cpufeatures", "version": "0.3.1", "features": [], "buildScript": false },
+    { "name": "crypto-common", "version": "0.2.2", "features": [], "buildScript": false },
+    { "name": "digest", "version": "0.11.3", "features": ["block-api", "default"], "buildScript": false },
+    { "name": "hybrid-array", "version": "0.4.15", "features": [], "buildScript": false },
+    { "name": "libc", "version": "0.2.190", "features": [], "buildScript": true },
+    { "name": "sha2", "version": "0.11.1", "features": [], "buildScript": false },
+    { "name": "typenum", "version": "1.20.1", "features": ["const-generics"], "buildScript": false }
+  ]
+}
