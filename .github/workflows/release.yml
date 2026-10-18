@@ -10,7 +10,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release-please:
-    if: vars.FRAMESHIFT_RELEASE_APP_READY == 'true'
+    if: github.ref == 'refs/heads/main' && vars.FRAMESHIFT_RELEASE_APP_READY == 'true'
+    # The App key is an environment secret that only main may deploy with.
+    environment: release
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -54,13 +56,12 @@ jobs:
         with:
           name: packages-with-checksums
           path: archives
-      - name: Upload verified assets to the existing private release
+      - name: Upload verified assets to the existing release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_REF: ${{ needs.release-please.outputs.tag }}
         run: |
-          test "$(gh repo view --json isPrivate --jq .isPrivate)" = true
           (cd archives && sha256sum --check frameshift-*-checksums.txt)
           gh release view "$RELEASE_REF"
           gh release upload "$RELEASE_REF" archives/* --clobber

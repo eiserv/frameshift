@@ -213,7 +213,7 @@ A dependency is evaluated on:
 4. **Security:** history of vulnerabilities, attack surface, handling of untrusted input.
 5. **Maintenance burden:** upgrade frequency, breaking changes, number of transitive dependencies.
 6. **API stability:** versioning policy, and whether pre-1.0 churn is acceptable.
-7. **Licensing:** permissive licenses (MIT, BSD, Apache-2.0, ISC) are preferred, because the future license is undecided (`DF-003`). Copyleft runtime dependencies require an explicit decision.
+7. **Licensing:** dependencies must be compatible with Frameshift's `AGPL-3.0-or-later` license (`D-066`). Permissive licenses (MIT, BSD, Apache-2.0, ISC) remain preferred for reusable components. Copyleft runtime dependencies require an explicit decision; the project license does not waive dependency review.
 8. **Sustainability:** maintainers, governance, funding, and bus factor.
 9. **Portability:** builds from source with the pinned toolchains on every tier 1 platform, without extra system libraries.
 10. **Control over critical behavior:** if the component decides correctness (parsing, classification, code generation), Frameshift must be able to define and fix its behavior.
@@ -381,7 +381,7 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | --- | --- |
 | Product name | Frameshift, with exactly this capitalization. Never "FrameShift", "Frame Shift", or "frame-shift". |
 | Executable and command | `frameshift` (`frameshift.exe` on Windows) |
-| Repository | `eiserv/frameshift`, private (`D-026`) |
+| Repository | `eiserv/frameshift` (`D-026`); public preparation under `D-066` |
 | Rust crates | A Cargo workspace. Crates are named `frameshift-<subsystem>` (for example `frameshift-engine`, `frameshift-cli`). The binary is `frameshift`. Development-only tools live under `tools/`, are named `frameshift-<purpose>`, and are never dependencies of product crates. Modules inside crates use short, lowercase names. The existing M0 crate layout is recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md); it expands as concrete M1 requirements arise. |
 | JSON document kinds | `frameshift.version` and usage `frameshift.error` implemented (`D-050`); `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, and `frameshift.manifest` planned |
 | Output metadata | `.frameshift/` directory (with `SUMMARY.md`, `manifest.json`, `report.json`, `unmigrated/`), `src/frameshift-compat/` helpers |
