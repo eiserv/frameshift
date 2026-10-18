@@ -218,7 +218,7 @@ The owner authorized preparation for public visibility and selected AGPL-3.0-or-
 - Local Windows validation passed: workspace tests, all-target Clippy with warnings denied, rustfmt, Cargo boundary/version/Action-pin checks, actionlint 1.7.11, Go release-helper tests and vet, and Markdown link/style checks. A real Windows CLI archive contains LICENSE byte for byte. These checks do not substitute for native six-target CI.
 - Repository visibility was private at this preparation checkpoint. Existing failed CI runs are not treated as green.
 - The owner made the repository public on 2026-10-17. Steps 1 and 2 below were then completed: fork pull request workflows require approval for all external contributors, secret scanning with push protection and private vulnerability reporting are enabled, and the read-back of section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) confirmed the remaining settings.
-- On 2026-10-19, step 3 and the integration part of step 5 were completed: the preparation PR #14 was merged after its exact head passed the required checks, and the foundation PRs followed in dependency order with green final revisions (section 21 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Step 4, the owner's M1 acceptance, and step 6 remain open.
+- On 2026-10-19, step 3 and the integration part of step 5 were completed: the preparation PR #14 was merged after its exact head passed the required checks, and the foundation PRs followed in dependency order with green final revisions (section 21 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). The owner accepted M1 on the same day (`D-063`). Steps 4 and 6 remain open.
 
 ### Visibility switch and verification
 
