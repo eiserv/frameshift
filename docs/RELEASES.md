@@ -1,6 +1,6 @@
 # Releases and CI/CD
 
-**Status: CI and gated release foundation implemented (`D-051`, `D-052`).** Workflows, release configuration, and a release manifest exist. No release has been published. Release PR tooling is implemented and temporarily paused for the environment-secret transition; publication is disabled until M1 is accepted. Section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) records actual local and remote evidence. The remaining signing, immutable release, binary reproducibility, scheduled verification, and product smoke-test requirements below are plans for later milestones.
+**Status: CI and gated release foundation implemented (`D-051`, `D-052`).** Workflows, release configuration, and a release manifest exist. No release has been published. Release PR tooling is implemented and temporarily paused for the environment-secret transition; M1 was accepted on 2026-10-19 (`D-063`), and publication stays disabled until the owner sets `FRAMESHIFT_M1_RELEASE_READY=true`. Section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) records actual local and remote evidence. The remaining signing, immutable release, binary reproducibility, scheduled verification, and product smoke-test requirements below are plans for later milestones.
 
 ### Current controls and commands
 
