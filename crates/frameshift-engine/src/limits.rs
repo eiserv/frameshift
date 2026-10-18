@@ -11,7 +11,7 @@ use frameshift_core::{
     FindingLimits, HashLimits, IdentifierLimits, PathLimits, RunLimits, TextLimits, UnitId,
 };
 use frameshift_emit::EmitLimits;
-use frameshift_input::{DiscoveryLimits, IgnoreLimits};
+use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
 use frameshift_syntax::{LexicalLimits, ParseLimits};
 use frameshift_transform::EditLimits;
 
@@ -135,6 +135,15 @@ impl Limits {
             run: self.run,
             path: self.path,
             ignore: self.ignore,
+        }
+    }
+
+    /// Returns the limits that a snapshot applies: discovery's limits and
+    /// the hash bound of each file digest and of the identity stream.
+    pub fn snapshot(&self) -> SnapshotLimits {
+        SnapshotLimits {
+            discovery: self.discovery(),
+            hash: self.hash,
         }
     }
 

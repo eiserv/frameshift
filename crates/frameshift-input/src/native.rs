@@ -117,6 +117,50 @@ impl Tree for NativeTree {
         Ok(content)
     }
 
+    fn read_file(
+        &self,
+        file: &PathBuf,
+        expected: &Identity,
+        size: u64,
+    ) -> Result<Vec<u8>, ReadError> {
+        // A failure counts as unreadable only while the entry still looks
+        // like the listed file: a removed file, or one replaced by a
+        // directory (which Windows refuses to open), was changed.
+        let io = |error: std::io::Error| {
+            let listed = fs::symlink_metadata(file)
+                .is_ok_and(|metadata| kind(&metadata) == (RawKind::File { size }));
+            match IoFailure::from_io(&error) {
+                IoFailure::NotFound => ReadError::Changed,
+                IoFailure::PermissionDenied | IoFailure::Other if !listed => ReadError::Changed,
+                failure @ (IoFailure::PermissionDenied | IoFailure::Other) => {
+                    ReadError::Io(failure)
+                }
+            }
+        };
+        let handle = open_unfollowed(file).map_err(io)?;
+        let before = handle.metadata().map_err(io)?;
+        if kind(&before) != (RawKind::File { size }) || !same(&before, expected) {
+            return Err(ReadError::Changed);
+        }
+        let capacity = usize::try_from(size).map_err(|_| ReadError::AllocationFailed)?;
+        let mut content = Vec::new();
+        content
+            .try_reserve_exact(capacity)
+            .map_err(|_| ReadError::AllocationFailed)?;
+        (&handle)
+            .take(size.saturating_add(1))
+            .read_to_end(&mut content)
+            .map_err(io)?;
+        let after = handle.metadata().map_err(io)?;
+        if content.len() as u64 != size
+            || after.len() != size
+            || after.modified().ok() != before.modified().ok()
+        {
+            return Err(ReadError::Changed);
+        }
+        Ok(content)
+    }
+
     fn read_link(&self, link: &PathBuf) -> RawTarget {
         match fs::read_link(link) {
             Ok(target) => raw_target(&target),
