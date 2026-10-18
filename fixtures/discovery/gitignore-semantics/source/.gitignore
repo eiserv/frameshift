@@ -1,0 +1,14 @@
+﻿# Build output
+/dist/
+*.log
+!keep.log
+coverage/
+temp-*
+!temp-keep.txt
+docs/**/*.draft.md
+**/cache
+[Tt]humbs.db
+spaced\ name  
+\#hash
+vendor/*
+!vendor/allowed

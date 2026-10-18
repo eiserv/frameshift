@@ -1,0 +1,45 @@
+complete: true
+stop: none
+unrepresentable: 0
+files:
+  175 .gitignore
+  25 app/dist/client.ts
+  64 app/page.tsx
+  7 coverage-tools/.gitignore
+  12 coverage-tools/run.log
+  8 docs/guide/intro.md
+  5 keep.log
+  34 packages/web/.gitignore
+  12 packages/web/debug.log
+  24 packages/web/local-only
+  11 packages/web/src/generated/types.ts
+  5 temp-keep.txt
+  11 vendor/allowed/index.js
+entries:
+  #hash: ignored gitignore entry
+  Thumbs.db: ignored gitignore entry
+  app: directory
+  app/debug.log: ignored gitignore entry
+  app/dist: directory
+  coverage: ignored gitignore directory
+  coverage-tools: directory
+  dist: ignored gitignore directory
+  docs: directory
+  docs/guide: directory
+  docs/guide/intro.draft.md: ignored gitignore entry
+  docs/intro.draft.md: ignored gitignore entry
+  lib: directory
+  lib/cache: ignored gitignore directory
+  out.log: ignored gitignore directory
+  packages: directory
+  packages/web: directory
+  packages/web/generated: ignored gitignore directory
+  packages/web/src: directory
+  packages/web/src/generated: directory
+  packages/web/src/local-only: ignored gitignore directory
+  spaced name: ignored gitignore entry
+  temp-a.txt: ignored gitignore entry
+  vendor: directory
+  vendor/allowed: directory
+  vendor/blocked: ignored gitignore directory
+findings:

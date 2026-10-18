@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "discovery",
+  "description": "Very large files with default limits: a file of exactly 64 MiB is admitted and one byte more is accounted but not admitted (D-061, D-064). The harness creates both as sparse files; discovery never reads them.",
+  "createdAtTestTime": [
+    { "kind": "sparse-file", "path": "media/poster.png", "bytes": 67108864 },
+    { "kind": "sparse-file", "path": "media/hero.mov", "bytes": 67108865 }
+  ]
+}

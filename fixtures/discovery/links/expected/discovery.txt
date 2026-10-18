@@ -1,0 +1,36 @@
+complete: true
+stop: none
+unrepresentable: 0
+files:
+  12 assets/icons/menu.svg
+  12 assets/logo.svg
+  11 content/.gitignore
+  50 notes/private.md
+entries:
+  assets: directory
+  assets/icons: directory
+  content: directory
+  notes: directory
+  notes/.gitignore: link inside content/.gitignore
+  public: directory
+  public/escape: link escapes
+  public/home: link inside root
+  public/icons: link inside assets/icons
+  public/logo.svg: link inside assets/logo.svg
+  public/menu.svg: link unresolved through-link
+  public/missing: link dangling
+findings:
+  F0001 unknown FS1003 public/escape: Link target leaves the project root
+    Frameshift never follows links. This link's target resolves outside the project root, so its content is not analyzed or migrated.
+  F0002 unknown FS1006 public/menu.svg: Link target not resolved
+    Frameshift never follows links and could not resolve this target: the target passes through another link. Its content is not analyzed or migrated.
+  F0003 info FS1005 notes/.gitignore: Link not followed; target inside the project recorded
+    Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.
+  F0004 info FS1005 public/home: Link not followed; target inside the project recorded
+    Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.
+  F0005 info FS1005 public/icons: Link not followed; target inside the project recorded
+    Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.
+  F0006 info FS1005 public/logo.svg: Link not followed; target inside the project recorded
+    Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.
+  F0007 info FS1007 public/missing: Link target does not exist
+    The link's target does not exist in the project. Frameshift records the link, but there is no content to migrate for it.

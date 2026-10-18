@@ -11,6 +11,7 @@ use frameshift_core::{
     FindingLimits, HashLimits, IdentifierLimits, PathLimits, RunLimits, TextLimits, UnitId,
 };
 use frameshift_emit::EmitLimits;
+use frameshift_input::{DiscoveryLimits, IgnoreLimits};
 use frameshift_syntax::{LexicalLimits, ParseLimits};
 use frameshift_transform::EditLimits;
 
@@ -27,6 +28,8 @@ const _: () = assert!(usize::BITS <= u64::BITS);
 pub struct Limits {
     /// Discovery and snapshot input bounds.
     pub run: RunLimits,
+    /// `.gitignore` bytes and matching work during discovery.
+    pub ignore: IgnoreLimits,
     /// Decoded source text size.
     pub text: TextLimits,
     /// Canonical source and output path values.
@@ -73,6 +76,9 @@ pub enum LimitsError {
     /// `text.max-source-bytes` exceeds `edit.max-output-bytes`, so an empty
     /// edit set could fail to reproduce an accepted source.
     TextExceedsEditOutput,
+    /// `run.max-files` exceeds `run.max-entries`, so the file bound could
+    /// never be reached.
+    FilesExceedEntries,
 }
 
 impl fmt::Display for LimitsError {
@@ -87,6 +93,7 @@ impl fmt::Display for LimitsError {
                 "identifier.max-bytes cannot hold a file unit identity for every path"
             }
             Self::TextExceedsEditOutput => "text.max-source-bytes exceeds edit.max-output-bytes",
+            Self::FilesExceedEntries => "run.max-files exceeds run.max-entries",
         })
     }
 }
@@ -116,16 +123,29 @@ impl Limits {
         if self.text.max_source_bytes > self.edit.max_output_bytes {
             return Err(LimitsError::TextExceedsEditOutput);
         }
+        if run.max_files > run.max_entries {
+            return Err(LimitsError::FilesExceedEntries);
+        }
         Ok(())
+    }
+
+    /// Returns the limits that discovery applies.
+    pub fn discovery(&self) -> DiscoveryLimits {
+        DiscoveryLimits {
+            run: self.run,
+            path: self.path,
+            ignore: self.ignore,
+        }
     }
 
     /// Lists every configured limit, sorted by name bytes.
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 25] {
+    pub fn entries(&self) -> [LimitEntry; 28] {
         let Self {
             run,
+            ignore,
             text,
             path,
             identifier,
@@ -140,7 +160,12 @@ impl Limits {
             max_file_bytes,
             max_total_bytes,
             max_directory_depth,
+            max_entries,
         } = run;
+        let IgnoreLimits {
+            max_total_bytes: ignore_bytes,
+            max_match_work,
+        } = ignore;
         let TextLimits { max_source_bytes } = text;
         let PathLimits {
             max_path_bytes,
@@ -190,6 +215,8 @@ impl Limits {
             entry("finding.max-text-bytes", wide(max_text_bytes)),
             entry("hash.max-bytes", hash_bytes),
             entry("identifier.max-bytes", wide(identifier_bytes)),
+            entry("ignore.max-match-work", max_match_work),
+            entry("ignore.max-total-bytes", ignore_bytes),
             entry("parse.lexical.max-comments", wide(max_comments)),
             entry(
                 "parse.lexical.max-identifier-bytes",
@@ -206,6 +233,7 @@ impl Limits {
             entry("path.max-components", wide(max_components)),
             entry("path.max-path-bytes", wide(max_path_bytes)),
             entry("run.max-directory-depth", wide(max_directory_depth)),
+            entry("run.max-entries", wide(max_entries)),
             entry("run.max-file-bytes", max_file_bytes),
             entry("run.max-files", wide(max_files)),
             entry("run.max-total-bytes", max_total_bytes),

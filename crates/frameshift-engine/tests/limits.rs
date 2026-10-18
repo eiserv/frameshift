@@ -19,6 +19,7 @@ fn documented_defaults_are_consistent() {
             max_file_bytes: 64 * 1024 * 1024,
             max_total_bytes: 1024 * 1024 * 1024,
             max_directory_depth: 255,
+            max_entries: 1_000_000,
         }
     );
     let limits = Limits::default();
@@ -33,6 +34,9 @@ fn documented_defaults_are_consistent() {
             .map(|entry| entry.value)
     };
     assert_eq!(value("run.max-files"), Some(100_000));
+    assert_eq!(value("run.max-entries"), Some(1_000_000));
+    assert_eq!(value("ignore.max-total-bytes"), Some(4 * 1024 * 1024));
+    assert_eq!(value("ignore.max-match-work"), Some(1 << 34));
     assert_eq!(value("text.max-source-bytes"), Some(16 * 1024 * 1024));
     assert_eq!(value("path.max-components"), Some(256));
     assert_eq!(value("hash.max-bytes"), Some(ALGORITHM_MAX));
@@ -64,6 +68,7 @@ fn entries_are_sorted_named_and_complete() {
     limits.run.max_file_bytes = value() as u64;
     limits.run.max_total_bytes = value() as u64;
     limits.run.max_directory_depth = value();
+    limits.run.max_entries = value();
     limits.text.max_source_bytes = value();
     limits.path.max_path_bytes = value();
     limits.path.max_components = value();
@@ -85,13 +90,17 @@ fn entries_are_sorted_named_and_complete() {
     limits.edit.max_output_bytes = value();
     limits.emit.max_output_bytes = value();
     limits.emit.max_depth = value();
+    limits.ignore.max_total_bytes = value() as u64;
+    limits.ignore.max_match_work = value() as u64;
     let values: BTreeSet<u64> = limits.entries().iter().map(|entry| entry.value).collect();
-    assert_eq!(values, (1..=25).collect());
+    assert_eq!(values, (1..=28).collect());
     let entries = limits.entries();
     let named = |name: &str| entries.iter().find(|entry| entry.name == name).unwrap();
     assert_eq!(named("run.max-files").value, 1);
-    assert_eq!(named("parse.lexical.max-jsx-text-bytes").value, 21);
-    assert_eq!(named("emit.max-depth").value, 25);
+    assert_eq!(named("run.max-entries").value, 5);
+    assert_eq!(named("parse.lexical.max-jsx-text-bytes").value, 22);
+    assert_eq!(named("emit.max-depth").value, 26);
+    assert_eq!(named("ignore.max-match-work").value, 28);
     assert_eq!(limits.entries(), entries);
 }
 
@@ -131,6 +140,12 @@ fn each_relation_has_an_inclusive_boundary() {
     assert_eq!(limits.validate(), Ok(()));
     limits.edit.max_output_bytes -= 1;
     assert_eq!(limits.validate(), Err(LimitsError::TextExceedsEditOutput));
+
+    let mut limits = base;
+    limits.run.max_entries = limits.run.max_files;
+    assert_eq!(limits.validate(), Ok(()));
+    limits.run.max_entries -= 1;
+    assert_eq!(limits.validate(), Err(LimitsError::FilesExceedEntries));
 }
 
 #[test]
@@ -149,6 +164,7 @@ fn relations_use_the_effective_hash_bound_and_report_in_fixed_order() {
     limits.hash.max_bytes = 0;
     limits.run.max_directory_depth = usize::MAX;
     limits.run.max_total_bytes = 0;
+    limits.run.max_entries = 0;
     let mut reported = Vec::new();
     while let Err(error) = limits.validate() {
         reported.push(error);
@@ -158,6 +174,7 @@ fn relations_use_the_effective_hash_bound_and_report_in_fixed_order() {
             LimitsError::FileExceedsHash => limits.hash.max_bytes = u64::MAX,
             LimitsError::PathExceedsUnitId => limits.identifier.max_bytes = usize::MAX,
             LimitsError::TextExceedsEditOutput => limits.edit.max_output_bytes = usize::MAX,
+            LimitsError::FilesExceedEntries => limits.run.max_entries = usize::MAX,
         }
     }
     assert_eq!(
@@ -168,6 +185,7 @@ fn relations_use_the_effective_hash_bound_and_report_in_fixed_order() {
             LimitsError::FileExceedsHash,
             LimitsError::PathExceedsUnitId,
             LimitsError::TextExceedsEditOutput,
+            LimitsError::FilesExceedEntries,
         ]
     );
     for error in reported {

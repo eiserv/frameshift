@@ -5,9 +5,9 @@ use std::fmt;
 /// Inclusive, deterministic bounds on the source input of one run.
 ///
 /// Limits count sizes and entries, never time, so results do not depend on
-/// machine speed. Future discovery and snapshot code applies them in canonical
-/// path order; an input beyond a limit must become an explicit finding, never
-/// silent truncation. These values perform no I/O themselves.
+/// machine speed. Discovery and the future snapshot store apply them in
+/// canonical path order; an input beyond a limit must become an explicit
+/// finding, never silent truncation. These values perform no I/O themselves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RunLimits {
     /// Maximum admitted source files. Defaults to 100,000.
@@ -20,6 +20,9 @@ pub struct RunLimits {
     /// `a/b` has depth 2. Defaults to 255, so every file in a traversed
     /// directory fits the default 256-component path limit.
     pub max_directory_depth: usize,
+    /// Maximum directory entries that discovery reads, including
+    /// directories, links, and ignored names. Defaults to 1,000,000.
+    pub max_entries: usize,
 }
 
 impl Default for RunLimits {
@@ -29,6 +32,7 @@ impl Default for RunLimits {
             max_file_bytes: 64 * 1024 * 1024,
             max_total_bytes: 1024 * 1024 * 1024,
             max_directory_depth: 255,
+            max_entries: 1_000_000,
         }
     }
 }

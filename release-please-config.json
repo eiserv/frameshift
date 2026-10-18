@@ -23,6 +23,7 @@
         { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name.value=='frameshift-entity-gen')].version" },
         { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name.value=='frameshift-fuzz')].version" },
         { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name.value=='frameshift-fuzz-sections')].version" },
+        { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name.value=='frameshift-input')].version" },
         { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name.value=='frameshift-syntax')].version" },
         { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name.value=='frameshift-transform')].version" },
         { "type": "toml", "path": "Cargo.lock", "jsonpath": "$.package[?(@.name.value=='frameshift-unicode-gen')].version" }

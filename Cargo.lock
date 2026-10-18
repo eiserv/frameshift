@@ -96,6 +96,7 @@ version = "0.0.0"
 dependencies = [
  "frameshift-core",
  "frameshift-emit",
+ "frameshift-input",
  "frameshift-syntax",
  "frameshift-transform",
 ]
@@ -116,6 +117,13 @@ dependencies = [
 [[package]]
 name = "frameshift-fuzz-sections"
 version = "0.0.0"
+
+[[package]]
+name = "frameshift-input"
+version = "0.0.0"
+dependencies = [
+ "frameshift-core",
+]
 
 [[package]]
 name = "frameshift-syntax"

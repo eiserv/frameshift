@@ -1,0 +1,13 @@
+complete: true
+stop: none
+unrepresentable: 0
+files:
+  67108864 media/poster.png
+  14 public/robots.txt
+entries:
+  media: directory
+  media/hero.mov: oversized 67108865
+  public: directory
+findings:
+  F0001 unknown FS1004 media/hero.mov: File exceeds the size limit
+    The file has 67108865 bytes, more than the limit of 67108864 bytes per file (run.max-file-bytes). It is accounted for but not read, analyzed, or migrated.
