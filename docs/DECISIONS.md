@@ -673,7 +673,7 @@ Statuses change through an edit to this file under the integration workflow in D
   4. A read-back with `gh api repos/eiserv/frameshift/branches/main/protection` matches the authorized branch protection policy (section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md)).
   5. The documentation matches actual behavior, and the product fixture layout is decided (`D-062`).
 - **Procedure:** When the criteria hold, an agent prepares a documentation pull request that lists the evidence. The owner confirms acceptance explicitly. Only then do the documents mark M1 as complete, and only then is `FRAMESHIFT_M1_RELEASE_READY` set to `true`, by the owner or under the owner's explicit authorization. Merging a release pull request remains the owner's deliberate action (`D-051`).
-- **Current state:** The foundation code is complete once the open pull request stack is merged. Criteria 2 to 4 are pending, because GitHub Actions jobs cannot start while the account's billing condition persists (section 21 of [IMPLEMENTATION.md](IMPLEMENTATION.md)).
+- **Current state (2026-10-19):** The foundation pull requests #8, #9, #11, and #12 were rebased onto `main` and merged in order, each with a green `CI required` check on its final revision. The native CI run on `b594bb3`, the last M1 commit, passed all sixteen jobs on six platforms, and the branch protection read-back matches the policy. The evidence is in section 21 of [IMPLEMENTATION.md](IMPLEMENTATION.md). Criteria 1 to 4 are therefore met; M1 remains in progress until the owner explicitly confirms acceptance under the procedure above.
 
 ### D-064: Read-only discovery walker with link, ignore, and stop policies
 
