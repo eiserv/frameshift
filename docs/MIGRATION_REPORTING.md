@@ -1,6 +1,6 @@
 # Migration Reporting
 
-**Status: reporting specification with catalog and unit identifier values implemented.** `FindingCode`, `RuleId`, and `FeatureId` exist under `D-055`, and `UnitKind` and `UnitId` under `D-056` (sections 15 and 16 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Full finding records, assessments, metrics, and migration reports remain planned. This document defines how Frameshift counts, classifies, measures, and reports migrations. Reporting is a core product feature: the numbers must be useful, reproducible, and impossible to misread as a guarantee of correctness. Related decisions: `D-009`, `P-006`, and `P-016` in [DECISIONS.md](DECISIONS.md).
+**Status: reporting specification with catalog identifiers, unit identities, and finding records implemented.** `FindingCode`, `RuleId`, and `FeatureId` exist under `D-055`, `UnitKind` and `UnitId` under `D-056`, and bounded findings and deterministic report-local numbering under `D-057` (sections 15 to 17 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Assessments, metrics, the evidence ledger, and migration report documents remain planned. This document defines how Frameshift counts, classifies, measures, and reports migrations. Reporting is a core product feature: the numbers must be useful, reproducible, and impossible to misread as a guarantee of correctness. Related decisions: `D-009`, `P-006`, and `P-016` in [DECISIONS.md](DECISIONS.md).
 
 ## 1. Principles
 
@@ -199,18 +199,22 @@ Every verdict line cites the findings it rests on.
 
 | Field | Content |
 | --- | --- |
-| `id` | Report-local identifier (`F0001`, `F0002`, ...), assigned in deterministic order by severity, file path, and position |
+| `id` | Report-local identifier (`F0001`, `F0002`, ...), assigned only after the complete ordering described below; at least four digits, expanding above 9999 |
 | `code` | Stable finding code, such as `FS3120` |
 | `severity` | `error`, `blocker`, `unknown`, `review`, or `info` |
-| `unit` | Affected unit ID |
+| `unit` | Affected unit ID, if established; absent for project or file conditions without a unit |
 | `feature` | Feature ID, where applicable |
-| `location` | File (root-relative), start and end. Offsets are zero-based byte offsets and canonical, and the end is exclusive. Lines and columns are one-based, and columns count Unicode scalar values (`D-029`). |
+| `location` | Project-wide, file-only (root-relative), or validated text range. Text offsets are zero-based bytes and canonical, with an exclusive end. Derived lines and columns are one-based, counting Unicode scalar values (`D-029`). Missing positions are never invented. |
 | `message` | One-line summary |
 | `explanation` | Why this matters, in plain language |
 | `remediation` | Concrete options for the user |
 | `rule` | The rule that produced or was blocked by the finding, if any |
 
-Severities correspond to statuses: `blocker` makes the unit `unsupported`, `unknown` makes it `unknown`, and `review` makes it `review`. `info` does not change the status. `error` marks a Frameshift operational failure (the unit becomes `failed`), or an internal defect.
+The foundation record and collector exist (`D-057`, IMPLEMENTATION.md section 17). Ordering compares severity (`error`, `blocker`, `unknown`, `review`, `info`), location, code, unit, feature, rule, message, explanation, and remediation. Locations compare project scope first, then original UTF-8 path bytes, file-only before text ranges on the same path, start/end byte offsets, then derived start/end line and column. Optional associations sort absent first. Strings compare original bytes, without normalization. Identical records remain separate and receive successive IDs. These IDs belong to one finalized list and are not persistent keys. The full report schema and renderers remain planned.
+
+The record requires nonblank prose, with a single-line control-free message and no NUL in any field. Explanation and remediation may contain line breaks and other controls, which future renderers must escape. Inclusive defaults are 64 KiB per prose field and 100,000 records per collector, counting duplicates. Size/count/allocation failures return explicit errors without truncating evidence.
+
+The following assessment and outcome propagation remains planned. Severities correspond to statuses: `blocker` makes the unit `unsupported`, `unknown` makes it `unknown`, and `review` makes it `review`. `info` does not change the status. `error` marks a Frameshift operational failure (the unit becomes `failed`), or an internal defect.
 
 ### 8.2 Finding code ranges
 
