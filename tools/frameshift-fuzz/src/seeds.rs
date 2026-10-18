@@ -314,6 +314,7 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
         Target::References => &REFERENCE_TOKENS,
         Target::Edits => &EDIT_TOKENS,
         Target::Astro => &ASTRO_TOKENS,
+        Target::Collections => &["/", "//", "\0", "\u{7f}", "\u{80}", "a/b/a", "é"],
         Target::Hashes => &[
             "sha256:",
             "SHA256:",
@@ -385,6 +386,20 @@ pub fn inputs(target: Target) -> Vec<Vec<u8>> {
         Target::Lexical => LEXICAL.iter().map(|text| (*text).to_owned()).collect(),
         Target::References => REFERENCES.iter().map(|text| (*text).to_owned()).collect(),
         Target::Edits => return edit_cases(),
+        Target::Collections => [
+            "",
+            "\0",
+            "\u{3}cba",
+            "\u{5}abca",
+            " src/a.ts/src/A.ts/é.ts/e\u{301}.ts",
+            " a/b/a",
+            "\u{1f}\0\u{1}\u{2}\0\u{1f}",
+            "\u{7f}\u{7f}\u{7f}\u{1}\u{2}",
+            "é\0\0\u{1}",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .collect(),
         Target::Hashes => [
             "",
             "abc",

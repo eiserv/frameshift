@@ -1,6 +1,8 @@
 //! Public facade for Frameshift's implemented, in-memory engine operations.
 //!
-//! The foundation API exposes text, paths, identifiers, findings, and SHA-256.
+//! The foundation API exposes text, paths, identifiers, findings, SHA-256,
+//! run limits, and deterministic collections. The `limits` module bundles
+//! every subsystem's resource limits with their relations and canonical list.
 //! The text API exposes source positions, lexical primitives, a JavaScript
 //! parser for Script and Module source text with explicit JSX, TypeScript,
 //! and TSX dialects, regular-expression validation, pinned Unicode identifier
@@ -11,9 +13,11 @@
 //! CLI consumes this facade, including immutable build identity, rather than
 //! lower layers.
 
+pub mod limits;
 pub mod version;
 
-/// Framework-independent text, paths, identifiers, findings, SHA-256, and limits.
+/// Framework-independent text, paths, identifiers, findings, SHA-256, limits,
+/// and deterministic collections.
 pub use frameshift_core as foundation;
 /// Astro printing, JSX conversion, and emitted-text provenance.
 pub use frameshift_emit as emit;

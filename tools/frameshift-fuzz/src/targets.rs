@@ -14,7 +14,7 @@ use frameshift_engine::{
     validate_js_regexp,
 };
 
-use crate::{astro, edits, hashes, identifiers, lexical, paths, seeds};
+use crate::{astro, collections, edits, hashes, identifiers, lexical, paths, seeds};
 
 /// A fuzzed engine entry point with its contracts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,6 +39,8 @@ pub enum Target {
     Identifiers,
     /// SHA-256 streaming, bounded updates, and canonical digest parsing.
     Hashes,
+    /// Key tables, dense result slots, and atomic budgets.
+    Collections,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -55,7 +57,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -66,6 +68,7 @@ impl Target {
         Self::Paths,
         Self::Identifiers,
         Self::Hashes,
+        Self::Collections,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -81,6 +84,7 @@ impl Target {
             Self::Paths => "paths",
             Self::Identifiers => "identifiers",
             Self::Hashes => "hashes",
+            Self::Collections => "collections",
         }
     }
 
@@ -122,6 +126,9 @@ impl Target {
             Self::Hashes => {
                 "SHA-256 streaming, failed-update preservation, byte limits, and independent digest grammar"
             }
+            Self::Collections => {
+                "key tables, dense slots, and budgets against independent models; order independence and atomic failures"
+            }
         }
     }
 
@@ -135,7 +142,8 @@ impl Target {
             | Self::Astro
             | Self::Paths
             | Self::Identifiers
-            | Self::Hashes => 4_096,
+            | Self::Hashes
+            | Self::Collections => 4_096,
             Self::RegExp | Self::References => 1_024,
             Self::Lexical => 512,
         }
@@ -165,6 +173,7 @@ impl Target {
             Self::Paths => paths::run(input),
             Self::Identifiers => identifiers::run(input),
             Self::Hashes => hashes::run(input),
+            Self::Collections => collections::run(input),
         }
     }
 }

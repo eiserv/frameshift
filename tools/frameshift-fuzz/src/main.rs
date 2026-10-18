@@ -11,6 +11,7 @@
 //! depends on it.
 
 mod astro;
+mod collections;
 mod coverage;
 mod edits;
 mod hashes;

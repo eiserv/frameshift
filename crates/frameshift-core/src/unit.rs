@@ -149,7 +149,31 @@ impl UnitId {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// Returns an upper bound on the size of a file unit identity without an
+    /// export, for any source path of at most `path_bytes` UTF-8 bytes.
+    ///
+    /// The bound assumes the longest file kind and that every path byte is
+    /// percent-encoded, which a non-ASCII path attains. It saturates at
+    /// `usize::MAX`. Callers reconcile [`IdentifierLimits`] with path limits
+    /// through it before constructing identities.
+    pub fn max_file_id_bytes(path_bytes: usize) -> usize {
+        let kind = FILE_KINDS
+            .iter()
+            .fold(0, |longest, kind| longest.max(kind.as_str().len()));
+        (kind + 1).saturating_add(path_bytes.saturating_mul(3))
+    }
 }
+
+// The kinds that `UnitId::for_file` accepts.
+const FILE_KINDS: [UnitKind; 6] = [
+    UnitKind::Layout,
+    UnitKind::Provider,
+    UnitKind::Component,
+    UnitKind::RouteFile,
+    UnitKind::Module,
+    UnitKind::Stylesheet,
+];
 
 fn literal(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || b"-._~/[]()".contains(&byte)
@@ -204,6 +228,31 @@ fn encode(value: &str, text: &mut String) {
             text.push('%');
             text.push(char::from(HEX[usize::from(byte >> 4)]));
             text.push(char::from(HEX[usize::from(byte & 15)]));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FILE_KINDS, UnitId, UnitKind};
+    use crate::{IdentifierLimits, PathLimits, SourcePath};
+
+    #[test]
+    fn file_kinds_are_exactly_the_kinds_the_file_constructor_accepts() {
+        let path = SourcePath::new("a", PathLimits::default()).unwrap();
+        for kind in [
+            UnitKind::Route,
+            UnitKind::Layout,
+            UnitKind::Provider,
+            UnitKind::Endpoint,
+            UnitKind::Component,
+            UnitKind::RouteFile,
+            UnitKind::Module,
+            UnitKind::Stylesheet,
+            UnitKind::Config,
+        ] {
+            let accepted = UnitId::for_file(kind, &path, None, IdentifierLimits::default()).is_ok();
+            assert_eq!(accepted, FILE_KINDS.contains(&kind), "{kind:?}");
         }
     }
 }
