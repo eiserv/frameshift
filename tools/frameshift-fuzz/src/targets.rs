@@ -14,7 +14,7 @@ use frameshift_engine::{
     validate_js_regexp,
 };
 
-use crate::{astro, edits, lexical, paths, seeds};
+use crate::{astro, edits, identifiers, lexical, paths, seeds};
 
 /// A fuzzed engine entry point with its contracts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +35,8 @@ pub enum Target {
     Astro,
     /// Canonical source and portable output path validation with explicit limits.
     Paths,
+    /// Stable catalog identifiers and percent-encoded unit identity.
+    Identifiers,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -51,7 +53,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -60,6 +62,7 @@ impl Target {
         Self::Edits,
         Self::Astro,
         Self::Paths,
+        Self::Identifiers,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -73,6 +76,7 @@ impl Target {
             Self::Edits => "edits",
             Self::Astro => "astro",
             Self::Paths => "paths",
+            Self::Identifiers => "identifiers",
         }
     }
 
@@ -108,6 +112,9 @@ impl Target {
             Self::Paths => {
                 "source and output paths from arbitrary bytes; acceptance model, limits, spelling, and conversions"
             }
+            Self::Identifiers => {
+                "catalog grammar and unit identity; independent acceptance and encoding, limits, and repetition"
+            }
         }
     }
 
@@ -115,7 +122,12 @@ impl Target {
     /// boundary use shorter inputs, because their work grows faster.
     pub fn max_len(self) -> usize {
         match self {
-            Self::Program | Self::Expression | Self::Edits | Self::Astro | Self::Paths => 4_096,
+            Self::Program
+            | Self::Expression
+            | Self::Edits
+            | Self::Astro
+            | Self::Paths
+            | Self::Identifiers => 4_096,
             Self::RegExp | Self::References => 1_024,
             Self::Lexical => 512,
         }
@@ -143,6 +155,7 @@ impl Target {
             Self::Edits => edits::run(input),
             Self::Astro => astro::run(input),
             Self::Paths => paths::run(input),
+            Self::Identifiers => identifiers::run(input),
         }
     }
 }

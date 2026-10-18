@@ -62,6 +62,8 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-052 | Go development helper for deterministic release archives | Accepted |
 | D-053 | Preserve source path names and validate portable output names separately | Accepted |
 | D-054 | Strict canonical path values and separate portable output validation | Accepted |
+| D-055 | Stable, validated catalog identifiers | Accepted |
+| D-056 | Unambiguous, percent-encoded unit identities | Accepted |
 | D-066 | AGPL licensing and preparation for public source visibility | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
@@ -169,6 +171,8 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Nineteenth one-run exception (2026-10-14):** Through the Codex chat, the project owner explicitly authorized continuing development, interviewing for outstanding decisions, and committing and pushing verified changes directly to `main` once the work is complete. This run starts M1 with the grouped engine facade and the help and version CLI. This exception has the same limits as the first one.
 
 - **Twentieth one-run exception (2026-10-14):** Through the Codex chat, the project owner authorized continuing development after fetching the remote, interviewing for outstanding decisions, and committing and pushing the verified increment directly to `main`. The owner prioritized CI and the release foundation (`D-051`, `D-052`) and authorized enabling required CI checks after successful native runs. This exception has the same limits as the first one; branch protection is applied after integration.
+
+- **Twenty-first one-run exception (2026-10-15):** Through the Codex chat, the project owner authorized fetching the remote before development, recording interview decisions, and committing and pushing the verified increment directly to `main`. The owner also authorized PR creation and merge after green CI if a direct push is rejected, retaining branch protection. This run implements stable identifiers under `D-055` and the subsequent unit identity contract. It does not authorize changing protection or merging a release PR. The attempted direct push was rejected with `GH006`, requiring a pull request and `CI required`; this run therefore uses the authorized PR fallback.
 
 ### D-011: Release management with Release Please
 
@@ -568,6 +572,26 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Boundary and rationale:** Distinct types make the stronger output-name contract visible to future planners and executors without excluding nonportable source names from analysis (`D-053`). They depend only on the Rust standard library and perform no I/O. Case and Unicode-normalization collision detection, file/directory prefix collisions, native encoding conversion, symlinks, destination limits, and containment checks remain requirements for discovery, planning, and execution, not claims of these value types. Framework adapters and future V2/V3 paths can reuse the same neutral values (`D-033`).
 - **Integration:** This run supersedes the offered direct-main exception with the owner's explicit choice of PR and merge after green CI. Do not weaken branch protection or merge the unrelated release PR.
 
+### D-055: Stable, validated catalog identifiers
+
+- **Status:** Accepted (2026-10-15).
+- **Context:** M1 needs framework-independent stable identifiers before discovery and reporting can consume them (`P-016`). The owner approved unambiguous percent encoding for source-derived unit IDs through the Codex App question interface; that separate contract follows in the next increment.
+- **Decision:** Add `FindingCode`, `RuleId`, `FeatureId`, `IdentifierLimits`, and `IdentifierError` in the core, exposed through `frameshift_engine::foundation`. Finding codes are exactly `FS` and four ASCII digits. Rule IDs are `<source>-to-<target>/area.name`, with exactly one `-to-` occurrence, counting overlapping occurrences. Feature IDs have at least two dot-separated segments, permitting nested catalogs. Each name segment starts with a lowercase ASCII letter and continues with lowercase ASCII letters or digits and single internal hyphens. No spelling is repaired or normalized.
+- **Separator reconciliation:** A second PR review identified that nonoverlapping splitting accepted `a-to-to-b/x.y`, which can encode either source `a-to` and target `b` or source `a` and target `to-b`. Count every occurrence, including overlaps, and reject any path with more than one. Facade regressions and independently expressed fuzz-model boundary checks cover this case.
+- **Catalog reconciliation:** PR review identified a conflict between the initially implemented three-segment minimum and the existing V1 compatibility matrix, which includes `nextjs.fetch`, `component.island`, and `css.global`. Preserve those stable catalog names by accepting two or more segments. The longer ecosystem/category/name shape remains the usual convention, not a universal minimum. A regression test checks every concrete matrix ID and wildcard family expansion through the public API.
+- **Limits:** Explicit inclusive limits default to 128 KiB for rule and feature ID text. The size check precedes syntax and allocation; storage is reserved fallibly. Finding codes have a fixed six-byte grammar. Errors carry no input text. Equality, hashing, and ordering use the exact validated bytes.
+- **Boundary and rationale (`D-033`):** Identity syntax is independent of catalog membership, shipped versions, and frameworks. Unassigned finding codes and unknown but well-formed names remain representable without claiming product support. Stable typed keys prevent mixing rule and feature identities and support future adapters without a global counter or I/O. Product catalogs, complete finding records, report-local IDs, and unit IDs are not implemented by this increment.
+- **Validation:** Seven catalog facade tests cover the complete specified V1 feature matrix, all 10,000 finding-code spellings, malformed identifiers, exact limits and error precedence, rule parts, ordering, and input-free diagnostics. Focused tests and Clippy pass on Linux x86_64 with pinned Rust 1.98.0.
+
+### D-056: Unambiguous, percent-encoded unit identities
+
+- **Status:** Accepted (2026-10-15). The project owner approved percent encoding through the Codex App question interface, keeping ordinary IDs unchanged and distinguishing literal delimiters and percent sequences.
+- **Decision:** Add the nine framework-neutral `UnitKind` values from MIGRATION_REPORTING.md and immutable `UnitId` values in the core, exposed through the engine foundation namespace. File constructors accept validated `SourcePath` values for layout, provider, component, route-file, module, and stylesheet units. Route and endpoint IDs use rooted URL patterns. Configuration IDs use at least two lowercase catalog name segments. Wrong subject categories fail explicitly.
+- **Encoding:** Serialize `<kind>:<subject>[#<export>]`. Within subject and export, keep ASCII letters, digits, and `-._~/[]()` literal. Encode every other original UTF-8 byte as uppercase `%HH`, including `%`, `#`, `:`, whitespace, controls, and non-ASCII text. For example, `component:a%23b` identifies file `a#b`, while `component:a#b` identifies export `b` of file `a`, and `component:a%2523b` identifies file `a%23b`. Never percent-decode input or change source names, case, or Unicode normalization.
+- **Validation and limits:** Optional exports are nonempty original UTF-8 without NUL, not necessarily JavaScript identifiers. Route patterns have a leading slash, no backslash or NUL, and no empty interior or dot components; root and a single trailing slash are preserved. URL encoding and parameter semantics are not interpreted. `IdentifierLimits` counts all serialized bytes, including kind, delimiters, and expansion, before fallible allocation. Kind and export shape checks precede sizing for file IDs; route/config IDs check kind and encoded size before subject syntax. Errors carry no source text.
+- **Boundary and rationale (`D-033`):** These are keys, not a project model, router, rendering layer, or proof of unit uniqueness within a discovered project. Category-specific constructors prevent confusing filesystem paths with URL patterns and configuration concerns. Injective encoding supports future review ledgers and adapters without imposing portable output-name checks on source identity. Reading serialized IDs from report documents remains reporting work. Report-local finding numbers remain separate.
+- **Validation:** Twelve facade tests cover catalog and unit contracts. A ninth fuzz target, `identifiers`, uses independent acceptance models and percent encoding to check repeatability, limits, unchanged spelling, and exact serialization. Its generated tests also exercise malformed UTF-8, delimiters, and all four-digit finding codes. Instrumented Linux validation and final workspace evidence are in IMPLEMENTATION.md section 16.
+
 ### D-066: AGPL licensing and preparation for public source visibility
 
 - **Status:** Accepted (2026-10-17). The owner requested preparation for public visibility and explicitly selected `AGPL-3.0-or-later` through the Codex question interface.
@@ -674,7 +698,7 @@ Statuses change through an edit to this file under the integration workflow in D
 ### P-016: Finding codes and identifier schemes
 
 - **Status:** Accepted (2026-10-12), confirmed by the project owner through the Codex App question interface.
-- **Decision:** Finding codes `FS` followed by four digits, grouped by area. Rule IDs `<migration-path-id>/<area>.<name>`. Feature IDs `<ecosystem>.<category>.<name>`. Unit IDs `<kind>:<path or URL pattern>[#<export>]`. See [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md) and section 8 of [ENGINEERING.md](ENGINEERING.md).
+- **Decision:** Finding codes `FS` followed by four digits, grouped by area. Rule IDs `<migration-path-id>/<area>.<name>`. Feature IDs use dot-separated namespaces with at least two name segments, commonly `<ecosystem>.<category>.<name>`; existing two-segment catalog names remain valid (`D-055`). Unit IDs `<kind>:<path or URL pattern>[#<export>]`. See [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md) and section 8 of [ENGINEERING.md](ENGINEERING.md).
 
 ### P-017: Minimal relocation policy for output layout
 
@@ -736,6 +760,7 @@ Detailed success criteria for E1 and E2 are in section 2.8 of [ENGINEERING.md](E
 ## Template for new entries
 
 ```markdown
+
 ### <ID>: <Title>
 
 - **Status:** Proposed | Accepted | Deferred | Superseded by <ID> (<date>).

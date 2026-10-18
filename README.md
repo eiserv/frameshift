@@ -52,7 +52,7 @@ Milestones are defined by capabilities, not dates. See [docs/ROADMAP.md](docs/RO
 
 ## Available CLI shell
 
-The engine foundation also exposes strict canonical `SourcePath` values and separately validated portable `OutputPath` values through `frameshift_engine::foundation` (`D-053`, `D-054`). They preserve source spelling and reject ambiguous structure without normalization. These in-memory types do not inspect a filesystem or establish safe write locations. See section 14 of [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
+The engine foundation also exposes strict canonical `SourcePath` values and separately validated portable `OutputPath` values through `frameshift_engine::foundation` (`D-053`, `D-054`). They preserve source spelling and reject ambiguous structure without normalization. Stable `UnitId` values distinguish file, URL-pattern, and configuration subjects with unambiguous percent encoding (`D-056`, IMPLEMENTATION.md section 16). `FindingCode`, `RuleId`, and `FeatureId` values validate catalog spelling, independently of whether a catalog entry ships (`D-055`, IMPLEMENTATION.md section 15). These in-memory types do not inspect a filesystem or establish safe write locations. See section 14 of [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md).
 
 ```text
 cargo run -p frameshift-cli --offline --locked -- help
