@@ -96,7 +96,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 - Discovery never leaves the root. Symbolic links are not followed. Links resolving inside the root are recorded as references (`FS1005`). Links resolving outside are excluded with `FS1003`; absolute targets and targets through other links are not resolved (`FS1006`). Windows junctions and every other reparse point are treated like links, so cloud placeholders are never opened (`FS1008`). Implemented by the discovery walker (`D-064`, section 22 of [IMPLEMENTATION.md](IMPLEMENTATION.md)); traversal is path based (section 13).
 - Device files, named pipes, and sockets are skipped and reported (`FS1002`, implemented).
 - Discovery opens no file except `.gitignore` files, which it opens read-only and rejects when they turn out to be links or are not the listed file.
-- All reads go through the snapshot, so a file is read once. Its hash then identifies it for the rest of the run, which also prevents time-of-check to time-of-use races between stages.
+- All reads go through the snapshot, so a file is read once. Its hash then identifies it for the rest of the run, which also prevents time-of-check to time-of-use races between stages. Implemented by the snapshot store (`D-067`, section 24 of [IMPLEMENTATION.md](IMPLEMENTATION.md)): a file that is no longer the listed regular file of the listed size, or that changes while it is read, stops the run.
 - `node_modules/` is never read (implemented as a built-in ignore at every depth).
 
 ### 7.2 Resource limits
