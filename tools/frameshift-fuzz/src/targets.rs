@@ -14,7 +14,9 @@ use frameshift_engine::{
     validate_js_regexp,
 };
 
-use crate::{astro, collections, edits, gitignore, hashes, identifiers, lexical, paths, seeds};
+use crate::{
+    astro, collections, edits, gitignore, hashes, identifiers, json, lexical, paths, seeds,
+};
 
 /// A fuzzed engine entry point with its contracts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,6 +45,8 @@ pub enum Target {
     Collections,
     /// `.gitignore` parsing, matching, and work charges.
     Gitignore,
+    /// JSON and JSONC parsing against an independent model.
+    Json,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -59,7 +63,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -72,6 +76,7 @@ impl Target {
         Self::Hashes,
         Self::Collections,
         Self::Gitignore,
+        Self::Json,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -89,6 +94,7 @@ impl Target {
             Self::Hashes => "hashes",
             Self::Collections => "collections",
             Self::Gitignore => "gitignore",
+            Self::Json => "json",
         }
     }
 
@@ -136,6 +142,9 @@ impl Target {
             Self::Gitignore => {
                 ".gitignore parsing and matching against a recursive model; work charges, atomic budgets, and repetition"
             }
+            Self::Json => {
+                "parse_json in both dialects against a recursive model; values, duplicate keys, spans, rewriting, and limits"
+            }
         }
     }
 
@@ -151,7 +160,7 @@ impl Target {
             | Self::Identifiers
             | Self::Hashes
             | Self::Collections => 4_096,
-            Self::RegExp | Self::References | Self::Gitignore => 1_024,
+            Self::RegExp | Self::References | Self::Gitignore | Self::Json => 1_024,
             Self::Lexical => 512,
         }
     }
@@ -182,6 +191,7 @@ impl Target {
             Self::Hashes => hashes::run(input),
             Self::Collections => collections::run(input),
             Self::Gitignore => gitignore::run(input),
+            Self::Json => json::run(input),
         }
     }
 }

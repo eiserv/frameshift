@@ -1,5 +1,8 @@
 //! Walker contracts on in-memory trees whose listings arrive in shuffled order.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+
 use frameshift_core::{FindingLimits, FindingList};
 
 use super::*;
@@ -7,7 +10,7 @@ use super::*;
 /// A node of an in-memory tree. Names are text; the name `<raw>` stands for
 /// a native name that is not Unicode.
 #[derive(Clone, Debug)]
-enum Node {
+pub(crate) enum Node {
     Directory(Vec<usize>),
     File(Vec<u8>),
     /// A link target as stored, or `None` when it cannot be read.
@@ -20,21 +23,27 @@ enum Node {
 }
 
 #[derive(Clone, Debug)]
-struct Memory {
+pub(crate) struct Memory {
     names: Vec<String>,
     nodes: Vec<Node>,
-    seed: u64,
+    pub(crate) seed: u64,
     /// A directory that fails the post-listing check.
     changed: Option<usize>,
+    /// A file that reads as changed after listing.
+    pub(crate) changed_file: Option<usize>,
+    /// The number of admitted file reads, shared by clones.
+    pub(crate) reads: Arc<AtomicUsize>,
 }
 
 impl Memory {
-    fn new(spec: &[(&str, Node)]) -> Self {
+    pub(crate) fn new(spec: &[(&str, Node)]) -> Self {
         let mut tree = Self {
             names: vec![String::new()],
             nodes: vec![Node::Directory(Vec::new())],
             seed: 0,
             changed: None,
+            changed_file: None,
+            reads: Arc::new(AtomicUsize::new(0)),
         };
         for (path, node) in spec {
             let mut parent = 0;
@@ -79,7 +88,7 @@ impl Memory {
         tree
     }
 
-    fn find(&self, path: &str) -> usize {
+    pub(crate) fn find(&self, path: &str) -> usize {
         let mut node = 0;
         for part in path.split('/') {
             let Node::Directory(children) = &self.nodes[node] else {
@@ -169,6 +178,25 @@ impl Tree for Memory {
         }
     }
 
+    fn read_file(&self, file: &usize, identity: &usize, size: u64) -> Result<Vec<u8>, ReadError> {
+        assert_eq!(file, identity);
+        self.reads.fetch_add(1, AtomicOrdering::Relaxed);
+        if self.changed_file == Some(*file) {
+            return Err(ReadError::Changed);
+        }
+        match &self.nodes[*file] {
+            Node::File(content) if content.len() as u64 == size => Ok(content.clone()),
+            Node::File(_) => Err(ReadError::Changed),
+            Node::UnreadableFile(_) => Err(ReadError::Io(IoFailure::PermissionDenied)),
+            Node::Directory(_)
+            | Node::Link(_)
+            | Node::Reparse
+            | Node::Special
+            | Node::Uninspectable
+            | Node::Unreadable => Err(ReadError::Changed),
+        }
+    }
+
     fn read_link(&self, link: &usize) -> RawTarget {
         let Node::Link(Some(target)) = &self.nodes[*link] else {
             return RawTarget::Unreadable;
@@ -196,11 +224,11 @@ impl Tree for Memory {
     }
 }
 
-fn file(content: &str) -> Node {
+pub(crate) fn file(content: &str) -> Node {
     Node::File(content.as_bytes().to_vec())
 }
 
-fn link(target: &str) -> Node {
+pub(crate) fn link(target: &str) -> Node {
     Node::Link(Some(target.to_owned()))
 }
 

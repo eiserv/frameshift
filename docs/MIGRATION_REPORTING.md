@@ -229,7 +229,7 @@ The following assessment and outcome propagation remains planned. Severities cor
 | `FS7xxx` | Output and filesystem safety | `FS7001` output location exists. `FS7002` output location inside the source. `FS7003` unsafe output path rejected. `FS7004` managed output was modified since generation. |
 | `FS9xxx` | Internal | `FS9001` internal error. Results of this run are not trustworthy. |
 
-The discovery walker emits the following assigned codes (`D-064`, `D-065`, section 22 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Locations are the named path or, for entries directly in the root, project scope. Severities follow the status mapping above: `unknown` where content is not analyzed, `error` for operational failures, and `info` where nothing is lost.
+The discovery walker and the snapshot store emit the following assigned codes (`D-064`, `D-065`, `D-067`, sections 22 and 24 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Locations are the named path or, for entries directly in the root, project scope. Severities follow the status mapping above: `unknown` where content is not analyzed, `error` for operational failures, and `info` where nothing is lost.
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
@@ -250,6 +250,7 @@ The discovery walker emits the following assigned codes (`D-064`, `D-065`, secti
 | `FS1016` | error | Directory could not be read; its contents were not discovered. |
 | `FS1017` | error | Entry could not be inspected. |
 | `FS1018` | error | `.gitignore` file could not be read; its directory was not traversed. |
+| `FS1019` | error | File could not be read by the snapshot store; its content is not analyzed (`D-067`). |
 
 `FS1010` (lockfile format not parsed) stays reserved for the lockfile parsers. Finding code syntax is implemented independently of this future catalog: exactly `FS` followed by four ASCII digits (`D-055`). A valid value alone does not establish that a code is assigned. Codes are never reused for a different meaning. `frameshift explain <code>` prints the full documentation for a code (see [CLI.md](CLI.md)).
 

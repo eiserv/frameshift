@@ -8,9 +8,11 @@
 //! and TSX dialects, regular-expression validation, pinned Unicode identifier
 //! classification, character reference decoding with pinned tables, span
 //! rewriting, and the Astro component printer with JSX conversion and
-//! multi-source provenance of the E2 experiment. The input API discovers a
-//! project's files read-only and matches `.gitignore` patterns; it is the
-//! only part that reads the source filesystem. The facade contains no
+//! multi-source provenance of the E2 experiment, and the syntax API also
+//! parses JSON and JSONC. The input API discovers a project's files
+//! read-only, matches `.gitignore` patterns, and reads admitted files once
+//! through the snapshot store; it is the only part that reads the source
+//! filesystem. The facade contains no
 //! project inspection, migration, or verification pipeline. The M1 help and
 //! version CLI consumes this facade, including immutable build identity,
 //! rather than lower layers.
@@ -23,9 +25,9 @@ pub mod version;
 pub use frameshift_core as foundation;
 /// Astro printing, JSX conversion, and emitted-text provenance.
 pub use frameshift_emit as emit;
-/// Read-only project discovery and `.gitignore` matching.
+/// Read-only project discovery, `.gitignore` matching, and the snapshot store.
 pub use frameshift_input as input;
-/// Language parsing, lexical scanning, and character reference decoding.
+/// Language and JSON parsing, lexical scanning, and character reference decoding.
 pub use frameshift_syntax as syntax;
 /// Validated span edits and rewrite provenance.
 pub use frameshift_transform as transform;

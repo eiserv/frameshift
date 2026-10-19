@@ -347,6 +347,34 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
             "\n1",
             "é",
         ],
+        Target::Json => &[
+            "{",
+            "}",
+            "[",
+            "]",
+            ":",
+            ",",
+            "\"",
+            "\\",
+            "\\u",
+            "\\ud83d\\ude00",
+            "\\udc00",
+            "true",
+            "false",
+            "null",
+            "-0",
+            "1e5",
+            ".5",
+            "//",
+            "/*",
+            "*/",
+            "\n",
+            "\u{feff}",
+            "\u{a0}",
+            "é",
+            "\"k\":",
+            "\0",
+        ],
         Target::Identifiers => &[
             "FS",
             "0001",
@@ -447,6 +475,21 @@ pub fn inputs(target: Target) -> Vec<Vec<u8>> {
             "x/*\n*/\n**\\/x\n\0\x000x/a\n1a\n0a/x\n0x",
             "[ax\na\\\n[[:foo:]]\n\0\x000ax\n0a\\\n0f",
             "caf?\né\n\0\x000café\n0e\u{301}\n0é",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .collect(),
+        Target::Json => [
+            "",
+            "{\"name\": \"fictional\", \"version\": \"1.0.0\", \"private\": true}",
+            "\u{feff}{\"dependencies\": {\"next\": \"16.2.1\"}, \"workspaces\": [\"packages/*\"]}",
+            "// c\n{\"compilerOptions\": {\"strict\": true, /* d */ \"paths\": {\"@/*\": [\"./src/*\",],},},}",
+            "[0, -0, 1.5e+3, -2E-2, 18446744073709551616, null, false]",
+            "\"\\u0041\\u00e9\\ud83d\\ude00 \\\" \\\\ \\/ \\b \\f \\n \\r \\t\"",
+            "{\"a\": 1, \"b\": {\"a\": 2, \"a\": 3}, \"a\": 4, \"\\u0061\": 5}",
+            "[[[[{\"k\": [[]]}]]]]",
+            "\"\\ud800\"",
+            "{\"a\" 1}",
         ]
         .iter()
         .map(|text| (*text).to_owned())

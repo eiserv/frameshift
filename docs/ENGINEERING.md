@@ -249,8 +249,8 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | --- | --- | --- | --- |
 | JS, TS, JSX, TSX parser | Runtime | Build (E1 passed, `P-002` accepted) | Most critical component. Needs exact spans, comments, error policy, and resource limits. oxc may serve as a development-time test oracle. |
 | CSS tokenizer and structural parser | Runtime | Build | Specified by CSS Syntax Level 3. Bounded. Lightning CSS may serve as a test oracle. |
-| JSON reading and deterministic writing | Runtime | Build | RFC 8259 is small and precisely specified. Frameshift needs control over key order, formatting, and error positions, and shares the code with JSONC. |
-| JSONC | Runtime | Build | Extension of the JSON parser |
+| JSON reading and deterministic writing | Runtime | Build (reading implemented under `D-068`; writing remains planned) | RFC 8259 is small and precisely specified. Frameshift needs control over key order, formatting, and error positions, and shares the code with JSONC. |
+| JSONC | Runtime | Build (implemented under `D-068`) | Extension of the JSON parser: comments and one trailing comma |
 | YAML subset for lockfiles | Runtime | Build | General YAML is large and risky. Only the lockfile subset is needed. |
 | Yarn classic lockfile | Runtime | Build | Small format |
 | npm semver range matching | Runtime | Build | Needed for knowledge base matching. The grammar is well documented. |

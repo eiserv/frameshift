@@ -58,7 +58,7 @@ impl IoFailure {
         }
     }
 
-    const fn describe(self) -> &'static str {
+    pub(crate) const fn describe(self) -> &'static str {
         match self {
             Self::PermissionDenied => "permission denied",
             Self::NotFound => "not found",
@@ -115,6 +115,46 @@ pub fn discover(
     walk(&NativeTree, root, identity, limits, findings)
 }
 
+/// The native location and listing identity of every admitted file, in the
+/// order of the inventory's file table.
+pub(crate) type FileLocations<T> = Vec<(<T as Tree>::Location, <T as Tree>::Identity)>;
+
+/// Why an input-layer finding could not be stored.
+pub(crate) enum ReportError {
+    /// The code is not a valid finding code, an internal defect.
+    Code,
+    /// The collector rejected the finding.
+    Findings(FindingError),
+}
+
+/// Builds an input-layer finding and appends it to the run's collector.
+///
+/// Findings are built with permissive construction limits; the collector
+/// applies its own limits on insertion.
+pub(crate) fn push_finding(
+    findings: &mut FindingCollector,
+    code: &str,
+    severity: Severity,
+    location: FindingLocation,
+    text: FindingText<'_>,
+) -> Result<(), ReportError> {
+    let code = FindingCode::new(code).map_err(|_| ReportError::Code)?;
+    let construction = FindingLimits {
+        max_text_bytes: usize::MAX,
+        max_findings: usize::MAX,
+    };
+    let finding = Finding::new(
+        code,
+        severity,
+        location,
+        FindingContext::default(),
+        text,
+        construction,
+    )
+    .map_err(ReportError::Findings)?;
+    findings.push(finding).map_err(ReportError::Findings)
+}
+
 /// Filesystem access for the walker.
 pub(crate) trait Tree {
     /// Where a directory or entry is.
@@ -140,6 +180,14 @@ pub(crate) trait Tree {
         file: &Self::Location,
         identity: &Self::Identity,
         max: u64,
+    ) -> Result<Vec<u8>, ReadError>;
+    /// Reads exactly `size` bytes of an admitted regular file without
+    /// following links, or reports that it is no longer the listed file.
+    fn read_file(
+        &self,
+        file: &Self::Location,
+        identity: &Self::Identity,
+        size: u64,
     ) -> Result<Vec<u8>, ReadError>;
     /// Reads a link's target without following it.
     fn read_link(&self, link: &Self::Location) -> RawTarget;
@@ -179,8 +227,11 @@ pub(crate) enum ListError {
 }
 
 pub(crate) enum ReadError {
+    /// The entry is no longer the regular file that was listed, or it
+    /// changed while it was read.
     Changed,
     Io(IoFailure),
+    AllocationFailed,
 }
 
 /// A link target as the link stores it.
@@ -292,6 +343,18 @@ pub(crate) fn walk<T: Tree>(
     limits: DiscoveryLimits,
     findings: &mut FindingCollector,
 ) -> Result<Inventory, DiscoveryError> {
+    walk_files(tree, root, identity, limits, findings).map(|(inventory, _)| inventory)
+}
+
+/// Walks like [`walk`] and also returns where each admitted file is, for
+/// the snapshot store.
+pub(crate) fn walk_files<T: Tree>(
+    tree: &T,
+    root: T::Location,
+    identity: T::Identity,
+    limits: DiscoveryLimits,
+    findings: &mut FindingCollector,
+) -> Result<(Inventory, FileLocations<T>), DiscoveryError> {
     let mut walker = Walker {
         tree,
         limits,
@@ -302,6 +365,7 @@ pub(crate) fn walk<T: Tree>(
         ignore_bytes: Budget::new(limits.ignore.max_total_bytes),
         work: Budget::new(limits.ignore.max_match_work),
         admitted: Vec::new(),
+        locations: Vec::new(),
         recorded: Vec::new(),
         links: Vec::new(),
         ignores: Vec::new(),
@@ -323,6 +387,7 @@ struct Walker<'a, T: Tree> {
     ignore_bytes: Budget,
     work: Budget,
     admitted: Vec<(SourcePath, u64)>,
+    locations: FileLocations<T>,
     recorded: Vec<Entry>,
     links: Vec<(SourcePath, RawTarget)>,
     ignores: Vec<IgnoreLevel>,
@@ -483,6 +548,7 @@ impl<T: Tree> Walker<'_, T> {
         {
             Ok(content) => content,
             Err(ReadError::Changed) => return Err(DiscoveryError::SourceChanged),
+            Err(ReadError::AllocationFailed) => return Err(DiscoveryError::AllocationFailed),
             Err(ReadError::Io(failure)) => {
                 self.complete = false;
                 if let Some(directory) = directory {
@@ -588,7 +654,7 @@ impl<T: Tree> Walker<'_, T> {
                     EntryKind::NotTraversed(NotTraversed::DepthLimit),
                 )?;
             }
-            RawKind::File { size } => self.admit(child.path, size)?,
+            RawKind::File { size } => self.admit(child.path, size, location, child.identity)?,
             RawKind::Link => {
                 let target = self.tree.read_link(&location);
                 self.links
@@ -648,7 +714,13 @@ impl<T: Tree> Walker<'_, T> {
 
     /// Admits a regular file, or accounts for it when it is too large, or
     /// stops discovery when a cumulative budget would be exceeded.
-    fn admit(&mut self, path: SourcePath, size: u64) -> Result<(), DiscoveryError> {
+    fn admit(
+        &mut self,
+        path: SourcePath,
+        size: u64,
+        location: T::Location,
+        identity: T::Identity,
+    ) -> Result<(), DiscoveryError> {
         let run = self.limits.run;
         if size > run.max_file_bytes {
             let explanation = format!(
@@ -693,7 +765,11 @@ impl<T: Tree> Walker<'_, T> {
         self.admitted
             .try_reserve(1)
             .map_err(|_| DiscoveryError::AllocationFailed)?;
+        self.locations
+            .try_reserve(1)
+            .map_err(|_| DiscoveryError::AllocationFailed)?;
         self.admitted.push((path, size));
+        self.locations.push((location, identity));
         Ok(())
     }
 
@@ -812,34 +888,20 @@ impl<T: Tree> Walker<'_, T> {
         explanation: &str,
         remediation: &str,
     ) -> Result<(), DiscoveryError> {
-        let code = FindingCode::new(code).map_err(|_| DiscoveryError::Internal)?;
-        // The collector applies its own limits on insertion.
-        let construction = FindingLimits {
-            max_text_bytes: usize::MAX,
-            max_findings: usize::MAX,
-        };
         let text = FindingText {
             message,
             explanation,
             remediation,
         };
-        let finding = Finding::new(
-            code,
-            severity,
-            location,
-            FindingContext::default(),
-            text,
-            construction,
-        )
-        .map_err(DiscoveryError::Findings)?;
-        self.findings
-            .push(finding)
-            .map_err(DiscoveryError::Findings)
+        push_finding(self.findings, code, severity, location, text).map_err(|error| match error {
+            ReportError::Code => DiscoveryError::Internal,
+            ReportError::Findings(error) => DiscoveryError::Findings(error),
+        })
     }
 
     /// Sorts the entries, resolves link targets against them, and builds
     /// the file identities.
-    fn finish(mut self) -> Result<Inventory, DiscoveryError> {
+    fn finish(mut self) -> Result<(Inventory, FileLocations<T>), DiscoveryError> {
         self.recorded
             .sort_unstable_by(|left, right| left.path.cmp(&right.path));
         if self
@@ -885,14 +947,15 @@ impl<T: Tree> Walker<'_, T> {
             slots.insert(id, size).map_err(collection)?;
         }
         let sizes = slots.finish().map_err(collection)?;
-        Ok(Inventory {
+        let inventory = Inventory {
             files,
             sizes,
             entries: self.recorded,
             unrepresentable: self.unrepresentable,
             stop: self.stop,
             complete: self.complete,
-        })
+        };
+        Ok((inventory, self.locations))
     }
 
     /// Resolves a link target lexically. Every directory that resolution
@@ -1157,4 +1220,4 @@ fn environment(name: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

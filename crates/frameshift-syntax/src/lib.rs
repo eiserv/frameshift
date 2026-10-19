@@ -1,8 +1,11 @@
 //! Framework-independent JavaScript and TypeScript scanners and parsers for
-//! the E1 parser experiment. A parsed tree does not authorize transformations.
+//! the E1 parser experiment, and the JSON and JSONC parser for manifests,
+//! lockfiles, and configuration (`D-068`). A parsed tree does not authorize
+//! transformations.
 
 mod ast;
 mod identifier;
+mod json;
 mod jsx;
 mod lexical;
 mod lookup;
@@ -29,6 +32,10 @@ pub use ast::{
 };
 pub use identifier::{
     IdentifierKind, IdentifierToken, ReservedWord, ReservedWordClass, scan_js_identifier,
+};
+pub use json::{
+    JsonArray, JsonDialect, JsonDocument, JsonError, JsonErrorKind, JsonExpected, JsonId,
+    JsonLimits, JsonMember, JsonNumber, JsonObject, JsonValue, parse_json,
 };
 pub use jsx::{JsxStringToken, scan_jsx_identifier, scan_jsx_string, scan_jsx_text};
 pub use lexical::{
