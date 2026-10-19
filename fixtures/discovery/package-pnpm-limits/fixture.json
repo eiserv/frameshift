@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "An admitted pnpm lockfile exceeds the caller's YAML collection-depth limit and becomes an unanalyzed file with a location (D-071).",
+  "limits": {"yaml.max-depth": 2}
+}

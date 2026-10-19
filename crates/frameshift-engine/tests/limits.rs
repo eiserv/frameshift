@@ -50,6 +50,7 @@ fn documented_defaults_are_consistent() {
     let package = limits.package();
     assert_eq!(package.text, limits.text);
     assert_eq!(package.json, limits.json);
+    assert_eq!(package.yaml, limits.yaml);
     assert_eq!(package.path, limits.path);
     assert_eq!(package.package, limits.package);
 }

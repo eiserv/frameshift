@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "pnpm lockfiles fail closed on a YAML syntax error, duplicate keys, missing referenced snapshots, an unsupported version, multiple documents, and schema-incompatible scalar tags. Finding prose never echoes fictional marker values (D-071).",
+  "directories": ["syntax", "duplicate", "missing", "unsupported", "multiple", "typed"]
+}

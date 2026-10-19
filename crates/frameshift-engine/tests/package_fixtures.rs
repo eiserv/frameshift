@@ -74,6 +74,8 @@ fn cases() -> Vec<Case> {
                     "text.max-source-bytes" => limits.text.max_source_bytes = size(),
                     "json.max-depth" => limits.json.max_depth = size(),
                     "json.max-nodes" => limits.json.max_nodes = size(),
+                    "yaml.max-depth" => limits.yaml.max_depth = size(),
+                    "yaml.max-nodes" => limits.yaml.max_nodes = size(),
                     other => panic!("{name}: unknown limit {other}"),
                 }
             }

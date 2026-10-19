@@ -242,7 +242,7 @@ The discovery walker, the snapshot store, and the package loader emit the follow
 | `FS1007` | info | Link target does not exist. |
 | `FS1008` | unknown | Windows reparse point that is not a link (for example a cloud placeholder) not followed. |
 | `FS1009` | unknown | Directory exceeds the depth limit and was not traversed. |
-| `FS1010` | unknown | Lockfile format or format version not parsed: `pnpm-lock.yaml`, `yarn.lock`, and `bun.lockb`, npm version 1, Bun version 0, or an unknown version; versions fall back to declared ranges (`D-069`). |
+| `FS1010` | unknown | Lockfile format or format version not parsed: `yarn.lock` and `bun.lockb`, npm version 1, Bun version 0, pnpm versions other than 9.0, or an unknown version; versions fall back to declared ranges (`D-069`). |
 | `FS1011` | unknown | File count limit reached; discovery stopped. |
 | `FS1012` | unknown | Total size limit reached; discovery stopped. |
 | `FS1013` | unknown | Entry limit reached; discovery stopped. |
@@ -253,7 +253,7 @@ The discovery walker, the snapshot store, and the package loader emit the follow
 | `FS1018` | error | `.gitignore` file could not be read; its directory was not traversed. |
 | `FS1019` | error | File could not be read by the snapshot store; its content is not analyzed (`D-067`). |
 | `FS1020` | unknown | A `package.json` field or entry has an unexpected type or value, or the document is not an object; the value is not used (`D-069`). |
-| `FS1021` | review | Duplicate key in a package file; the last occurrence is used, as npm does. |
+| `FS1021` | review | Duplicate key in a package file. JSON uses the last occurrence, as npm does; YAML lockfiles are rejected as ambiguous (`D-071`). |
 | `FS1022` | unknown | `packageManager` is not `<name>@<version>[+<hash>]` with npm, pnpm, yarn, or bun and an exact version; it is ignored. |
 | `FS1023` | review | Lockfile of another package manager than the `packageManager` field names; it is ignored. |
 | `FS1024` | unknown | Lockfiles of several package managers and no valid `packageManager` field; no lockfile is used. Reported at the directory. |
@@ -261,7 +261,7 @@ The discovery walker, the snapshot store, and the package loader emit the follow
 | `FS1026` | unknown | Lockfile structure differs from its format; the lockfile is not used. |
 | `FS1027` | review | Lockfile root declarations differ from `package.json`; resolved versions may be stale. |
 | `FS1028` | unknown | Lockfile exceeds `package.max-lockfile-bytes`; it is not parsed. |
-| `FS2001` | unknown | Syntax error; the file is not analyzed. The package loader reports it for JSON and JSONC package files. |
+| `FS2001` | unknown | Syntax error; the file is not analyzed. The package loader reports it for JSON, JSONC, and YAML package files, including their parse limits. |
 | `FS2002` | unknown | Unsupported text encoding (not UTF-8); the file is not analyzed. |
 | `FS2003` | unknown | File exceeds the text size limit; it is not decoded or analyzed. |
 

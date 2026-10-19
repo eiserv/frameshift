@@ -33,6 +33,18 @@ pub fn run(input: &[u8]) -> Result<(), String> {
             }
         }
         Ok(stream) => {
+            let lockfile = frameshift_engine::package::Lockfile::from_yaml(&stream);
+            if lockfile != frameshift_engine::package::Lockfile::from_yaml(&stream) {
+                return Err("pnpm model is not deterministic".into());
+            }
+            match lockfile {
+                Ok(lockfile) => crate::package::check_lockfile(&lockfile, None)?,
+                Err(error) => {
+                    source
+                        .slice(error.span)
+                        .map_err(|_| "pnpm error span is invalid")?;
+                }
+            }
             for node in stream.nodes() {
                 source
                     .slice(node.span)

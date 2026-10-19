@@ -1,5 +1,5 @@
 {
   "$schema": "../../../schemas/fixture.schema.json",
   "kind": "package",
-  "description": "The packageManager field names pnpm with a Corepack hash, so pnpm-lock.yaml is selected but not parsed yet, and the npm lockfiles are ignored as belonging to another package manager (D-069)."
+  "description": "The packageManager field names pnpm with a Corepack hash, so pnpm-lock.yaml is selected, but rejected as structurally incomplete because its referenced package snapshot is absent, and the npm lockfiles are ignored as belonging to another package manager (D-069)."
 }

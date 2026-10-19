@@ -30,7 +30,9 @@
           "run.max-file-bytes",
           "run.max-files",
           "run.max-total-bytes",
-          "text.max-source-bytes"
+          "text.max-source-bytes",
+          "yaml.max-depth",
+          "yaml.max-nodes"
         ]
       },
       "additionalProperties": { "type": "integer", "minimum": 0 }
