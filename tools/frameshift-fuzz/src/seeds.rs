@@ -375,6 +375,74 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
             "\"k\":",
             "\0",
         ],
+        Target::Semver => &[
+            "^",
+            "~",
+            "~>",
+            ">=",
+            "<=",
+            ">",
+            "<",
+            "=",
+            "v",
+            "x",
+            "X",
+            "*",
+            ".",
+            "-",
+            "+",
+            " - ",
+            "||",
+            " ",
+            "0",
+            "1",
+            "10",
+            "9007199254740991",
+            "-0",
+            "-rc.1",
+            "+build",
+            "npm:",
+            "workspace:",
+            "catalog:",
+            "file:",
+            "github:",
+            "@",
+            "/",
+            "pnpm@",
+            "+sha512.",
+        ],
+        Target::Package => &[
+            "{",
+            "}",
+            "[",
+            "]",
+            ":",
+            ",",
+            "\"",
+            "\"name\":",
+            "\"version\":",
+            "\"dependencies\":",
+            "\"devDependencies\":",
+            "\"peerDependencies\":",
+            "\"workspaces\":",
+            "\"exports\":",
+            "\"packageManager\":",
+            "\"lockfileVersion\":",
+            "\"packages\":",
+            "\"node_modules/",
+            "/node_modules/",
+            "\"link\": true",
+            "\"resolved\":",
+            "@workspace:",
+            "\"optionalPeers\":",
+            "\"^1.0.0\"",
+            "\"*\"",
+            "2",
+            "3",
+            "//",
+            "/*",
+            "*/",
+        ],
         Target::Identifiers => &[
             "FS",
             "0001",
@@ -490,6 +558,50 @@ pub fn inputs(target: Target) -> Vec<Vec<u8>> {
             "[[[[{\"k\": [[]]}]]]]",
             "\"\\ud800\"",
             "{\"a\" 1}",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .collect(),
+        Target::Semver => [
+            "",
+            "^16.2.1",
+            "~1.2.3-beta.2 || >=2 <3",
+            "1.2.3 - 2.3",
+            ">= 1.2 <=3.x
+1.x.x-rc
+*",
+            "> =1.2.3 ~> 1.2 ^ 0.0.x",
+            "+build 1 - 2 +a",
+            "9007199254740991.0.0 || 1.9007199254740990",
+            "1.2.3-0a.9.x+meta
+v1.2.3
+=1.2.3",
+            "npm:@scope/alias@~2.1
+workspace:^
+catalog:react
+github:owner/repo#v1",
+            "pnpm@10.24.0+sha512.0a1b2c
+npm@11.11.0
+yarn@4.6.0-rc.1
+bun@1.4.0",
+            ">0.0.0-0 <0.0.1-0
+<0.0.0-0 || 1
+1.2.*3",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .collect(),
+        Target::Package => [
+            "",
+            "{\"name\": \"fictional\", \"version\": \"1.0.0\", \"type\": \"module\", \"packageManager\": \"npm@11.0.0\"}",
+            "{\"dependencies\": {\"next\": \"^16.2.1\", \"ui\": \"workspace:*\", \"alias\": \"npm:other@~1\"}, \"workspaces\": [\"packages/*\"]}",
+            "{\"exports\": {\".\": {\"import\": \"./a.mjs\", \"default\": [\"./b.js\", null]}}, \"bin\": {\"t\": \"t.js\"}, \"browser\": {\"fs\": false}}",
+            "{\"overrides\": {\"a\": {\".\": \"1\", \"b\": \"$b\"}}, \"pnpm\": {\"overrides\": {\"c\": \"2\"}}, \"browserslist\": {\"production\": \"> 1%\"}}",
+            "{\"lockfileVersion\": 3, \"packages\": {\"\": {\"dependencies\": {\"a\": \"^1\"}}, \"node_modules/a\": {\"version\": \"1.0.0\", \"dependencies\": {\"b\": \"*\"}}, \"node_modules/a/node_modules/b\": {\"version\": \"2.0.0\"}}}",
+            "{\"lockfileVersion\": 2, \"packages\": {\"node_modules/w\": {\"resolved\": \"packages/w\", \"link\": true}, \"packages/w\": {\"name\": \"w\"}}}",
+            "{\"lockfileVersion\": 2, \"workspaces\": {\"\": {\"name\": \"r\", \"dependencies\": {\"a\": \"1\",},}, \"packages/w\": {\"name\": \"@s/w\"}}, \"packages\": {\"a\": [\"a@1.0.0\", \"\", {\"dependencies\": {\"b\": \"2\"}}, \"sha512-x\"], \"a/b\": [\"b@2.0.0\"], \"@s/w\": [\"@s/w@workspace:packages/w\"],},}",
+            "{\"lockfileVersion\": 1, \"dependencies\": {}}",
+            "{\"name\": 1, \"name\": \"x\", \"dependencies\": []}",
         ]
         .iter()
         .map(|text| (*text).to_owned())

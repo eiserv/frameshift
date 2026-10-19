@@ -15,7 +15,8 @@ use frameshift_engine::{
 };
 
 use crate::{
-    astro, collections, edits, gitignore, hashes, identifiers, json, lexical, paths, seeds,
+    astro, collections, edits, gitignore, hashes, identifiers, json, lexical, package, paths,
+    seeds, semver,
 };
 
 /// A fuzzed engine entry point with its contracts.
@@ -47,6 +48,10 @@ pub enum Target {
     Gitignore,
     /// JSON and JSONC parsing against an independent model.
     Json,
+    /// npm versions, ranges, specifiers, and `packageManager` values.
+    Semver,
+    /// The `package.json` and lockfile models on arbitrary JSON and JSONC.
+    Package,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -63,7 +68,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 15] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -77,6 +82,8 @@ impl Target {
         Self::Collections,
         Self::Gitignore,
         Self::Json,
+        Self::Semver,
+        Self::Package,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -95,6 +102,8 @@ impl Target {
             Self::Collections => "collections",
             Self::Gitignore => "gitignore",
             Self::Json => "json",
+            Self::Semver => "semver",
+            Self::Package => "package",
         }
     }
 
@@ -145,6 +154,12 @@ impl Target {
             Self::Json => {
                 "parse_json in both dialects against a recursive model; values, duplicate keys, spans, rewriting, and limits"
             }
+            Self::Semver => {
+                "npm ranges, versions, specifiers, and packageManager; canonical text, precedence model, minimums"
+            }
+            Self::Package => {
+                "package.json and npm and Bun lockfile models on JSON and JSONC; spans, sorting, and resolution"
+            }
         }
     }
 
@@ -159,8 +174,9 @@ impl Target {
             | Self::Paths
             | Self::Identifiers
             | Self::Hashes
-            | Self::Collections => 4_096,
-            Self::RegExp | Self::References | Self::Gitignore | Self::Json => 1_024,
+            | Self::Collections
+            | Self::Package => 4_096,
+            Self::RegExp | Self::References | Self::Gitignore | Self::Json | Self::Semver => 1_024,
             Self::Lexical => 512,
         }
     }
@@ -192,6 +208,8 @@ impl Target {
             Self::Collections => collections::run(input),
             Self::Gitignore => gitignore::run(input),
             Self::Json => json::run(input),
+            Self::Semver => semver::run(input),
+            Self::Package => package::run(input),
         }
     }
 }
