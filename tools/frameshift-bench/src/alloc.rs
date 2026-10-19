@@ -122,6 +122,8 @@ unsafe impl GlobalAlloc for CountingAllocator {
 
 #[cfg(test)]
 mod tests {
+    use std::ptr::NonNull;
+
     use super::*;
 
     #[test]
@@ -144,27 +146,27 @@ mod tests {
     fn allocator_counts_requested_sizes_through_reallocation() {
         let allocator = CountingAllocator::new();
         let layout = Layout::from_size_align(64, 8).expect("valid layout");
-        // SAFETY: `layout` has a non-zero size, every pointer is checked for
-        // null before use, and each block is released with its current layout.
+        // SAFETY: `layout` has a non-zero size, NonNull rejects allocation
+        // failures before use, and each block is released with its current layout.
         unsafe {
-            let pointer = allocator.alloc(layout);
-            assert!(!pointer.is_null());
-            pointer.write_bytes(0xA5, 64);
-            let grown = allocator.realloc(pointer, layout, 200);
-            assert!(!grown.is_null());
-            assert_eq!(grown.read(), 0xA5);
+            let pointer = NonNull::new(allocator.alloc(layout)).expect("allocation succeeds");
+            pointer.as_ptr().write_bytes(0xA5, 64);
+            let grown = NonNull::new(allocator.realloc(pointer.as_ptr(), layout, 200))
+                .expect("growth succeeds");
+            assert_eq!(grown.as_ptr().read(), 0xA5);
             assert_eq!(allocator.counters().current(), 200);
             let grown_layout = Layout::from_size_align(200, 8).expect("valid layout");
-            let shrunk = allocator.realloc(grown, grown_layout, 16);
-            assert!(!shrunk.is_null());
+            let shrunk = NonNull::new(allocator.realloc(grown.as_ptr(), grown_layout, 16))
+                .expect("shrink succeeds");
+            assert_eq!(shrunk.as_ptr().read(), 0xA5);
             assert_eq!(allocator.counters().current(), 16);
-            let zeroed = allocator.alloc_zeroed(layout);
-            assert!(!zeroed.is_null());
-            assert_eq!(zeroed.read(), 0);
+            let zeroed =
+                NonNull::new(allocator.alloc_zeroed(layout)).expect("zeroed allocation succeeds");
+            assert_eq!(zeroed.as_ptr().read(), 0);
             assert_eq!(allocator.counters().current(), 80);
-            allocator.dealloc(zeroed, layout);
+            allocator.dealloc(zeroed.as_ptr(), layout);
             let shrunk_layout = Layout::from_size_align(16, 8).expect("valid layout");
-            allocator.dealloc(shrunk, shrunk_layout);
+            allocator.dealloc(shrunk.as_ptr(), shrunk_layout);
         }
         assert_eq!(allocator.counters().current(), 0);
         assert_eq!(allocator.counters().peak(), 200);

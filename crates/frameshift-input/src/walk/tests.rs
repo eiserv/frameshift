@@ -410,7 +410,10 @@ fn builtin_ignores_and_environment_examples() {
         "app/.env.development.local",
     ] {
         let environment = ignored(IgnoreReason::Environment, false);
-        assert_eq!(kind(&inventory, secret), &environment, "{secret}");
+        assert!(
+            kind(&inventory, secret) == &environment,
+            "environment files must be ignored"
+        );
     }
     // Nothing below an ignored directory is listed or counted.
     let below = SourcePath::new("node_modules/a", PathLimits::default()).unwrap();
