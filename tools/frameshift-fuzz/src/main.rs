@@ -17,6 +17,7 @@ mod edits;
 mod gitignore;
 mod hashes;
 mod identifiers;
+mod json;
 mod lexical;
 mod mutate;
 mod paths;
