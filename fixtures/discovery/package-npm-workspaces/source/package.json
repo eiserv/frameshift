@@ -1,0 +1,17 @@
+{
+  "name": "lumen-site",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.11.0",
+  "engines": { "node": ">=20.9" },
+  "workspaces": ["packages/*"],
+  "scripts": { "dev": "next dev", "build": "next build" },
+  "dependencies": {
+    "next": "^16.2.0",
+    "react": "19.1.0",
+    "fictional-icons": "npm:lumen-icons@~2.3",
+    "@lumen/ui": "*"
+  },
+  "devDependencies": { "typescript": "~6.0.3" }
+}

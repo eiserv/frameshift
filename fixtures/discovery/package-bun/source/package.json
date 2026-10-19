@@ -1,0 +1,13 @@
+{
+  "name": "harbor-docs",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "next": "16.1.x",
+    "react": "^19.0.0",
+    "@harbor/ui": "workspace:*",
+    "theme": "catalog:",
+    "local-kit": "file:./vendor/kit"
+  },
+  "devDependencies": { "harbor-lint": "github:harbor/lint#v2" }
+}

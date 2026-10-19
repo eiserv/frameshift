@@ -1,0 +1,4 @@
+{
+  "name": "malformed",
+  "dependencies": { "next": "^16.2.0", }
+}

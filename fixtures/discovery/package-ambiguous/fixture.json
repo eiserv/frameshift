@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "Lockfiles of Yarn and npm without a packageManager field leave the package manager undetermined, so no lockfile is used and versions fall back to the declared ranges (D-069)."
+}

@@ -1,0 +1,12 @@
+directory (root)
+  manifest name=atlas-shop version=- parsed-version=- private=- type=-
+  dependencies next ">=15.3 <17": range >=15.3.0 <17.0.0-0; min 15.3.0; no lockfile
+  dependencies react "19.x || 18.3.x": range >=19.0.0 <20.0.0-0||>=18.3.0 <18.4.0-0; min 18.3.0; no lockfile
+  packageManager -
+  detected - from - lockfile -
+  ignored package-lock.json ambiguous
+  ignored yarn.lock ambiguous
+  lockfile none
+findings:
+  F0001 unknown FS1024 project: Package manager ambiguous
+    Lockfiles of several package managers are present and no valid packageManager field decides, so no lockfile is used and versions fall back to the declared ranges.

@@ -1,0 +1,16 @@
+directory (root)
+  manifest name=quill-blog version=- parsed-version=- private=- type=-
+  dependencies next "~16.0.4": range >=16.0.4 <16.1.0-0; min 16.0.4; no lockfile
+  dependencies react ">=19.0.0 <20": range >=19.0.0 <20.0.0-0; min 19.0.0; no lockfile
+  packageManager pnpm 10.14.0 hash sha512
+  detected pnpm from field lockfile pnpm-lock.yaml
+  ignored npm-shrinkwrap.json other-manager
+  ignored package-lock.json other-manager
+  lockfile not parsed pnpm-lock.yaml
+findings:
+  F0001 unknown FS1010 pnpm-lock.yaml: Lockfile format not parsed
+    Frameshift does not read this lockfile format or format version, so resolved versions fall back to the ranges declared in package.json and are imprecise.
+  F0002 review FS1023 npm-shrinkwrap.json: Lockfile of another package manager ignored
+    The packageManager field names a different package manager, so this lockfile is not used.
+  F0003 review FS1023 package-lock.json: Lockfile of another package manager ignored
+    The packageManager field names a different package manager, so this lockfile is not used.

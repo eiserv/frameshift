@@ -1,0 +1,4 @@
+{
+  "name": "large",
+  "dependencies": { "next": "^16.0.0" }
+}
