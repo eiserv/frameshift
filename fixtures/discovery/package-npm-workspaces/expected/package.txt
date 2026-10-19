@@ -1,20 +1,20 @@
 directory (root)
   manifest name=lumen-site version=1.4.0 parsed-version=1.4.0 private=true type=module
   workspaces packages/*
-  dependencies next "^16.2.0": range >=16.2.0 <17.0.0-0; min 16.2.0; next@16.2.1
-  dependencies react "19.1.0": range 19.1.0; min 19.1.0; react@19.1.0
+  dependencies frame-kit "^16.2.0": range >=16.2.0 <17.0.0-0; min 16.2.0; frame-kit@16.2.1
+  dependencies view-kit "19.1.0": range 19.1.0; min 19.1.0; view-kit@19.1.0
   dependencies fictional-icons "npm:lumen-icons@~2.3": alias lumen-icons range >=2.3.0 <2.4.0-0; min 2.3.0; lumen-icons@2.3.4
   dependencies @lumen/ui "*": range *; min 0.0.0; link packages/ui
-  devDependencies typescript "~6.0.3": range >=6.0.3 <6.1.0-0; min 6.0.3; typescript@6.0.3
+  devDependencies type-kit "~6.0.3": range >=6.0.3 <6.1.0-0; min 6.0.3; type-kit@6.0.3
   packageManager npm 11.11.0
   detected npm from field lockfile package-lock.json
   lockfile package-lock.json version 3: 3 workspaces, 8 packages
-  workspace packages/ui react "^18.3.0": react@18.3.1
+  workspace packages/ui view-kit "^18.3.0": view-kit@18.3.1
   workspace packages/web @lumen/ui "*": link packages/ui
 directory packages/ui
   manifest name=@lumen/ui version=0.3.0 parsed-version=0.3.0 private=- type=-
-  dependencies react "^18.3.0": range >=18.3.0 <19.0.0-0; min 18.3.0; no lockfile
-  peerDependencies next ">=15": range >=15.0.0; min 15.0.0; no lockfile
+  dependencies view-kit "^18.3.0": range >=18.3.0 <19.0.0-0; min 18.3.0; no lockfile
+  peerDependencies frame-kit ">=15": range >=15.0.0; min 15.0.0; no lockfile
   packageManager -
   detected - from - lockfile -
   lockfile none

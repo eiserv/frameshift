@@ -6,12 +6,12 @@
   "packageManager": "npm@11.11.0",
   "engines": { "node": ">=20.9" },
   "workspaces": ["packages/*"],
-  "scripts": { "dev": "next dev", "build": "next build" },
+  "scripts": { "dev": "frame-kit dev", "build": "frame-kit build" },
   "dependencies": {
-    "next": "^16.2.0",
-    "react": "19.1.0",
+    "frame-kit": "^16.2.0",
+    "view-kit": "19.1.0",
     "fictional-icons": "npm:lumen-icons@~2.3",
     "@lumen/ui": "*"
   },
-  "devDependencies": { "typescript": "~6.0.3" }
+  "devDependencies": { "type-kit": "~6.0.3" }
 }

@@ -2,5 +2,5 @@
 # yarn lockfile v1
 
 
-next@^16.0.0:
+frame-kit@^16.0.0:
   version "16.0.0"

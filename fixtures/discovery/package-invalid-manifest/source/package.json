@@ -5,16 +5,16 @@
   "private": "yes",
   "packageManager": "pnpm@latest",
   "dependencies": {
-    "next": "16.0.0",
-    "next": "^16.2.0",
-    "react": 19,
+    "frame-kit": "16.0.0",
+    "frame-kit": "^16.2.0",
+    "view-kit": 19,
     "loose": "1.2.3beta",
     "spaced": "has space",
     "tagged": "canary",
     "huge": "9007199254740992.0.0",
     "alias": "npm:Upper@1.0.0"
   },
-  "devDependencies": ["typescript"],
+  "devDependencies": ["type-kit"],
   "exports": { ".": "./index.js", "import": "./index.mjs" },
   "workspaces": ["apps/*", 7],
   "name": "last-name"

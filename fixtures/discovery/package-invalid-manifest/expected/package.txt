@@ -1,7 +1,7 @@
 directory (root)
   manifest name=last-name version=v1.0.0 parsed-version=- private=- type=-
   workspaces apps/*
-  dependencies next "^16.2.0": range >=16.2.0 <17.0.0-0; min 16.2.0; no lockfile
+  dependencies frame-kit "^16.2.0": range >=16.2.0 <17.0.0-0; min 16.2.0; no lockfile
   dependencies tagged "canary": tag canary; min -; no lockfile
   packageManager -
   detected - from - lockfile -
@@ -13,7 +13,7 @@ findings:
     The `private` field of package.json has a value of an unexpected JSON type, so this value is not used.
   F0003 unknown FS1022 package.json:6:21: packageManager is not a valid specification
     The packageManager field must be <name>@<version>[+<hash>] with npm, pnpm, yarn, or bun and an exact version, so it is ignored and lockfiles decide.
-  F0004 unknown FS1020 package.json:10:14: package.json field has an unexpected type or value
+  F0004 unknown FS1020 package.json:10:17: package.json field has an unexpected type or value
     The `dependencies` field of package.json has a value of an unexpected JSON type, so this value is not used.
   F0005 unknown FS1020 package.json:11:14: package.json field has an unexpected type or value
     The `dependencies` field of package.json has a value that is not valid for the field, so this value is not used.

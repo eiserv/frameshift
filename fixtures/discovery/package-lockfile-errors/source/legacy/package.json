@@ -1,4 +1,4 @@
 {
   "name": "legacy",
-  "dependencies": { "next": "^15.0.0" }
+  "dependencies": { "frame-kit": "^15.0.0" }
 }

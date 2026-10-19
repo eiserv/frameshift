@@ -1,7 +1,7 @@
 directory (root)
   manifest name=quill-blog version=- parsed-version=- private=- type=-
-  dependencies next "~16.0.4": range >=16.0.4 <16.1.0-0; min 16.0.4; no lockfile
-  dependencies react ">=19.0.0 <20": range >=19.0.0 <20.0.0-0; min 19.0.0; no lockfile
+  dependencies frame-kit "~16.0.4": range >=16.0.4 <16.1.0-0; min 16.0.4; no lockfile
+  dependencies view-kit ">=19.0.0 <20": range >=19.0.0 <20.0.0-0; min 19.0.0; no lockfile
   packageManager pnpm 10.14.0 hash sha512
   detected pnpm from field lockfile pnpm-lock.yaml
   ignored npm-shrinkwrap.json other-manager

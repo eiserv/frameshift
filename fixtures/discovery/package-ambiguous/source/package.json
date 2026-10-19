@@ -1,4 +1,4 @@
 {
   "name": "atlas-shop",
-  "dependencies": { "next": ">=15.3 <17", "react": "19.x || 18.3.x" }
+  "dependencies": { "frame-kit": ">=15.3 <17", "view-kit": "19.x || 18.3.x" }
 }

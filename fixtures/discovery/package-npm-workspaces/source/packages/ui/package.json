@@ -1,7 +1,7 @@
 {
   "name": "@lumen/ui",
   "version": "0.3.0",
-  "dependencies": { "react": "^18.3.0" },
-  "peerDependencies": { "next": ">=15" },
-  "peerDependenciesMeta": { "next": { "optional": true } }
+  "dependencies": { "view-kit": "^18.3.0" },
+  "peerDependencies": { "frame-kit": ">=15" },
+  "peerDependenciesMeta": { "frame-kit": { "optional": true } }
 }

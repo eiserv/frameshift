@@ -1,7 +1,7 @@
 directory (root)
   manifest name=atlas-shop version=- parsed-version=- private=- type=-
-  dependencies next ">=15.3 <17": range >=15.3.0 <17.0.0-0; min 15.3.0; no lockfile
-  dependencies react "19.x || 18.3.x": range >=19.0.0 <20.0.0-0||>=18.3.0 <18.4.0-0; min 18.3.0; no lockfile
+  dependencies frame-kit ">=15.3 <17": range >=15.3.0 <17.0.0-0; min 15.3.0; no lockfile
+  dependencies view-kit "19.x || 18.3.x": range >=19.0.0 <20.0.0-0||>=18.3.0 <18.4.0-0; min 18.3.0; no lockfile
   packageManager -
   detected - from - lockfile -
   ignored package-lock.json ambiguous
