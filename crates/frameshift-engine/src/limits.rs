@@ -13,7 +13,7 @@ use frameshift_core::{
 use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
 use frameshift_package::{LoadLimits, PackageLimits};
-use frameshift_syntax::{JsonLimits, LexicalLimits, ParseLimits};
+use frameshift_syntax::{JsonLimits, LexicalLimits, ParseLimits, YamlLimits};
 use frameshift_transform::EditLimits;
 
 // Entry values widen `usize` limits without loss.
@@ -45,6 +45,8 @@ pub struct Limits {
     pub parse: ParseLimits,
     /// One JSON or JSONC parse.
     pub json: JsonLimits,
+    /// One YAML stream, with aliases retained as references.
+    pub yaml: YamlLimits,
     /// The package model, such as the lockfile size.
     pub package: PackageLimits,
     /// One span rewrite.
@@ -159,6 +161,7 @@ impl Limits {
         LoadLimits {
             text: self.text,
             json: self.json,
+            yaml: self.yaml,
             path: self.path,
             package: self.package,
         }
@@ -168,7 +171,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 31] {
+    pub fn entries(&self) -> [LimitEntry; 33] {
         let Self {
             run,
             ignore,
@@ -179,6 +182,7 @@ impl Limits {
             hash,
             parse,
             json,
+            yaml,
             package,
             edit,
             emit,
@@ -220,6 +224,10 @@ impl Limits {
             max_nodes: json_nodes,
         } = json;
         let PackageLimits { max_lockfile_bytes } = package;
+        let YamlLimits {
+            max_depth: yaml_depth,
+            max_nodes: yaml_nodes,
+        } = yaml;
         let LexicalLimits {
             max_comments,
             max_string_bytes,
@@ -274,6 +282,8 @@ impl Limits {
             entry("run.max-files", wide(max_files)),
             entry("run.max-total-bytes", max_total_bytes),
             entry("text.max-source-bytes", wide(max_source_bytes)),
+            entry("yaml.max-depth", wide(yaml_depth)),
+            entry("yaml.max-nodes", wide(yaml_nodes)),
         ]
     }
 }

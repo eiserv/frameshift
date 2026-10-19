@@ -20,6 +20,7 @@ mod template;
 mod typescript;
 mod unicode;
 mod value;
+mod yaml;
 #[rustfmt::skip]
 mod entity_tables;
 #[rustfmt::skip]
@@ -65,3 +66,7 @@ pub use template::{
 pub use typescript::TypeScriptKind;
 pub use unicode::{is_js_identifier_part, is_js_identifier_start};
 pub use unicode_tables::UNICODE_VERSION;
+pub use yaml::{
+    YamlDocument, YamlError, YamlErrorKind, YamlId, YamlLimits, YamlNode, YamlScalarStyle,
+    YamlStream, YamlValue, parse_yaml,
+};

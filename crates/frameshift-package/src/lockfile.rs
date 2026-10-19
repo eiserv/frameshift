@@ -9,11 +9,12 @@
 
 mod bun;
 mod npm;
+mod pnpm;
 
 use std::fmt;
 
 use frameshift_core::Span;
-use frameshift_syntax::JsonDocument;
+use frameshift_syntax::{JsonDocument, YamlStream};
 
 use crate::manager::LockfileKind;
 use crate::manifest::{DependencyKind, PackageManifest};
@@ -138,13 +139,14 @@ impl fmt::Display for LockfileError {
 
 impl std::error::Error for LockfileError {}
 
-/// A parsed npm or Bun lockfile.
+/// A parsed npm, Bun, or pnpm 9.0 lockfile.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Lockfile {
     kind: LockfileKind,
     version: u64,
     workspaces: Vec<LockedWorkspace>,
     packages: Vec<LockedPackage>,
+    pnpm_references: pnpm::References,
 }
 
 impl Lockfile {
@@ -174,7 +176,32 @@ impl Lockfile {
             version,
             workspaces,
             packages,
+            pnpm_references: Default::default(),
         })
+    }
+
+    /// Interprets exactly one YAML document as a pnpm lockfile of format
+    /// 9.0. Duplicate, complex, or non-string mapping keys and incompatible
+    /// tags fail closed. Anchors and aliases are read without expansion.
+    pub fn from_yaml(stream: &YamlStream) -> Result<Self, LockfileError> {
+        let mut read = pnpm::read(stream)?;
+        read.workspaces.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(Self {
+            kind: LockfileKind::Pnpm,
+            version: 9,
+            workspaces: read.workspaces,
+            packages: read.packages,
+            pnpm_references: read.references,
+        })
+    }
+
+    /// Returns a pnpm importer's exact recorded dependency reference,
+    /// including aliases, peer contexts, and `link:` references. Other
+    /// lockfile kinds return `None`. The root workspace is `""`.
+    pub fn pnpm_reference(&self, workspace: &str, name: &str) -> Option<&str> {
+        self.pnpm_references
+            .get(&(workspace.into(), name.into()))
+            .map(AsRef::as_ref)
     }
 
     /// Returns the lockfile kind.
@@ -182,7 +209,7 @@ impl Lockfile {
         self.kind
     }
 
-    /// Returns `lockfileVersion`.
+    /// Returns the format major: npm/Bun's integer or 9 for pnpm 9.0.
     pub const fn version(&self) -> u64 {
         self.version
     }
@@ -220,8 +247,13 @@ impl Lockfile {
     /// directory up to the root, skipping `node_modules` directories, then
     /// one link to its target. Bun looks for `<prefix>/<name>` from the
     /// workspace's package name down to the bare name.
+    /// pnpm follows the importer's exact snapshot reference, preserving
+    /// peer contexts and aliases; local `link:` references return `None`.
     pub fn resolve(&self, workspace: &str, name: &str) -> Option<&LockedPackage> {
         match self.kind {
+            LockfileKind::Pnpm => {
+                pnpm::find(&self.packages, name, self.pnpm_reference(workspace, name)?)
+            }
             LockfileKind::BunText => {
                 let prefix = if workspace.is_empty() {
                     ""
@@ -232,7 +264,6 @@ impl Lockfile {
             }
             LockfileKind::NpmShrinkwrap
             | LockfileKind::NpmPackageLock
-            | LockfileKind::Pnpm
             | LockfileKind::Yarn
             | LockfileKind::BunBinary => self.resolve_npm(workspace, name),
         }
@@ -241,10 +272,16 @@ impl Lockfile {
     /// Resolves a dependency of a locked package.
     pub fn resolve_from(&self, package: &LockedPackage, name: &str) -> Option<&LockedPackage> {
         match self.kind {
+            LockfileKind::Pnpm => {
+                let index = package
+                    .dependencies
+                    .binary_search_by(|dependency| dependency.name.as_ref().cmp(name))
+                    .ok()?;
+                pnpm::find(&self.packages, name, &package.dependencies[index].spec)
+            }
             LockfileKind::BunText => self.resolve_bun(&package.key, name),
             LockfileKind::NpmShrinkwrap
             | LockfileKind::NpmPackageLock
-            | LockfileKind::Pnpm
             | LockfileKind::Yarn
             | LockfileKind::BunBinary => self.resolve_npm(&package.key, name),
         }
@@ -303,6 +340,11 @@ impl Lockfile {
         DependencyKind::ALL
             .into_iter()
             .filter(|kind| {
+                // pnpm importers record installed direct dependencies, not
+                // the manifest's peer declarations.
+                if self.kind == LockfileKind::Pnpm && *kind == DependencyKind::Peer {
+                    return false;
+                }
                 let mut declared: Vec<Declared> = manifest
                     .dependencies_of(*kind)
                     .iter()

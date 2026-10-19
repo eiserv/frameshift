@@ -1,0 +1,45 @@
+directory syntax
+  manifest absent
+  packageManager -
+  detected pnpm from lockfile lockfile pnpm-lock.yaml
+  lockfile not parsed pnpm-lock.yaml
+directory duplicate
+  manifest absent
+  packageManager -
+  detected pnpm from lockfile lockfile pnpm-lock.yaml
+  lockfile not parsed pnpm-lock.yaml
+directory missing
+  manifest absent
+  packageManager -
+  detected pnpm from lockfile lockfile pnpm-lock.yaml
+  lockfile not parsed pnpm-lock.yaml
+directory unsupported
+  manifest absent
+  packageManager -
+  detected pnpm from lockfile lockfile pnpm-lock.yaml
+  lockfile not parsed pnpm-lock.yaml
+directory multiple
+  manifest absent
+  packageManager -
+  detected pnpm from lockfile lockfile pnpm-lock.yaml
+  lockfile not parsed pnpm-lock.yaml
+directory typed
+  manifest absent
+  packageManager -
+  detected pnpm from lockfile lockfile pnpm-lock.yaml
+  lockfile not parsed pnpm-lock.yaml
+findings:
+  F0001 unknown FS1026 duplicate/pnpm-lock.yaml:3:12: Lockfile structure not valid
+    The lockfile does not have the structure of its format, so it is not used and versions fall back to the declared ranges.
+  F0002 unknown FS1026 missing/pnpm-lock.yaml:1:1: Lockfile structure not valid
+    The lockfile does not have the structure of its format, so it is not used and versions fall back to the declared ranges.
+  F0003 unknown FS1026 multiple/pnpm-lock.yaml:1:1: Lockfile structure not valid
+    The lockfile does not have the structure of its format, so it is not used and versions fall back to the declared ranges.
+  F0004 unknown FS2001 syntax/pnpm-lock.yaml:3:1: Syntax error, file not analyzed
+    The file is not usable YAML (invalid YAML syntax at bytes 52..52), so it is not analyzed.
+  F0005 unknown FS1026 typed/pnpm-lock.yaml:2:12: Lockfile structure not valid
+    The lockfile does not have the structure of its format, so it is not used and versions fall back to the declared ranges.
+  F0006 unknown FS1010 unsupported/pnpm-lock.yaml:1:18: Lockfile format not parsed
+    Frameshift does not read this lockfile format or format version, so resolved versions fall back to the ranges declared in package.json and are imprecise.
+  F0007 review FS1021 duplicate/pnpm-lock.yaml:2:1: Duplicate key in a package file
+    A YAML mapping repeats a decoded key. The lockfile is ambiguous and is rejected as a whole.

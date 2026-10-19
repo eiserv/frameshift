@@ -1,0 +1,12 @@
+{
+  "name": "@frameshift-fictional/pnpm-site",
+  "private": true,
+  "packageManager": "pnpm@10.20.0",
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "@frameshift-fictional/view": "^1",
+    "@frameshift-fictional/alias": "npm:@frameshift-fictional/leaf@^1",
+    "@frameshift-fictional/side": "workspace:*"
+  },
+  "peerDependencies": {"@frameshift-fictional/host": "^2"}
+}

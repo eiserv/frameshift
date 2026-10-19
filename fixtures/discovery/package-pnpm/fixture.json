@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "A pnpm 9.0 lockfile with two importers, an npm alias, an unresolved local workspace link, distinct peer contexts with different transitive versions, and optional peer metadata (D-071)."
+}

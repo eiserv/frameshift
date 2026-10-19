@@ -1,0 +1,12 @@
+directory (root)
+  manifest name=@frameshift-fictional/pnpm-site version=- parsed-version=- private=true type=-
+  workspaces packages/*
+  dependencies @frameshift-fictional/view "^1": range >=1.0.0 <2.0.0-0; min 1.0.0; @frameshift-fictional/view@1.1.0
+  dependencies @frameshift-fictional/alias "npm:@frameshift-fictional/leaf@^1": alias @frameshift-fictional/leaf range >=1.0.0 <2.0.0-0; min 1.0.0; @frameshift-fictional/leaf@1.0.0
+  dependencies @frameshift-fictional/side "workspace:*": workspace *; min -; unresolved
+  peerDependencies @frameshift-fictional/host "^2": range >=2.0.0 <3.0.0-0; min 2.0.0; unresolved
+  packageManager pnpm 10.20.0
+  detected pnpm from field lockfile pnpm-lock.yaml
+  lockfile pnpm-lock.yaml version 9: 2 workspaces, 4 packages
+  workspace packages/side @frameshift-fictional/view "^1": @frameshift-fictional/view@1.1.0
+findings:

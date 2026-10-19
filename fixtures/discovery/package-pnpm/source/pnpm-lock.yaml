@@ -1,0 +1,38 @@
+lockfileVersion: '9.0'
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+importers:
+  .:
+    dependencies:
+      '@frameshift-fictional/view':
+        specifier: ^1
+        version: 1.1.0(@frameshift-fictional/peer@2.0.0)
+      '@frameshift-fictional/alias':
+        specifier: npm:@frameshift-fictional/leaf@^1
+        version: '@frameshift-fictional/leaf@1.0.0'
+      '@frameshift-fictional/side':
+        specifier: workspace:*
+        version: link:packages/side
+  packages/side:
+    dependencies:
+      '@frameshift-fictional/view':
+        specifier: ^1
+        version: 1.1.0(@frameshift-fictional/peer@3.0.0)
+packages:
+  '@frameshift-fictional/view@1.1.0':
+    resolution: &resolution {integrity: sha512-fictional}
+    peerDependencies: {'@frameshift-fictional/peer': '*'}
+    peerDependenciesMeta: {'@frameshift-fictional/peer': {optional: true}}
+  '@frameshift-fictional/leaf@1.0.0':
+    resolution: *resolution
+  '@frameshift-fictional/leaf@2.0.0':
+    resolution: *resolution
+snapshots:
+  '@frameshift-fictional/view@1.1.0(@frameshift-fictional/peer@2.0.0)':
+    dependencies: {'@frameshift-fictional/leaf': 1.0.0}
+  '@frameshift-fictional/view@1.1.0(@frameshift-fictional/peer@3.0.0)':
+    optionalDependencies: {'@frameshift-fictional/leaf': 2.0.0}
+    optional: true
+  '@frameshift-fictional/leaf@1.0.0': {}
+  '@frameshift-fictional/leaf@2.0.0': {}

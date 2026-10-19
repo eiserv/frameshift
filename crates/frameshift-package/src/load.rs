@@ -13,7 +13,9 @@ use frameshift_core::{
     TextLimits, TextLocation,
 };
 use frameshift_input::{FileRead, Snapshot, SnapshotError};
-use frameshift_syntax::{JsonDialect, JsonDocument, JsonLimits, parse_json};
+use frameshift_syntax::{
+    JsonDialect, JsonDocument, JsonLimits, YamlLimits, parse_json, parse_yaml,
+};
 
 use crate::lockfile::{Lockfile, LockfileErrorKind};
 use crate::manager::{Detection, IgnoredReason, LockfileKind, PackageManagerSpec, detect};
@@ -42,6 +44,8 @@ pub struct LoadLimits {
     pub text: TextLimits,
     /// Each JSON and JSONC parse.
     pub json: JsonLimits,
+    /// Each YAML stream.
+    pub yaml: YamlLimits,
     /// The paths of the files in the directory.
     pub path: PathLimits,
     /// The lockfile size.
@@ -64,8 +68,8 @@ pub enum ManifestState {
 pub enum LockfileState {
     /// No lockfile is selected.
     None,
-    /// The lockfile is not read or not usable; a finding says why. Pnpm and
-    /// Yarn lockfiles, `bun.lockb`, and unsupported format versions are here.
+    /// The lockfile is not read or not usable; a finding says why. Yarn
+    /// lockfiles, `bun.lockb`, and unsupported format versions are here.
     NotParsed(LockfileKind),
     /// The parsed lockfile.
     Parsed(Box<Lockfile>),
@@ -373,9 +377,10 @@ fn read_lockfile(
     report: &mut Reporter<'_>,
 ) -> Result<LockfileState, LoadError> {
     let dialect = match kind {
-        LockfileKind::NpmShrinkwrap | LockfileKind::NpmPackageLock => JsonDialect::Json,
-        LockfileKind::BunText => JsonDialect::Jsonc,
-        LockfileKind::Pnpm | LockfileKind::Yarn | LockfileKind::BunBinary => {
+        LockfileKind::NpmShrinkwrap | LockfileKind::NpmPackageLock => Some(JsonDialect::Json),
+        LockfileKind::BunText => Some(JsonDialect::Jsonc),
+        LockfileKind::Pnpm => None,
+        LockfileKind::Yarn | LockfileKind::BunBinary => {
             report.file(path, FS1010, Severity::Unknown, TEXT_FS1010)?;
             return Ok(LockfileState::NotParsed(kind));
         }
@@ -411,10 +416,43 @@ fn read_lockfile(
     let Some(source) = decode(snapshot, path, max, report)? else {
         return Ok(LockfileState::NotParsed(kind));
     };
-    let Some(document) = parse(&source, path, dialect, limits.json, report)? else {
-        return Ok(LockfileState::NotParsed(kind));
+    let parsed = if let Some(dialect) = dialect {
+        let Some(document) = parse(&source, path, dialect, limits.json, report)? else {
+            return Ok(LockfileState::NotParsed(kind));
+        };
+        Lockfile::from_json(kind, &document)
+    } else {
+        let stream = match parse_yaml(&source, limits.yaml) {
+            Ok(stream) => stream,
+            Err(error) => {
+                let explanation =
+                    format!("The file is not usable YAML ({error}), so it is not analyzed.");
+                report.text_with(path, &source, error.span, FS2001, Severity::Unknown, FindingText { message: "Syntax error, file not analyzed", explanation: &explanation, remediation: "Fix the syntax error or raise the reported YAML limit, then run Frameshift again." })?;
+                return Ok(LockfileState::NotParsed(kind));
+            }
+        };
+        for node in stream.nodes() {
+            if let frameshift_syntax::YamlValue::Mapping { entries, .. } = &node.value {
+                let mut seen = std::collections::BTreeMap::new();
+                for (key, _) in entries {
+                    let key_node = stream.node(*key).ok_or(LoadError::Internal)?;
+                    let target = match key_node.value {
+                        frameshift_syntax::YamlValue::Alias(target) => target,
+                        frameshift_syntax::YamlValue::Scalar { .. }
+                        | frameshift_syntax::YamlValue::Sequence { .. }
+                        | frameshift_syntax::YamlValue::Mapping { .. } => *key,
+                    };
+                    if let Some(text) = stream.scalar(target)
+                        && let Some(previous) = seen.insert(text, key_node.span)
+                    {
+                        report.text_with(path, &source, previous, FS1021, Severity::Review, FindingText { message: "Duplicate key in a package file", explanation: "A YAML mapping repeats a decoded key. The lockfile is ambiguous and is rejected as a whole.", remediation: "Remove the duplicate key." })?;
+                    }
+                }
+            }
+        }
+        Lockfile::from_yaml(&stream)
     };
-    let lockfile = match Lockfile::from_json(kind, &document) {
+    let lockfile = match parsed {
         Ok(lockfile) => lockfile,
         Err(error) => {
             let (code, text) = match error.kind {

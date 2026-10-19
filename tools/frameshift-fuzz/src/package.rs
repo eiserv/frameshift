@@ -93,7 +93,10 @@ fn check_manifest(text: &str, manifest: &PackageManifest) -> Result<(), String> 
     Ok(())
 }
 
-fn check_lockfile(lockfile: &Lockfile, manifest: Option<&PackageManifest>) -> Result<(), String> {
+pub(crate) fn check_lockfile(
+    lockfile: &Lockfile,
+    manifest: Option<&PackageManifest>,
+) -> Result<(), String> {
     if !lockfile
         .packages()
         .windows(2)

@@ -1,0 +1,8 @@
+directory (root)
+  manifest absent
+  packageManager -
+  detected pnpm from lockfile lockfile pnpm-lock.yaml
+  lockfile not parsed pnpm-lock.yaml
+findings:
+  F0001 unknown FS2001 pnpm-lock.yaml:3:6: Syntax error, file not analyzed
+    The file is not usable YAML (YAML collection nesting exceeds yaml.max-depth (implementation ceiling 128) at bytes 39..40), so it is not analyzed.

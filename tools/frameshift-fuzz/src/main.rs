@@ -29,6 +29,7 @@ mod semver;
 mod supervisor;
 mod targets;
 mod worker;
+mod yaml;
 
 use std::{
     env, fs, io,

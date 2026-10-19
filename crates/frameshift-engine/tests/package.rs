@@ -207,4 +207,41 @@ fn engine_limits_bridge_to_the_loader() {
     let limits = Limits::default().package();
     assert_eq!(limits.package.max_lockfile_bytes, 64 * 1024 * 1024);
     assert_eq!(limits.text, TextLimits::default());
+    assert_eq!(
+        limits.yaml,
+        frameshift_engine::syntax::YamlLimits::default()
+    );
+}
+
+#[test]
+fn pnpm_loader_reads_only_the_selected_snapshot_files() {
+    let root = scratch("pnpm-selected");
+    write(&root, "package.json", br#"{"name":"fictional","packageManager":"pnpm@10.20.0","peerDependencies":{"fictional-host":"^1"}}"#);
+    write(
+        &root,
+        "pnpm-lock.yaml",
+        b"lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
+    );
+    write(&root, "package-lock.json", b"not opened");
+    write(&root, "source.ts", b"throw new Error('never executed');");
+    let (snapshot, loaded, findings) = load(&root, None, Limits::default());
+    assert!(matches!(loaded.unwrap().lockfile, LockfileState::Parsed(_)));
+    assert_eq!(codes(&findings), ["FS1023"]);
+    assert!(is_read(&snapshot, "package.json"));
+    assert!(is_read(&snapshot, "pnpm-lock.yaml"));
+    assert!(!is_read(&snapshot, "package-lock.json"));
+    assert!(!is_read(&snapshot, "source.ts"));
+    let mut limits = Limits::default();
+    limits.yaml.max_nodes = 1;
+    let (_, loaded, findings) = load(&root, None, limits);
+    assert!(matches!(
+        loaded.unwrap().lockfile,
+        LockfileState::NotParsed(LockfileKind::Pnpm)
+    ));
+    assert!(codes(&findings).contains(&"FS2001"));
+    let mut limits = Limits::default();
+    limits.package.max_lockfile_bytes = 1;
+    let (snapshot, _, findings) = load(&root, None, limits);
+    assert!(codes(&findings).contains(&"FS1028"));
+    assert!(!is_read(&snapshot, "pnpm-lock.yaml"));
 }
