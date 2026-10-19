@@ -12,6 +12,7 @@ use frameshift_core::{
 };
 use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
+use frameshift_package::{LoadLimits, PackageLimits};
 use frameshift_syntax::{JsonLimits, LexicalLimits, ParseLimits};
 use frameshift_transform::EditLimits;
 
@@ -44,6 +45,8 @@ pub struct Limits {
     pub parse: ParseLimits,
     /// One JSON or JSONC parse.
     pub json: JsonLimits,
+    /// The package model, such as the lockfile size.
+    pub package: PackageLimits,
     /// One span rewrite.
     pub edit: EditLimits,
     /// One emitted output file.
@@ -149,11 +152,23 @@ impl Limits {
         }
     }
 
+    /// Returns the limits that loading a package directory applies: the
+    /// text bound of `package.json`, each JSON parse, paths, and the
+    /// lockfile size.
+    pub fn package(&self) -> LoadLimits {
+        LoadLimits {
+            text: self.text,
+            json: self.json,
+            path: self.path,
+            package: self.package,
+        }
+    }
+
     /// Lists every configured limit, sorted by name bytes.
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 30] {
+    pub fn entries(&self) -> [LimitEntry; 31] {
         let Self {
             run,
             ignore,
@@ -164,6 +179,7 @@ impl Limits {
             hash,
             parse,
             json,
+            package,
             edit,
             emit,
         } = *self;
@@ -203,6 +219,7 @@ impl Limits {
             max_depth: json_depth,
             max_nodes: json_nodes,
         } = json;
+        let PackageLimits { max_lockfile_bytes } = package;
         let LexicalLimits {
             max_comments,
             max_string_bytes,
@@ -235,6 +252,7 @@ impl Limits {
             entry("ignore.max-total-bytes", ignore_bytes),
             entry("json.max-depth", wide(json_depth)),
             entry("json.max-nodes", wide(json_nodes)),
+            entry("package.max-lockfile-bytes", max_lockfile_bytes),
             entry("parse.lexical.max-comments", wide(max_comments)),
             entry(
                 "parse.lexical.max-identifier-bytes",

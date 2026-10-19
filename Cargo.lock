@@ -97,6 +97,7 @@ dependencies = [
  "frameshift-core",
  "frameshift-emit",
  "frameshift-input",
+ "frameshift-package",
  "frameshift-syntax",
  "frameshift-transform",
 ]

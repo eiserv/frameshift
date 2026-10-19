@@ -4,6 +4,7 @@
 //! This crate interprets package metadata without framework knowledge. It
 //! performs no I/O of its own.
 
+mod load;
 mod lockfile;
 mod manager;
 mod manifest;
@@ -11,6 +12,10 @@ mod range;
 mod spec;
 mod version;
 
+pub use load::{
+    LoadError, LoadLimits, LockfileState, ManifestState, PackageDirectory, PackageLimits,
+    load_package,
+};
 pub use lockfile::{
     Declared, LockedPackage, LockedWorkspace, Lockfile, LockfileError, LockfileErrorKind,
     Resolution,
