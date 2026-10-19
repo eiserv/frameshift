@@ -1,0 +1,23 @@
+directory (root)
+  manifest name=harbor-docs version=- parsed-version=- private=true type=-
+  workspaces packages/*
+  dependencies frame-kit "16.1.x": range >=16.1.0 <16.2.0-0; min 16.1.0; frame-kit@16.1.4
+  dependencies view-kit "^19.0.0": range >=19.0.0 <20.0.0-0; min 19.0.0; view-kit@19.2.0
+  dependencies @harbor/ui "workspace:*": workspace *; min -; workspace packages/ui
+  dependencies theme "catalog:": catalog ; min -; theme@3.2.0
+  dependencies local-kit "file:./vendor/kit": local; min -; local-kit other file:vendor/kit
+  devDependencies harbor-lint "github:harbor/lint#v2": git; min -; harbor-lint other github:harbor/lint#0f1e2d3
+  packageManager -
+  detected bun from lockfile lockfile bun.lock
+  ignored bun.lockb superseded
+  lockfile bun.lock version 2: 2 workspaces, 8 packages
+  workspace packages/ui view-kit "18.3.1": view-kit@18.3.1
+directory packages/ui
+  manifest name=@harbor/ui version=1.0.0 parsed-version=1.0.0 private=- type=-
+  dependencies view-kit "18.3.1": range 18.3.1; min 18.3.1; no lockfile
+  packageManager -
+  detected - from - lockfile -
+  lockfile none
+findings:
+  F0001 info FS1025 bun.lockb: Lockfile superseded
+    A lockfile of the same package manager takes precedence: npm-shrinkwrap.json over package-lock.json, and bun.lock over bun.lockb.

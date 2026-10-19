@@ -1,0 +1,5 @@
+{
+  "name": "stale",
+  "dependencies": { "frame-kit": "^16.2.0" },
+  "devDependencies": { "type-kit": "^6.0.0" }
+}

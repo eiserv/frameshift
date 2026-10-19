@@ -1,0 +1,4 @@
+{
+  "name": "malformed",
+  "dependencies": { "frame-kit": "^16.2.0", }
+}

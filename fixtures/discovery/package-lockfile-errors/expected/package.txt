@@ -1,0 +1,40 @@
+directory (root)
+  manifest absent
+  packageManager -
+  detected - from - lockfile -
+  lockfile none
+directory large
+  manifest name=large version=- parsed-version=- private=- type=-
+  dependencies frame-kit "^16.0.0": range >=16.0.0 <17.0.0-0; min 16.0.0; no lockfile
+  packageManager -
+  detected npm from lockfile lockfile package-lock.json
+  lockfile not parsed package-lock.json
+directory legacy
+  manifest name=legacy version=- parsed-version=- private=- type=-
+  dependencies frame-kit "^15.0.0": range >=15.0.0 <16.0.0-0; min 15.0.0; no lockfile
+  packageManager -
+  detected npm from lockfile lockfile package-lock.json
+  lockfile not parsed package-lock.json
+directory malformed
+  manifest not analyzed
+  packageManager -
+  detected npm from lockfile lockfile package-lock.json
+  lockfile not parsed package-lock.json
+directory stale
+  manifest name=stale version=- parsed-version=- private=- type=-
+  dependencies frame-kit "^16.2.0": range >=16.2.0 <17.0.0-0; min 16.2.0; frame-kit@16.1.6
+  devDependencies type-kit "^6.0.0": range >=6.0.0 <7.0.0-0; min 6.0.0; type-kit@6.0.3
+  packageManager -
+  detected npm from lockfile lockfile package-lock.json
+  lockfile package-lock.json version 3: 1 workspaces, 2 packages
+findings:
+  F0001 unknown FS1028 large/package-lock.json: Lockfile exceeds the lockfile size limit
+    The lockfile has 367 bytes, more than package.max-lockfile-bytes (300), so it is not parsed. Versions fall back to the declared ranges.
+  F0002 unknown FS1010 legacy/package-lock.json:3:22: Lockfile format not parsed
+    Frameshift does not read this lockfile format or format version, so resolved versions fall back to the ranges declared in package.json and are imprecise.
+  F0003 unknown FS1026 malformed/package-lock.json:4:44: Lockfile structure not valid
+    The lockfile does not have the structure of its format, so it is not used and versions fall back to the declared ranges.
+  F0004 unknown FS2001 malformed/package.json:3:43: Syntax error, file not analyzed
+    The file is not valid JSON (trailing commas are not allowed in JSON at bytes 67..68), so it is not analyzed.
+  F0005 review FS1027 stale/package-lock.json: Lockfile is out of sync with package.json
+    The lockfile's root declarations differ from package.json in dependencies, so resolved versions may not match what an install would produce.

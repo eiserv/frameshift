@@ -1,13 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Frameshift product fixture metadata",
-  "description": "Human-written metadata of a product fixture below fixtures/ (D-062). Only discovery cases exist; feature and composite fixtures extend this schema with their first case. No tool writes these files.",
+  "description": "Human-written metadata of a product fixture below fixtures/ (D-062). Only discovery and package cases exist; feature and composite fixtures extend this schema with their first case. No tool writes these files.",
   "type": "object",
   "required": ["kind", "description"],
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
-    "kind": { "const": "discovery" },
+    "kind": {
+      "description": "discovery: an inventory rendering (expected/discovery.txt); package: package models and resolutions (expected/package.txt, D-069).",
+      "enum": ["discovery", "package"]
+    },
     "description": { "type": "string", "minLength": 1 },
     "limits": {
       "description": "Overrides of engine limits by their canonical names from Limits::entries.",
@@ -17,16 +20,31 @@
         "enum": [
           "ignore.max-match-work",
           "ignore.max-total-bytes",
+          "json.max-depth",
+          "json.max-nodes",
+          "package.max-lockfile-bytes",
           "path.max-components",
           "path.max-path-bytes",
           "run.max-directory-depth",
           "run.max-entries",
           "run.max-file-bytes",
           "run.max-files",
-          "run.max-total-bytes"
+          "run.max-total-bytes",
+          "text.max-source-bytes"
         ]
       },
       "additionalProperties": { "type": "integer", "minimum": 0 }
+    },
+    "directories": {
+      "description": "Package cases only: the package directories to load, relative to source/, with the empty string for the root. Defaults to the root.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "anyOf": [
+          { "const": "" },
+          { "$ref": "#/$defs/path" }
+        ]
+      }
     },
     "createdAtTestTime": {
       "description": "Inputs the harness creates in a temporary copy of source/, in order, because they cannot or should not be committed.",

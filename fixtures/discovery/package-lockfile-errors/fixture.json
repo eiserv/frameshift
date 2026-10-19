@@ -1,0 +1,7 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "Lockfile problems in separate package directories: declarations out of sync with package.json, a JSON syntax error in package.json with a structurally invalid lockfile, a version 1 lockfile, and a lockfile over the lowered package.max-lockfile-bytes limit, besides a root without any package file (D-069).",
+  "limits": { "package.max-lockfile-bytes": 300 },
+  "directories": ["", "large", "legacy", "malformed", "stale"]
+}

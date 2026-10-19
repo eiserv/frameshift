@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "A Bun workspace whose bun.lock (JSONC, version 2) decides the package manager without a packageManager field; bun.lockb is superseded, and a workspace member resolves a nested version (D-069).",
+  "directories": ["", "packages/ui"]
+}

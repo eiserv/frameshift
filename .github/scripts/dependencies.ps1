@@ -20,9 +20,10 @@ function Assert-CargoPolicy {
         'frameshift-core' = @('sha2')
         'frameshift-syntax' = @('frameshift-core')
         'frameshift-input' = @('frameshift-core')
+        'frameshift-package' = @('frameshift-core', 'frameshift-syntax', 'frameshift-input')
         'frameshift-transform' = @('frameshift-core')
         'frameshift-emit' = @('frameshift-core', 'frameshift-syntax', 'frameshift-transform')
-        'frameshift-engine' = @('frameshift-core', 'frameshift-syntax', 'frameshift-transform', 'frameshift-emit', 'frameshift-input')
+        'frameshift-engine' = @('frameshift-core', 'frameshift-syntax', 'frameshift-transform', 'frameshift-emit', 'frameshift-input', 'frameshift-package')
         'frameshift-cli' = @('frameshift-engine')
     }
     foreach ($package in $metadata.packages | Where-Object { $_.id -in $metadata.workspace_members }) {

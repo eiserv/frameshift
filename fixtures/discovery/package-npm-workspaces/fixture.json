@@ -1,0 +1,6 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "An npm workspace root with a version 3 lockfile: the packageManager field and the lockfile agree, an alias resolves to its target package, a workspace member resolves its own nested version, and a link points to a workspace (D-069, D-070).",
+  "directories": ["", "packages/ui"]
+}

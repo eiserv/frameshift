@@ -3,6 +3,7 @@ members = [
     "crates/frameshift-cli",
     "crates/frameshift-core",
     "crates/frameshift-input",
+    "crates/frameshift-package",
     "crates/frameshift-syntax",
     "crates/frameshift-transform",
     "crates/frameshift-emit",

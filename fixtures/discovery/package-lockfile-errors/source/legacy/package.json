@@ -1,0 +1,4 @@
+{
+  "name": "legacy",
+  "dependencies": { "frame-kit": "^15.0.0" }
+}

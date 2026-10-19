@@ -1,0 +1,5 @@
+{
+  "name": "@harbor/ui",
+  "version": "1.0.0",
+  "dependencies": { "view-kit": "18.3.1" }
+}

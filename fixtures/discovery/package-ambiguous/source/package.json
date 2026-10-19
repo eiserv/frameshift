@@ -1,0 +1,4 @@
+{
+  "name": "atlas-shop",
+  "dependencies": { "frame-kit": ">=15.3 <17", "view-kit": "19.x || 18.3.x" }
+}

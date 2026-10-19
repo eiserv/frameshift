@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "A manifest with duplicate keys, unexpected types, an unknown module type, specifiers that only npm's loose range grammar or no grammar accepts, mixed exports keys, and an invalid packageManager; each problem becomes a finding at its span and the remaining fields are used (D-069, D-070)."
+}

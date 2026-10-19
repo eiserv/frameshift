@@ -1,6 +1,6 @@
 //! Discovery fixtures below `fixtures/discovery/` against their goldens (`D-062`).
 //!
-//! Each case copies `source/` into Cargo's temporary directory, creates the
+//! Each case of kind `discovery` copies `source/` into Cargo's temporary directory, creates the
 //! inputs that `fixture.json` lists under `createdAtTestTime`, applies its
 //! limit overrides, runs discovery twice, and compares a deterministic text
 //! rendering of the inventory and findings with `expected/discovery.txt`.
@@ -59,10 +59,14 @@ fn cases() -> Vec<Case> {
     assert!(!names.is_empty());
     names
         .into_iter()
-        .map(|name| {
+        .filter_map(|name| {
             let directory = fixtures().join(&name);
             let text = fs::read_to_string(directory.join("fixture.json")).unwrap();
             let metadata = support::parse(&text).unwrap_or_else(|error| panic!("{name}: {error}"));
+            // Package cases have their own harness (`package_fixtures.rs`).
+            if metadata.get("kind").and_then(Json::as_str) == Some("package") {
+                return None;
+            }
             for key in metadata.keys() {
                 assert!(
                     [
@@ -115,12 +119,12 @@ fn cases() -> Vec<Case> {
                     });
                 }
             }
-            Case {
+            Some(Case {
                 name,
                 directory,
                 limits,
                 created,
-            }
+            })
         })
         .collect()
 }

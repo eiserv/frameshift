@@ -1,0 +1,47 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "harbor-docs",
+      "dependencies": {
+        "@harbor/ui": "workspace:*",
+        "local-kit": "file:./vendor/kit",
+        "frame-kit": "16.1.x",
+        "view-kit": "^19.0.0",
+        "theme": "catalog:",
+      },
+      "devDependencies": {
+        "harbor-lint": "github:harbor/lint#v2",
+      },
+    },
+    "packages/ui": {
+      "name": "@harbor/ui",
+      "version": "1.0.0",
+      "dependencies": {
+        "view-kit": "18.3.1",
+      },
+    },
+  },
+  "catalog": {
+    "theme": "^3.0.0",
+  },
+  "packages": {
+    // Registry packages: ident, registry, metadata, integrity.
+    "@harbor/ui": ["@harbor/ui@workspace:packages/ui"],
+
+    "harbor-lint": ["harbor-lint@github:harbor/lint#0f1e2d3", { "bin": { "harbor-lint": "cli.js" } }, "harbor-lint-0f1e2d3"],
+
+    "local-kit": ["local-kit@file:vendor/kit", {}],
+
+    "frame-kit": ["frame-kit@16.1.4", "", { "dependencies": { "style-kit": "5.1.6" }, "peerDependencies": { "view-kit": "^18.2.0 || ^19.0.0", "sheet-kit": "*" }, "optionalPeers": ["sheet-kit"] }, "sha512-fictional"],
+
+    "view-kit": ["view-kit@19.2.0", "", {}, "sha512-fictional"],
+
+    "style-kit": ["style-kit@5.1.6", "", {}, "sha512-fictional"],
+
+    "theme": ["theme@3.2.0", "", {}, "sha512-fictional"],
+
+    "@harbor/ui/view-kit": ["view-kit@18.3.1", "", {}, "sha512-fictional"],
+  }
+}

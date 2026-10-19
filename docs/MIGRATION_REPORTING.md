@@ -229,7 +229,7 @@ The following assessment and outcome propagation remains planned. Severities cor
 | `FS7xxx` | Output and filesystem safety | `FS7001` output location exists. `FS7002` output location inside the source. `FS7003` unsafe output path rejected. `FS7004` managed output was modified since generation. |
 | `FS9xxx` | Internal | `FS9001` internal error. Results of this run are not trustworthy. |
 
-The discovery walker and the snapshot store emit the following assigned codes (`D-064`, `D-065`, `D-067`, sections 22 and 24 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Locations are the named path or, for entries directly in the root, project scope. Severities follow the status mapping above: `unknown` where content is not analyzed, `error` for operational failures, and `info` where nothing is lost.
+The discovery walker, the snapshot store, and the package loader emit the following assigned codes (`D-064`, `D-065`, `D-067`, `D-069`, sections 22, 24, and 26 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Locations are the named path, a text range in it where the problem has a span, or, for entries directly in the root, project scope. Package findings name fields, kinds, and limits, never package names or values. Severities follow the status mapping above: `unknown` where content is not analyzed, `error` for operational failures, and `info` where nothing is lost.
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
@@ -242,6 +242,7 @@ The discovery walker and the snapshot store emit the following assigned codes (`
 | `FS1007` | info | Link target does not exist. |
 | `FS1008` | unknown | Windows reparse point that is not a link (for example a cloud placeholder) not followed. |
 | `FS1009` | unknown | Directory exceeds the depth limit and was not traversed. |
+| `FS1010` | unknown | Lockfile format or format version not parsed: `pnpm-lock.yaml`, `yarn.lock`, and `bun.lockb`, npm version 1, Bun version 0, or an unknown version; versions fall back to declared ranges (`D-069`). |
 | `FS1011` | unknown | File count limit reached; discovery stopped. |
 | `FS1012` | unknown | Total size limit reached; discovery stopped. |
 | `FS1013` | unknown | Entry limit reached; discovery stopped. |
@@ -251,8 +252,20 @@ The discovery walker and the snapshot store emit the following assigned codes (`
 | `FS1017` | error | Entry could not be inspected. |
 | `FS1018` | error | `.gitignore` file could not be read; its directory was not traversed. |
 | `FS1019` | error | File could not be read by the snapshot store; its content is not analyzed (`D-067`). |
+| `FS1020` | unknown | A `package.json` field or entry has an unexpected type or value, or the document is not an object; the value is not used (`D-069`). |
+| `FS1021` | review | Duplicate key in a package file; the last occurrence is used, as npm does. |
+| `FS1022` | unknown | `packageManager` is not `<name>@<version>[+<hash>]` with npm, pnpm, yarn, or bun and an exact version; it is ignored. |
+| `FS1023` | review | Lockfile of another package manager than the `packageManager` field names; it is ignored. |
+| `FS1024` | unknown | Lockfiles of several package managers and no valid `packageManager` field; no lockfile is used. Reported at the directory. |
+| `FS1025` | info | Lockfile superseded by one of the same manager: `npm-shrinkwrap.json` over `package-lock.json`, `bun.lock` over `bun.lockb`. |
+| `FS1026` | unknown | Lockfile structure differs from its format; the lockfile is not used. |
+| `FS1027` | review | Lockfile root declarations differ from `package.json`; resolved versions may be stale. |
+| `FS1028` | unknown | Lockfile exceeds `package.max-lockfile-bytes`; it is not parsed. |
+| `FS2001` | unknown | Syntax error; the file is not analyzed. The package loader reports it for JSON and JSONC package files. |
+| `FS2002` | unknown | Unsupported text encoding (not UTF-8); the file is not analyzed. |
+| `FS2003` | unknown | File exceeds the text size limit; it is not decoded or analyzed. |
 
-`FS1010` (lockfile format not parsed) stays reserved for the lockfile parsers. Finding code syntax is implemented independently of this future catalog: exactly `FS` followed by four ASCII digits (`D-055`). A valid value alone does not establish that a code is assigned. Codes are never reused for a different meaning. `frameshift explain <code>` prints the full documentation for a code (see [CLI.md](CLI.md)).
+`FS2001` to `FS2003` keep their meaning for every parsed file kind as later parsers adopt them. Finding code syntax is implemented independently of this future catalog: exactly `FS` followed by four ASCII digits (`D-055`). A valid value alone does not establish that a code is assigned. Codes are never reused for a different meaning. `frameshift explain <code>` prints the full documentation for a code (see [CLI.md](CLI.md)).
 
 ## 9. Report contents
 

@@ -1,0 +1,4 @@
+{
+  "name": "large",
+  "dependencies": { "frame-kit": "^16.0.0" }
+}

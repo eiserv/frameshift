@@ -1,0 +1,5 @@
+{
+  "name": "@lumen/web",
+  "version": "0.1.0",
+  "dependencies": { "@lumen/ui": "*" }
+}
