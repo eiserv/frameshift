@@ -126,6 +126,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "frameshift-package"
+version = "0.0.0"
+dependencies = [
+ "frameshift-core",
+ "frameshift-input",
+ "frameshift-syntax",
+]
+
+[[package]]
 name = "frameshift-syntax"
 version = "0.0.0"
 dependencies = [

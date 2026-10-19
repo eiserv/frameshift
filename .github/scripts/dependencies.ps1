@@ -20,6 +20,7 @@ function Assert-CargoPolicy {
         'frameshift-core' = @('sha2')
         'frameshift-syntax' = @('frameshift-core')
         'frameshift-input' = @('frameshift-core')
+        'frameshift-package' = @('frameshift-core', 'frameshift-syntax', 'frameshift-input')
         'frameshift-transform' = @('frameshift-core')
         'frameshift-emit' = @('frameshift-core', 'frameshift-syntax', 'frameshift-transform')
         'frameshift-engine' = @('frameshift-core', 'frameshift-syntax', 'frameshift-transform', 'frameshift-emit', 'frameshift-input')

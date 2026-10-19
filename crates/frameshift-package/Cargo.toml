@@ -1,0 +1,15 @@
+[package]
+name = "frameshift-package"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+frameshift-core = { path = "../frameshift-core" }
+frameshift-input = { path = "../frameshift-input" }
+frameshift-syntax = { path = "../frameshift-syntax" }
+
+[lints]
+workspace = true
