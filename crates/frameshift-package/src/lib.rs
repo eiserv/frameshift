@@ -4,12 +4,17 @@
 //! This crate interprets package metadata without framework knowledge. It
 //! performs no I/O of its own.
 
+mod lockfile;
 mod manager;
 mod manifest;
 mod range;
 mod spec;
 mod version;
 
+pub use lockfile::{
+    Declared, LockedPackage, LockedWorkspace, Lockfile, LockfileError, LockfileErrorKind,
+    Resolution,
+};
 pub use manager::{
     Detection, DetectionSource, IgnoredLockfile, IgnoredReason, LockfileKind, PackageManagerError,
     PackageManagerKind, PackageManagerSpec, detect,
