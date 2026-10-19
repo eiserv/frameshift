@@ -3,7 +3,9 @@ use std::fmt;
 const CHECKPOINT_INTERVAL: usize = 128;
 
 /// A half-open byte range. Offsets refer to the original source, including a BOM.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+///
+/// The default is the empty range at offset 0.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
     start: usize,
     end: usize,

@@ -12,7 +12,7 @@ use frameshift_core::{
 };
 use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
-use frameshift_syntax::{LexicalLimits, ParseLimits};
+use frameshift_syntax::{JsonLimits, LexicalLimits, ParseLimits};
 use frameshift_transform::EditLimits;
 
 // Entry values widen `usize` limits without loss.
@@ -42,6 +42,8 @@ pub struct Limits {
     pub hash: HashLimits,
     /// One parse, including its lexical scans.
     pub parse: ParseLimits,
+    /// One JSON or JSONC parse.
+    pub json: JsonLimits,
     /// One span rewrite.
     pub edit: EditLimits,
     /// One emitted output file.
@@ -151,7 +153,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 28] {
+    pub fn entries(&self) -> [LimitEntry; 30] {
         let Self {
             run,
             ignore,
@@ -161,6 +163,7 @@ impl Limits {
             finding,
             hash,
             parse,
+            json,
             edit,
             emit,
         } = *self;
@@ -196,6 +199,10 @@ impl Limits {
             max_tokens,
             max_nesting_depth,
         } = parse;
+        let JsonLimits {
+            max_depth: json_depth,
+            max_nodes: json_nodes,
+        } = json;
         let LexicalLimits {
             max_comments,
             max_string_bytes,
@@ -226,6 +233,8 @@ impl Limits {
             entry("identifier.max-bytes", wide(identifier_bytes)),
             entry("ignore.max-match-work", max_match_work),
             entry("ignore.max-total-bytes", ignore_bytes),
+            entry("json.max-depth", wide(json_depth)),
+            entry("json.max-nodes", wide(json_nodes)),
             entry("parse.lexical.max-comments", wide(max_comments)),
             entry(
                 "parse.lexical.max-identifier-bytes",
