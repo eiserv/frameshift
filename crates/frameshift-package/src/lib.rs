@@ -4,11 +4,16 @@
 //! This crate interprets package metadata without framework knowledge. It
 //! performs no I/O of its own.
 
+mod manager;
 mod manifest;
 mod range;
 mod spec;
 mod version;
 
+pub use manager::{
+    Detection, DetectionSource, IgnoredLockfile, IgnoredReason, LockfileKind, PackageManagerError,
+    PackageManagerKind, PackageManagerSpec, detect,
+};
 pub use manifest::{
     Bin, Browser, BrowserTarget, Browserslist, Dependency, DependencyKind, Element, Entry, Exports,
     Field, IssueKind, ManifestError, ManifestField, ManifestIssue, ModuleType, OtherMember,
