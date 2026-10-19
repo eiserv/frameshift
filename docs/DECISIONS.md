@@ -78,6 +78,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-068 | Purpose-built JSON and JSONC parser with exact values | Accepted |
 | D-069 | Package manifest, package manager, and npm and Bun lockfile models | Accepted |
 | D-070 | npm version ranges with node-semver's semantics | Accepted |
+| D-071 | Purpose-built full YAML 1.2 syntax and pnpm lockfile version 9 | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -782,6 +783,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Revisit if:** npm bundles a node-semver version with different semantics, or the knowledge base needs loose ranges or `includePrerelease`.
 - **Validation:** Section 26 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
+### D-071: Purpose-built full YAML 1.2 syntax and pnpm lockfile version 9
+
+- **Status:** Accepted (2026-10-19). Through the Codex App question interface, the owner selected YAML and pnpm as the next M2 increment, full YAML 1.2 instead of a lockfile subset, and pnpm lockfile version 9.0 first. In a follow-up, the owner explicitly chose a purpose-built full parser over evaluating and adopting `saphyr-parser`. No new dependency is authorized or introduced.
+- **Decision:** Build the YAML 1.2 syntax parser in `frameshift-syntax`, behind Frameshift-owned types. Preserve scalar spelling and decoded text, tags, collection styles, anchors, aliases, complex keys, and multiple documents. Represent aliases as graph references without expansion, including recursive references. No tag instantiates objects or performs I/O. Syntax recognition is separate from application schema interpretation. Use explicit input, node, and nesting limits and source locations; errors never echo source content. Compare acceptance and event structure with the public YAML test suite outside the repository. Record actual conformance evidence and any remaining gaps in IMPLEMENTATION.md rather than claiming unmeasured compliance.
+- **pnpm:** Implement only lockfile format 9.0 in this increment. Read importer declarations and resolutions, package metadata, and peer-context snapshots into the existing lockfile model, through `Snapshot::read`. Preserve complete resolution keys, including peer contexts, and reject structural ambiguity or missing referenced packages as a whole. Unknown format versions remain `FS1010`; malformed models remain `FS1026`. Yarn parsing, workspace detection, and framework detection remain later M2 work.
+- **Rationale and alternatives:** The earlier YAML subset in `P-002` and ENGINEERING.md section 3.4 no longer covers the owner's requested syntax scope. A general parser permits later configuration consumers without format-specific syntax forks. `saphyr-parser` documents YAML 1.2 support and conformance-suite testing, but adopting it would add runtime dependencies and delegate syntax ownership; the owner selected in-house implementation after that alternative was presented. Effort is not a reason to reduce correctness (`D-020`).
+- **Implementation status:** YAML syntax is implemented and its evidence is in IMPLEMENTATION.md section 27. The pnpm model follows in a separate increment.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
@@ -795,7 +804,7 @@ Statuses change through an edit to this file under the integration workflow in D
 ### P-002: Purpose-built parsers
 
 - **Status:** Accepted (2026-10-13). E1 passed under the criteria of section 2.8 of [ENGINEERING.md](ENGINEERING.md) and the closure rules of `D-047`, which the project owner confirmed; the purpose-built JavaScript, JSX, TypeScript, and TSX parser is the foundation for M3. The other parsers of this proposal are built under the same policy when their milestones arrive.
-- **Proposal:** Build Frameshift's own parsers for JavaScript, TypeScript, JSX, TSX, CSS and SCSS, JSONC, the YAML subset used by lockfiles, and the Yarn classic lockfile format.
+- **Proposal:** Build Frameshift's own parsers for JavaScript, TypeScript, JSX, TSX, CSS and SCSS, JSONC, YAML, and the Yarn classic lockfile format. The owner expanded YAML to full YAML 1.2 syntax in `D-071`.
 - **Rationale:** Parsing is the most correctness-critical component. Frameshift needs control over spans, comments, the error policy, and resource limits, and a tree design that extends to further languages. The strongest Rust parser, oxc, is still pre-1.0 with regular breaking AST changes.
 - **Fallback if E1 reveals a fundamental problem:** oxc behind a Frameshift-owned facade, with its own decision record. oxc may serve as a development-time test oracle in any case.
 

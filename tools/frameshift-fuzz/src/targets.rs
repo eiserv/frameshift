@@ -16,7 +16,7 @@ use frameshift_engine::{
 
 use crate::{
     astro, collections, edits, gitignore, hashes, identifiers, json, lexical, package, paths,
-    seeds, semver,
+    seeds, semver, yaml,
 };
 
 /// A fuzzed engine entry point with its contracts.
@@ -52,6 +52,8 @@ pub enum Target {
     Semver,
     /// The `package.json` and lockfile models on arbitrary JSON and JSONC.
     Package,
+    /// Full YAML syntax, unexpanded graph references, and the JSON subset.
+    Yaml,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -68,7 +70,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -84,6 +86,7 @@ impl Target {
         Self::Json,
         Self::Semver,
         Self::Package,
+        Self::Yaml,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -104,6 +107,7 @@ impl Target {
             Self::Json => "json",
             Self::Semver => "semver",
             Self::Package => "package",
+            Self::Yaml => "yaml",
         }
     }
 
@@ -160,6 +164,9 @@ impl Target {
             Self::Package => {
                 "package.json and npm and Bun lockfile models on JSON and JSONC; spans, sorting, and resolution"
             }
+            Self::Yaml => {
+                "YAML streams, spans, graph references, deterministic errors, bounds, and agreement on the JSON subset"
+            }
         }
     }
 
@@ -176,6 +183,7 @@ impl Target {
             | Self::Hashes
             | Self::Collections
             | Self::Package => 4_096,
+            Self::Yaml => 1_024,
             Self::RegExp | Self::References | Self::Gitignore | Self::Json | Self::Semver => 1_024,
             Self::Lexical => 512,
         }
@@ -210,6 +218,7 @@ impl Target {
             Self::Json => json::run(input),
             Self::Semver => semver::run(input),
             Self::Package => package::run(input),
+            Self::Yaml => yaml::run(input),
         }
     }
 }

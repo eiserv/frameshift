@@ -235,7 +235,7 @@ A dependency is evaluated on:
 Building is not a license for unbounded work:
 
 - **Specification first.** Each purpose-built component implements a written specification: an external standard (the ECMAScript and CSS syntax specifications, Git's gitignore rules, the npm semver range grammar) or an internal document.
-- **Bounded scope.** Implement what Frameshift needs. A YAML parser for lockfiles parses the lockfile subset and rejects everything else explicitly.
+- **Bounded scope.** Implement the accepted grammar with explicit resource limits. The owner selected full YAML 1.2 syntax in `D-071`, superseding the earlier lockfile-subset proposal; application schemas remain separate and fail closed.
 - **Conformance testing.** Use public conformance suites where their licenses allow, for example the TypeScript conformance tests (Apache-2.0) or test262, as test inputs. They are not shipped.
 - **Fuzzing.** Every parser of untrusted input is fuzzed continuously.
 - **Documented limitations.** Unsupported syntax is reported explicitly and never silently mis-parsed.
@@ -251,7 +251,7 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | CSS tokenizer and structural parser | Runtime | Build | Specified by CSS Syntax Level 3. Bounded. Lightning CSS may serve as a test oracle. |
 | JSON reading and deterministic writing | Runtime | Build (reading implemented under `D-068`; writing remains planned) | RFC 8259 is small and precisely specified. Frameshift needs control over key order, formatting, and error positions, and shares the code with JSONC. |
 | JSONC | Runtime | Build (implemented under `D-068`) | Extension of the JSON parser: comments and one trailing comma |
-| YAML subset for lockfiles | Runtime | Build | General YAML is large and risky. Only the lockfile subset is needed. |
+| YAML 1.2 syntax | Runtime | Build (`D-071`, implemented) | Full syntax with flat graph references, preserved tags, explicit bounds, and an external conformance-suite runner. Package interpretation remains separate. |
 | Yarn classic lockfile | Runtime | Build | Small format |
 | npm semver range matching | Runtime | Build (implemented under `D-070`) | Needed for knowledge base matching and version lower bounds. Follows node-semver 7.8.5 exactly, including behavior beyond the documented grammar, and is tested differentially against it outside the repository. |
 | Unicode identifier properties and property value names | Runtime data | Build: generated tables from the pinned Unicode Character Database (`D-036`, `D-037`, implemented) | A standard-library-only development tool generates `ID_Start` and `ID_Continue` ranges and the General_Category and Script value names that regular-expression property escapes accept. Rust's own Unicode predicates use other properties and an unpinned version. Unicode's terms require a notice before distribution. |

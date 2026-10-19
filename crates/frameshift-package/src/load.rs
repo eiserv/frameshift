@@ -13,7 +13,7 @@ use frameshift_core::{
     TextLimits, TextLocation,
 };
 use frameshift_input::{FileRead, Snapshot, SnapshotError};
-use frameshift_syntax::{JsonDialect, JsonDocument, JsonLimits, parse_json};
+use frameshift_syntax::{JsonDialect, JsonDocument, JsonLimits, YamlLimits, parse_json};
 
 use crate::lockfile::{Lockfile, LockfileErrorKind};
 use crate::manager::{Detection, IgnoredReason, LockfileKind, PackageManagerSpec, detect};
@@ -42,6 +42,8 @@ pub struct LoadLimits {
     pub text: TextLimits,
     /// Each JSON and JSONC parse.
     pub json: JsonLimits,
+    /// Each YAML stream.
+    pub yaml: YamlLimits,
     /// The paths of the files in the directory.
     pub path: PathLimits,
     /// The lockfile size.
