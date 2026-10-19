@@ -622,7 +622,7 @@ bun@1.4.0",
         .iter()
         .map(|text| (*text).to_owned())
         .collect(),
-        Target::Yaml => ["", "fictional: [one, two, {three: four}]\n", "? &key [fictional, complex]\n: *key\n", "&a [*a, {self: *a}]", "%YAML 1.2\n---\n{? [a, b]: !!str 9}\n...\n---\nnull\n", "a: >-\n  fictional\n\n  lines\n", "- &key \"hello\\nworld\"\n- *key\n", "{\"a\": [true, false, null, 1.25, -0, \"\\u0041\"]}", "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      fictional:\n        specifier: ^1\n        version: 1.0.0\npackages:\n  fictional@1.0.0:\n    resolution: {integrity: sha512-fake}\nsnapshots:\n  fictional@1.0.0: {}\n"].iter().map(|text| (*text).to_owned()).collect(),
+        Target::Yaml => ["", "{\"fictional\": \"\\uD83D\\uDE00\"}", "fictional: [one, two, {three: four}]\n", "? &key [fictional, complex]\n: *key\n", "&a [*a, {self: *a}]", "%YAML 1.2\n---\n{? [a, b]: !!str 9}\n...\n---\nnull\n", "a: >-\n  fictional\n\n  lines\n", "- &key \"hello\\nworld\"\n- *key\n", "{\"a\": [true, false, null, 1.25, -0, \"\\u0041\"]}", "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      fictional:\n        specifier: ^1\n        version: 1.0.0\npackages:\n  fictional@1.0.0:\n    resolution: {integrity: sha512-fake}\nsnapshots:\n  fictional@1.0.0: {}\n"].iter().map(|text| (*text).to_owned()).collect(),
         Target::Package => [
             "",
             "{\"name\": \"fictional\", \"version\": \"1.0.0\", \"type\": \"module\", \"packageManager\": \"npm@11.0.0\"}",

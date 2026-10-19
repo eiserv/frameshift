@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::BTreeMap;
 
 use super::{
@@ -11,7 +12,8 @@ type Result<T> = std::result::Result<T, YamlError>;
 pub(super) fn parse(text: &str, limits: YamlLimits) -> Result<YamlStream> {
     let mut restricted = Vec::new();
     for (offset, ch) in text.char_indices() {
-        if !matches!(ch, '\t' | '\n' | '\r' | '\u{20}'..='\u{7e}' | '\u{85}' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}')
+        if ch == '\u{feff}'
+            || !matches!(ch, '\t' | '\n' | '\r' | '\u{20}'..='\u{7e}' | '\u{85}' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..='\u{10ffff}')
         {
             if ch < '\u{20}' {
                 return Err(YamlError {
@@ -34,6 +36,8 @@ pub(super) fn parse(text: &str, limits: YamlLimits) -> Result<YamlStream> {
         tags: BTreeMap::new(),
         restricted,
         quoted_ranges: Vec::new(),
+        document_active: false,
+        line_cursor: Cell::new((0, 0)),
     }
     .stream()
 }
@@ -51,6 +55,10 @@ struct Parser<'s> {
     tags: BTreeMap<Box<str>, Box<str>>,
     restricted: Vec<usize>,
     quoted_ranges: Vec<Span>,
+    document_active: bool,
+    // Cache forward line scans so long flow collections do not repeatedly
+    // scan the same prefix. Bounded lookahead can restore an earlier cursor.
+    line_cursor: Cell<(usize, usize)>,
 }
 
 impl Parser<'_> {
@@ -72,9 +80,23 @@ impl Parser<'_> {
         Some(ch)
     }
     fn column(&self) -> usize {
-        self.text[..self.pos]
-            .rfind(['\n', '\r'])
-            .map_or(self.pos, |i| self.pos - i - 1)
+        let (known, line_start) = self.line_cursor.get();
+        let start = if self.pos >= known {
+            self.text[known..self.pos]
+                .rfind(['\n', '\r'])
+                .map_or(line_start, |i| known + i + 1)
+        } else {
+            self.text[..self.pos]
+                .rfind(['\n', '\r'])
+                .map_or(0, |i| i + 1)
+        };
+        self.line_cursor.set((self.pos, start));
+        let raw = self.pos - start;
+        if self.text[start..].starts_with('\u{feff}') {
+            raw.saturating_sub(3)
+        } else {
+            raw
+        }
     }
     fn line_end(&self) -> usize {
         self.text[self.pos..]
@@ -107,7 +129,11 @@ impl Parser<'_> {
     }
     fn blank(&mut self) {
         loop {
-            if self.column() == 0 && self.at("\u{feff}") {
+            if self.column() == 0
+                && self.at("\u{feff}")
+                && (!self.document_active || self.text[self.pos + 3..].starts_with("---"))
+            {
+                self.quoted_ranges.push(range(self.pos, self.pos + 3));
                 self.pos += 3;
             }
             self.spaces();
@@ -131,6 +157,13 @@ impl Parser<'_> {
                 .chars()
                 .next()
                 .is_none_or(separation)
+    }
+    fn flow_colon(&self) -> bool {
+        self.at(":")
+            && self.text[self.pos + 1..]
+                .chars()
+                .next()
+                .is_none_or(|ch| separation(ch) || matches!(ch, ',' | '[' | ']' | '{' | '}'))
     }
     fn empty(&mut self) -> Result<YamlId> {
         self.add(self.pos, None, None, scalar(String::new(), Style::Plain))
@@ -169,6 +202,7 @@ impl Parser<'_> {
     fn stream(mut self) -> Result<YamlStream> {
         let mut bare_allowed = true;
         loop {
+            self.document_active = false;
             self.blank();
             if self.pos == self.text.len() {
                 break;
@@ -199,7 +233,11 @@ impl Parser<'_> {
                     Some("%YAML") => {
                         if version
                             || fields.len() != 2
-                            || !matches!(fields[1], "1.1" | "1.2" | "1.3")
+                            || !fields[1].strip_prefix("1.").is_some_and(|minor| {
+                                !minor.is_empty()
+                                    && minor.bytes().all(|byte| byte.is_ascii_digit())
+                                    && minor.bytes().any(|byte| byte != b'0')
+                            })
                         {
                             return Err(self.error(Error::Property));
                         }
@@ -230,6 +268,7 @@ impl Parser<'_> {
                 return Err(self.error(Error::Syntax));
             }
             if explicit_start {
+                self.document_active = true;
                 self.pos += 3;
                 self.spaces();
                 self.comment();
@@ -242,6 +281,7 @@ impl Parser<'_> {
             let root = if self.pos == self.text.len() || self.marker("---") || self.marker("...") {
                 self.empty()?
             } else {
+                self.document_active = true;
                 self.node(-1, 0, false, false, false)?
             };
             self.spaces();
@@ -252,6 +292,7 @@ impl Parser<'_> {
             self.blank();
             let explicit_end = self.marker("...");
             if explicit_end {
+                self.document_active = false;
                 self.pos += 3;
                 self.spaces();
                 self.comment();
@@ -726,7 +767,7 @@ impl Parser<'_> {
                 self.flow_space(parent)?;
             }
             let pair_start = self.pos;
-            let key = if self.indicator(':') {
+            let key = if self.flow_colon() {
                 self.empty()?
             } else {
                 self.node(parent, depth, true, false, false)?
@@ -796,7 +837,7 @@ impl Parser<'_> {
                 self.pos += 1;
                 self.flow_space(parent)?;
             }
-            let key = if self.at(":") {
+            let key = if self.flow_colon() {
                 self.empty()?
             } else {
                 self.node(parent, depth, true, false, false)?
@@ -901,6 +942,13 @@ impl Parser<'_> {
             if self.pos == self.text.len()
                 || self.marker("---")
                 || self.marker("...")
+                || (self.column() == 0
+                    && self.at("\u{feff}")
+                    && self.text[self.pos + 3..].starts_with("---")
+                    && self.text[self.pos + 6..]
+                        .chars()
+                        .next()
+                        .is_none_or(separation))
                 || self.at("#")
                 || self.at("\t")
                 || (!flow && self.column() as isize <= parent)
@@ -982,6 +1030,24 @@ impl Parser<'_> {
                                 .and_then(|c| c.to_digit(16))
                                 .ok_or_else(|| self.error(Error::Character))?;
                             code = (code << 4) | digit;
+                        }
+                        if escape == 'u' && (0xd800..=0xdbff).contains(&code) {
+                            if !self.at("\\u") {
+                                return Err(self.error(Error::Character));
+                            }
+                            self.pos += 2;
+                            let mut low = 0u32;
+                            for _ in 0..4 {
+                                let digit = self
+                                    .bump()
+                                    .and_then(|ch| ch.to_digit(16))
+                                    .ok_or_else(|| self.error(Error::Character))?;
+                                low = (low << 4) | digit;
+                            }
+                            if !(0xdc00..=0xdfff).contains(&low) {
+                                return Err(self.error(Error::Character));
+                            }
+                            code = 0x10000 + ((code - 0xd800) << 10) + low - 0xdc00;
                         }
                         char::from_u32(code).ok_or_else(|| self.error(Error::Character))?
                     }

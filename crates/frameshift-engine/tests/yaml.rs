@@ -104,6 +104,61 @@ fn json_compatible_quoted_characters_and_exact_scalar_values() {
     }
 }
 
+#[test]
+fn colon_prefixed_flow_keys_bom_and_surrogate_pairs_preserve_meaning() {
+    assert!(events(&parse("{:fictional}")).contains("=VAL ::fictional\n=VAL :\n"));
+    assert!(events(&parse("{a:b}")).contains("=VAL :a:b\n=VAL :\n"));
+    assert!(events(&parse("[:]")).contains("+MAP {}\n=VAL :\n=VAL :\n-MAP"));
+    assert_eq!(
+        events(&parse("\u{feff}first: one\nsecond: two\n")),
+        events(&parse("first: one\nsecond: two\n"))
+    );
+    assert_eq!(
+        events(&parse(
+            "\u{feff}---\nfirst: one\n...\n\u{feff}---\nsecond: two\n"
+        )),
+        events(&parse("---\nfirst: one\n...\n---\nsecond: two\n"))
+    );
+    assert!(events(&parse("%YAML 1.42\n---\nfictional\n")).contains("=VAL :fictional\n"));
+    let pair = parse("\"\\uD83D\\uDE00\"");
+    assert_eq!(pair.scalar(pair.documents()[0].root), Some("\u{1f600}"));
+    assert_eq!(parse("first\n\u{feff}---\nsecond\n").documents().len(), 2);
+    for text in [
+        "a: b\n\u{feff}c: d\n",
+        "---\n\u{feff}fictional\n",
+        "\"\\uD83D\"",
+        "\"\\uDE00\"",
+    ] {
+        let source = SourceText::new(text.into(), TextLimits::default()).unwrap();
+        assert!(parse_yaml(&source, YamlLimits::default()).is_err());
+    }
+}
+
+#[test]
+fn long_flow_lines_and_lookahead_keep_all_values_and_locations() {
+    let input = format!(
+        "[{}]\n",
+        std::iter::repeat_n("--- ", 20_000)
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let stream = parse(&input);
+    let YamlValue::Sequence { elements, .. } =
+        &stream.node(stream.documents()[0].root).unwrap().value
+    else {
+        panic!("flow sequence");
+    };
+    assert_eq!(elements.len(), 20_000);
+    for id in elements {
+        assert_eq!(stream.scalar(*id), Some("---"));
+    }
+    let multiline = parse("[{fictional: one\n ,other: two},\n three]\n");
+    assert_eq!(multiline.documents().len(), 1);
+    for node in multiline.nodes() {
+        assert!(node.span.start() <= node.span.end());
+    }
+}
+
 fn events(stream: &YamlStream) -> String {
     fn node(stream: &YamlStream, id: YamlId, output: &mut String) {
         let node = stream.node(id).unwrap();
