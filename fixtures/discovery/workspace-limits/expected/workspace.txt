@@ -1,0 +1,7 @@
+releases npm-11
+declarations package.json
+complete false
+package (root) lockfile-workspace ""
+findings:
+  F0001 unknown FS1038 package.json: Workspace limit reached
+    The workspace declaration has more patterns than workspace.max-patterns (2), so its members are not determined.

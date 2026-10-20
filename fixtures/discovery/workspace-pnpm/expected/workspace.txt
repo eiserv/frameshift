@@ -1,0 +1,14 @@
+releases pnpm-10
+declarations pnpm-workspace.yaml
+complete false
+member apps/web name=fictional-web
+member packages/kit name=fictional-kit
+undetermined packages/yaml-only
+package (root) lockfile-workspace ""
+package apps/web lockfile-workspace "apps/web"
+  dependencies fictional-kit "workspace:*": unresolved; sibling packages/kit
+  dependencies fictional-format "^2.0.0": fictional-format@2.4.1
+package packages/kit lockfile-workspace "packages/kit"
+findings:
+  F0001 unknown FS1036 packages/yaml-only: Workspace membership not known
+    The directory has only a manifest format that Frameshift does not read (yarn.json, package.yaml, or package.json5), so its workspace membership is not known.

@@ -1,0 +1,10 @@
+{
+  "name": "fictional-rejected-root",
+  "private": true,
+  "packageManager": "npm@11.11.0",
+  "workspaces": [
+    "packages/+(a|b)",
+    "../outside/*",
+    "/packages/*"
+  ]
+}

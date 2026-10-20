@@ -1,0 +1,11 @@
+releases npm-11
+declarations package.json
+complete false
+package (root) lockfile-workspace ""
+findings:
+  F0001 unknown FS1030 package.json:6:5: Workspace pattern not evaluated
+    A workspace pattern is not evaluated because the pattern contains a character that a package manager reads specially, so the workspace members are not determined.
+  F0002 unknown FS1030 package.json:7:5: Workspace pattern not evaluated
+    A workspace pattern is not evaluated because the pattern is absolute or names a `.` or `..` segment, so the workspace members are not determined.
+  F0003 unknown FS1030 package.json:8:5: Workspace pattern not evaluated
+    A workspace pattern is not evaluated because the pattern is absolute or names a `.` or `..` segment, so the workspace members are not determined.

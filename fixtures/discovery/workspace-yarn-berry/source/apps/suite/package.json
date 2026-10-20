@@ -1,0 +1,10 @@
+{
+  "name": "fictional-suite",
+  "version": "1.0.0",
+  "workspaces": [
+    "plugins/*"
+  ],
+  "dependencies": {
+    "fictional-core": "workspace:^"
+  }
+}

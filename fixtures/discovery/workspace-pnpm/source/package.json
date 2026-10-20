@@ -1,0 +1,5 @@
+{
+  "name": "fictional-pnpm-root",
+  "private": true,
+  "packageManager": "pnpm@10.34.7"
+}

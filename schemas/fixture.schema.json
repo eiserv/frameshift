@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Frameshift product fixture metadata",
-  "description": "Human-written metadata of a product fixture below fixtures/ (D-062). Only discovery and package cases exist; feature and composite fixtures extend this schema with their first case. No tool writes these files.",
+  "description": "Human-written metadata of a product fixture below fixtures/ (D-062). Only discovery, package, and workspace cases exist; feature and composite fixtures extend this schema with their first case. No tool writes these files.",
   "type": "object",
   "required": ["kind", "description"],
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
     "kind": {
-      "description": "discovery: an inventory rendering (expected/discovery.txt); package: package models and resolutions (expected/package.txt, D-069).",
-      "enum": ["discovery", "package"]
+      "description": "discovery: an inventory rendering (expected/discovery.txt); package: package models and resolutions (expected/package.txt, D-069); workspace: workspace members and their resolutions (expected/workspace.txt, D-073).",
+      "enum": ["discovery", "package", "workspace"]
     },
     "description": { "type": "string", "minLength": 1 },
     "limits": {
@@ -31,6 +31,10 @@
           "run.max-files",
           "run.max-total-bytes",
           "text.max-source-bytes",
+          "workspace.max-alternatives",
+          "workspace.max-match-work",
+          "workspace.max-pattern-bytes",
+          "workspace.max-patterns",
           "yaml.max-depth",
           "yaml.max-nodes",
           "yarn.max-depth",

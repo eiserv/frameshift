@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "workspace",
+  "description": "An npm 11 workspace: a negation removes a member, a dot directory and a directory without package.json are not members, and members resolve registry packages and siblings through the root lockfile (D-073)."
+}

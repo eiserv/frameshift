@@ -1,0 +1,8 @@
+{
+  "name": "fictional-site",
+  "version": "1.0.0",
+  "dependencies": {
+    "fictional-ui": "^1.0.0",
+    "fictional-format": "^2.1.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "fictional-open-root",
+  "private": true,
+  "workspaces": [
+    "!packages/b",
+    "packages/*"
+  ]
+}

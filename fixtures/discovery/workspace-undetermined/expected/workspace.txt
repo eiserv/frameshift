@@ -1,0 +1,12 @@
+releases npm-11 yarn-1 yarn-2 yarn-4 bun-1.4
+declarations package.json
+complete false
+member packages/a name=fictional-open-a
+undetermined packages/b
+package (root) lockfile-workspace ""
+package packages/a lockfile-workspace "packages/a"
+findings:
+  F0001 unknown FS1032 packages/b: Workspace membership differs between package managers
+    The package manager release is not determined, and only Yarn 1, Yarn 2 and 3, Bun 1.4 select this directory as a workspace member, so its membership is not known.
+  F0002 unknown FS1031 packages/generated: Workspace pattern reaches an entry that discovery did not traverse
+    A workspace pattern could select this entry or a directory below it, but discovery did not traverse it (it is ignored, a link, or not read), while the package manager may. The workspace members may be incomplete.

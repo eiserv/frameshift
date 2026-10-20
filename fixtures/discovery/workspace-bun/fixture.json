@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "workspace",
+  "description": "A Bun 1.4 workspace: a later negation removes a member, and a negation that comes first is walked as a pattern of its own whose first segment Bun inverts, so it adds every other top-level package (D-073)."
+}
