@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Frameshift product fixture metadata",
-  "description": "Human-written metadata of a product fixture below fixtures/ (D-062). Only discovery, package, and workspace cases exist; feature and composite fixtures extend this schema with their first case. No tool writes these files.",
+  "description": "Human-written metadata of a product fixture below fixtures/ (D-062). Only discovery, package, workspace, and inspect cases exist; feature and composite fixtures extend this schema with their first case. No tool writes these files.",
   "type": "object",
   "required": ["kind", "description"],
   "additionalProperties": false,
   "properties": {
     "$schema": { "type": "string" },
     "kind": {
-      "description": "discovery: an inventory rendering (expected/discovery.txt); package: package models and resolutions (expected/package.txt, D-069); workspace: workspace members and their resolutions (expected/workspace.txt, D-073).",
-      "enum": ["discovery", "package", "workspace"]
+      "description": "discovery: an inventory rendering (expected/discovery.txt); package: package models and resolutions (expected/package.txt, D-069); workspace: workspace members and their resolutions (expected/workspace.txt, D-073); inspect: the frameshift.inspection document and the CLI text of frameshift inspect (expected/inspection.json and expected/inspection.txt, D-075).",
+      "enum": ["discovery", "package", "workspace", "inspect"]
     },
     "description": { "type": "string", "minLength": 1 },
     "limits": {

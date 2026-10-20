@@ -1,0 +1,99 @@
+{
+  "kind": "frameshift.inspection",
+  "schemaVersion": 1,
+  "engineVersion": "@ENGINE_VERSION@",
+  "files": {
+    "complete": true,
+    "stop": null,
+    "admitted": 11,
+    "admittedBytes": 1017,
+    "directories": 8,
+    "ignored": {
+      "vcs": 0,
+      "dependencies": 0,
+      "build-output": 0,
+      "environment": 0,
+      "gitignore": 1
+    },
+    "oversized": 0,
+    "links": 0,
+    "reparsePoints": 0,
+    "special": 0,
+    "notTraversed": 0,
+    "uninspectable": 0,
+    "unrepresentable": 0
+  },
+  "packageManager": {
+    "name": "pnpm",
+    "source": "package-manager-field",
+    "declared": {
+      "name": "pnpm",
+      "version": "10.34.7"
+    },
+    "lockfile": {
+      "path": "pnpm-lock.yaml",
+      "status": "parsed",
+      "formatVersion": 9
+    },
+    "ignoredLockfiles": [
+      {
+        "path": "package-lock.json",
+        "reason": "other-manager"
+      }
+    ]
+  },
+  "workspace": {
+    "isWorkspace": false,
+    "declarations": [],
+    "releases": [],
+    "complete": true,
+    "members": [],
+    "undetermined": []
+  },
+  "packages": [
+    {
+      "directory": ".",
+      "name": "fictional-lumen",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "nextjs",
+        "dependency": {
+          "field": "dependencies",
+          "specifier": "^16.2.0"
+        },
+        "version": {
+          "value": "16.2.1",
+          "evidence": "locked"
+        },
+        "config": {
+          "path": "next.config.mjs",
+          "load": "loaded"
+        },
+        "router": "app",
+        "app": {
+          "path": "src/app",
+          "inSrc": true,
+          "state": "directory",
+          "routeFiles": 3,
+          "complete": true
+        },
+        "pages": null
+      }
+    }
+  ],
+  "migrationPaths": [],
+  "findings": [
+    {
+      "id": "F0001",
+      "code": "FS1023",
+      "severity": "review",
+      "location": {
+        "scope": "file",
+        "path": "package-lock.json"
+      },
+      "message": "Lockfile of another package manager ignored",
+      "explanation": "The packageManager field names a different package manager, so this lockfile is not used.",
+      "remediation": "Remove the stale lockfile, or correct the packageManager field."
+    }
+  ]
+}

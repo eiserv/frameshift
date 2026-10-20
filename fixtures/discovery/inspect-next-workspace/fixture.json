@@ -1,0 +1,34 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "inspect",
+  "description": "An npm 11 workspace whose members are a hybrid Next.js 15 site with app and pages in one directory and its own configuration, a documentation package that declares next without a configuration or route files (FS1040), and a library; the root lockfile resolves next for the site (D-073, D-074, D-075). Manifests and the lockfile name the real next package, so the harness creates them at test time (Q-014).",
+  "createdAtTestTime": [
+    {
+      "kind": "file",
+      "path": "package.json",
+      "content": "{\n  \"name\": \"fictional-harbor\",\n  \"private\": true,\n  \"packageManager\": \"npm@11.11.0\",\n  \"workspaces\": [\"apps/*\", \"packages/*\"]\n}\n"
+    },
+    {
+      "kind": "file",
+      "path": "apps/site/package.json",
+      "content": "{\n  \"name\": \"fictional-site\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"fictional-ui\": \"1.0.0\",\n    \"next\": \"~15.5.0\"\n  }\n}\n"
+    },
+    {
+      "kind": "file",
+      "path": "apps/docs/package.json",
+      "content": "{\n  \"name\": \"fictional-docs\",\n  \"version\": \"1.0.0\",\n  \"devDependencies\": {\n    \"next\": \"~15.5.0\"\n  }\n}\n"
+    },
+    {
+      "kind": "file",
+      "path": "packages/ui/package.json",
+      "content": "{\n  \"name\": \"fictional-ui\",\n  \"version\": \"1.0.0\"\n}\n"
+    },
+    {
+      "kind": "file",
+      "path": "package-lock.json",
+      "content": "{\n  \"name\": \"fictional-harbor\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"fictional-harbor\",\n      \"workspaces\": [\"apps/*\", \"packages/*\"]\n    },\n    \"apps/docs\": {\n      \"name\": \"fictional-docs\",\n      \"version\": \"1.0.0\",\n      \"devDependencies\": {\n        \"next\": \"~15.5.0\"\n      }\n    },\n    \"apps/site\": {\n      \"name\": \"fictional-site\",\n      \"version\": \"1.0.0\",\n      \"dependencies\": {\n        \"fictional-ui\": \"1.0.0\",\n        \"next\": \"~15.5.0\"\n      }\n    },\n    \"node_modules/fictional-docs\": {\n      \"resolved\": \"apps/docs\",\n      \"link\": true\n    },\n    \"node_modules/fictional-site\": {\n      \"resolved\": \"apps/site\",\n      \"link\": true\n    },\n    \"node_modules/fictional-ui\": {\n      \"resolved\": \"packages/ui\",\n      \"link\": true\n    },\n    \"node_modules/next\": {\n      \"version\": \"15.5.2\",\n      \"resolved\": \"https://registry.npmjs.org/next/-/next-15.5.2.tgz\"\n    },\n    \"packages/ui\": {\n      \"name\": \"fictional-ui\",\n      \"version\": \"1.0.0\"\n    }\n  }\n}\n"
+    },
+    { "kind": "directory", "path": "node_modules/next" },
+    { "kind": "file", "path": "apps/site/.next/BUILD_ID", "content": "fictional\n" }
+  ]
+}
