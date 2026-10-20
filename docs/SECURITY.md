@@ -97,6 +97,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 - Device files, named pipes, and sockets are skipped and reported (`FS1002`, implemented).
 - Discovery opens no file except `.gitignore` files, which it opens read-only and rejects when they turn out to be links or are not the listed file.
 - All reads go through the snapshot, so a file is read once. Its hash then identifies it for the rest of the run, which also prevents time-of-check to time-of-use races between stages. Implemented by the snapshot store (`D-067`, section 24 of [IMPLEMENTATION.md](IMPLEMENTATION.md)): a file that is no longer the listed regular file of the listed size, or that changes while it is read, stops the run.
+- Workspace patterns are untrusted text. They are evaluated over discovery's inventory, never passed to a filesystem glob, so a pattern cannot reach above the root, follow a link, or make Frameshift read a directory; parent-relative and absolute patterns are rejected. Pattern size, brace alternatives, pattern count, and matching steps are bounded (`D-073`, section 30 of [IMPLEMENTATION.md](IMPLEMENTATION.md)).
 - `node_modules/` is never read (implemented as a built-in ignore at every depth).
 
 ### 7.2 Resource limits

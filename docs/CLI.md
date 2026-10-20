@@ -1,6 +1,6 @@
 # Command-Line Interface
 
-**Status: help and version shell implemented; remaining commands specified.** The `frameshift` executable provides `help`, `version`, `--help`/`-h`, `--version`, and version formatting (`D-050`). The project commands and other options below remain planned and are rejected by the current shell; `inspect` will build on the engine's read-only discovery, which exists (`D-064`). Samples for those commands are fictional. The available shell is documented in section 4.9 and [IMPLEMENTATION.md](IMPLEMENTATION.md), section 12.
+**Status: help and version shell implemented; remaining commands specified.** The `frameshift` executable provides `help`, `version`, `--help`/`-h`, `--version`, and version formatting (`D-050`). The project commands and other options below remain planned and are rejected by the current shell; `inspect` will build on the engine's read-only discovery, workspace detection, and Next.js detection, which exist (`D-064`, `D-073`, `D-074`). Samples for those commands are fictional. The available shell is documented in section 4.9 and [IMPLEMENTATION.md](IMPLEMENTATION.md), section 12.
 
 The CLI is Frameshift's only user interface in the current scope (`D-004`). It is meant to become a polished, production-quality developer tool, not a temporary prototype.
 
