@@ -64,7 +64,11 @@ fn member<'a>(document: &'a JsonDocument<'_>, object: JsonId, key: &str) -> Opti
 fn text<'a>(document: &'a JsonDocument<'_>, object: JsonId, key: &str) -> Option<&'a str> {
     match member(document, object, key)? {
         JsonValue::String(text) => Some(text),
-        _ => None,
+        JsonValue::Null
+        | JsonValue::Bool(_)
+        | JsonValue::Number(_)
+        | JsonValue::Array(_)
+        | JsonValue::Object(_) => None,
     }
 }
 
@@ -128,7 +132,7 @@ fn expected(name: &str, file: &str) -> Vec<u8> {
 
 fn inspect(root: &Path, extra: &[&str]) -> Output {
     let mut args: Vec<&std::ffi::OsStr> = vec!["inspect".as_ref(), root.as_os_str()];
-    args.extend(extra.iter().map(|arg| std::ffi::OsStr::new(arg)));
+    args.extend(extra.iter().map(std::ffi::OsStr::new));
     invoke(&args)
 }
 
