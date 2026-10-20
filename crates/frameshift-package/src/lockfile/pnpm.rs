@@ -461,7 +461,7 @@ fn dependency_field(kind: DependencyKind) -> &'static str {
     }
 }
 
-fn core_number(text: &str) -> bool {
+pub(crate) fn core_number(text: &str) -> bool {
     let value = text.strip_prefix(['+', '-']).unwrap_or(text);
     if matches!(value, ".inf" | ".Inf" | ".INF" | ".nan" | ".NaN" | ".NAN") {
         return true;

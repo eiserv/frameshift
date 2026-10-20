@@ -75,7 +75,7 @@ Anything not listed in the compatibility matrix (section 17) is `unknown` by def
 
 ### 5.1 Detection
 
-A project is classified as Next.js when `next` is a declared dependency and at least one structural signal confirms it (a `next.config.*` file, or an `app/` or `pages/` directory with route files). The router type follows from route files in `app/` or `src/app/` (App Router) and `pages/` or `src/pages/` (Pages Router). In a hybrid project, the App Router part is migrated in V1 and every Pages Router route is `unsupported` with a pointer to V2.
+Implemented (`D-074`, section 31 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). A package is classified as Next.js when `next` is a production, development, or optional dependency and at least one structural signal confirms it: a `next.config.*` file, searched upward from the package directory as Next.js does, or an `app/` or `pages/` directory with route files. Next.js uses `app/` and `pages/` in the package directory and falls back to `src/app/` and `src/pages/` for each name separately; from Next.js 15 it rejects the two in different directories. The router type follows from route files with the default page extensions: `page` and `route` files outside private `_` folders in the App Router directory, and page files other than `_app`, `_document`, and `_error` in the Pages Router directory. The version comes from the root lockfile, or else is the lower bound of the declared range and reported as imprecise. In a hybrid project, the App Router part is migrated in V1 and every Pages Router route is `unsupported` with a pointer to V2.
 
 ### 5.2 Next.js configuration
 

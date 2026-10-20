@@ -384,7 +384,7 @@ Bounded worker pools, cooperative cancellation, no shared mutable state between 
 | Product name | Frameshift, with exactly this capitalization. Never "FrameShift", "Frame Shift", or "frame-shift". |
 | Executable and command | `frameshift` (`frameshift.exe` on Windows) |
 | Repository | `eiserv/frameshift` (`D-026`); public preparation under `D-066` |
-| Rust crates | A Cargo workspace. Crates are named `frameshift-<subsystem>` (for example `frameshift-engine`, `frameshift-cli`). The binary is `frameshift`. Development-only tools live under `tools/`, are named `frameshift-<purpose>`, and are never dependencies of product crates. Modules inside crates use short, lowercase names. The existing M0 crate layout is recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md); it expands as concrete M1 requirements arise. |
+| Rust crates | A Cargo workspace. Crates are named `frameshift-<subsystem>` (for example `frameshift-engine`, `frameshift-cli`); a source adapter crate is named after its adapter ID (`frameshift-nextjs`, `D-074`). The binary is `frameshift`. Development-only tools live under `tools/`, are named `frameshift-<purpose>`, and are never dependencies of product crates. Modules inside crates use short, lowercase names. The existing M0 crate layout is recorded in [IMPLEMENTATION.md](IMPLEMENTATION.md); it expands as concrete M1 requirements arise. |
 | JSON document kinds | `frameshift.version` and usage `frameshift.error` implemented (`D-050`); `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, and `frameshift.manifest` planned |
 | Output metadata | `.frameshift/` directory (with `SUMMARY.md`, `manifest.json`, `report.json`, `unmigrated/`), `src/frameshift-compat/` helpers |
 | Configuration file | `frameshift.jsonc` (`D-027`) |

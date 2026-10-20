@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "workspace",
+  "description": "A pnpm 10 workspace: a negated subtree removes test packages, a member with only package.yaml is not known, and members resolve through the importers of the root lockfile (D-073)."
+}

@@ -63,8 +63,12 @@ fn cases() -> Vec<Case> {
             let directory = fixtures().join(&name);
             let text = fs::read_to_string(directory.join("fixture.json")).unwrap();
             let metadata = support::parse(&text).unwrap_or_else(|error| panic!("{name}: {error}"));
-            // Package cases have their own harness (`package_fixtures.rs`).
-            if metadata.get("kind").and_then(Json::as_str) == Some("package") {
+            // Package and workspace cases have their own harnesses
+            // (`package_fixtures.rs`, `workspace_fixtures.rs`).
+            if matches!(
+                metadata.get("kind").and_then(Json::as_str),
+                Some("package" | "workspace")
+            ) {
                 return None;
             }
             for key in metadata.keys() {

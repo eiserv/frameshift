@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "workspace",
+  "description": "A Yarn 4 workspace: a member declares a nested workspace, which Yarn 2 and later resolve, and fast-glob does not return the base directory of packages/** itself (D-073)."
+}

@@ -1,0 +1,11 @@
+releases npm-11
+declarations package.json
+complete true
+member packages/site name=fictional-site
+member packages/ui name=fictional-ui
+package (root) lockfile-workspace ""
+package packages/site lockfile-workspace "packages/site"
+  dependencies fictional-ui "^1.0.0": link packages/ui; sibling packages/ui
+  dependencies fictional-format "^2.1.0": fictional-format@2.3.0
+package packages/ui lockfile-workspace "packages/ui"
+findings:

@@ -1,0 +1,8 @@
+{
+  "name": "fictional-web",
+  "version": "1.0.0",
+  "dependencies": {
+    "fictional-kit": "workspace:*",
+    "fictional-format": "^2.0.0"
+  }
+}

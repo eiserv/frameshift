@@ -1,0 +1,8 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "workspace",
+  "description": "Adversarial: a declaration with more patterns than workspace.max-patterns is not evaluated (D-061, D-073).",
+  "limits": {
+    "workspace.max-patterns": 2
+  }
+}

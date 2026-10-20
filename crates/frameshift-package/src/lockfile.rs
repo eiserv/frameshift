@@ -11,7 +11,7 @@
 
 mod bun;
 mod npm;
-mod pnpm;
+pub(crate) mod pnpm;
 mod yarn_berry;
 mod yarn_classic;
 
@@ -465,20 +465,36 @@ impl Lockfile {
     /// development last, so their effective declarations are compared with
     /// normalized ranges, and peer ranges as Yarn records them.
     pub fn out_of_sync(&self, manifest: &PackageManifest) -> Vec<DependencyKind> {
+        self.out_of_sync_in("", manifest, &|_, _| false)
+    }
+
+    /// Lists the dependency kinds whose declarations in the manifest of the
+    /// workspace at `workspace` (`""` for the root) differ from the
+    /// lockfile, as [`Lockfile::out_of_sync`] does for the root.
+    ///
+    /// `linked(name, spec)` tells whether a workspace package satisfies a
+    /// declaration. Yarn classic links such a package instead of locking
+    /// it, so its declaration is not stale (`D-073`).
+    pub fn out_of_sync_in(
+        &self,
+        workspace: &str,
+        manifest: &PackageManifest,
+        linked: &dyn Fn(&str, &str) -> bool,
+    ) -> Vec<DependencyKind> {
         if self.kind == LockfileKind::Yarn {
             return if self.is_yarn_classic() {
-                self.out_of_sync_classic(manifest)
+                self.out_of_sync_classic(manifest, linked)
             } else {
-                self.out_of_sync_berry(manifest)
+                self.out_of_sync_berry(workspace, manifest)
             };
         }
         let empty = LockedWorkspace {
-            path: "".into(),
+            path: workspace.into(),
             name: None,
             version: None,
             declared: Default::default(),
         };
-        let root = self.workspace("").unwrap_or(&empty);
+        let root = self.workspace(workspace).unwrap_or(&empty);
         DependencyKind::ALL
             .into_iter()
             .filter(|kind| {
@@ -503,7 +519,11 @@ impl Lockfile {
 }
 
 impl Lockfile {
-    fn out_of_sync_classic(&self, manifest: &PackageManifest) -> Vec<DependencyKind> {
+    fn out_of_sync_classic(
+        &self,
+        manifest: &PackageManifest,
+        linked: &dyn Fn(&str, &str) -> bool,
+    ) -> Vec<DependencyKind> {
         // Yarn 1 does not install peer dependencies.
         [
             DependencyKind::Production,
@@ -514,14 +534,19 @@ impl Lockfile {
         .filter(|kind| {
             manifest.dependencies_of(*kind).iter().any(|entry| {
                 yarn_classic::find(&self.yarn_patterns, &entry.key, &entry.value.text).is_none()
+                    && !linked(&entry.key, &entry.value.text)
             })
         })
         .collect()
     }
 
-    fn out_of_sync_berry(&self, manifest: &PackageManifest) -> Vec<DependencyKind> {
+    fn out_of_sync_berry(
+        &self,
+        workspace: &str,
+        manifest: &PackageManifest,
+    ) -> Vec<DependencyKind> {
         let empty = Vec::new();
-        let root = self.workspace("");
+        let root = self.workspace(workspace);
         let recorded =
             |kind: DependencyKind| root.map_or(&empty, |root| &root.declared[kind as usize]);
         // The effective declarations: optional over production, development

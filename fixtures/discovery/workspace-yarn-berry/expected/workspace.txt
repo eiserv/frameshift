@@ -1,0 +1,12 @@
+releases yarn-4
+declarations package.json
+complete true
+member apps/suite name=fictional-suite
+member apps/suite/plugins/chart name=fictional-chart
+member packages/core name=fictional-core
+package (root) lockfile-workspace ""
+package apps/suite lockfile-workspace "apps/suite"
+  dependencies fictional-core "workspace:^": workspace packages/core; sibling packages/core
+package apps/suite/plugins/chart lockfile-workspace "apps/suite/plugins/chart"
+package packages/core lockfile-workspace "packages/core"
+findings:

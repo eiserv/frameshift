@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "workspace",
+  "description": "Adversarial: without packageManager or lockfile, every release that reads workspaces is evaluated; they disagree on a negation that precedes its pattern, a .gitignore hides a matched directory, and members are not known exactly (D-073)."
+}

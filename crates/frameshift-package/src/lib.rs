@@ -1,8 +1,10 @@
 //! npm ecosystem facts of a project: SemVer versions and npm ranges
 //! (`D-070`).
 //!
-//! This crate interprets package metadata without framework knowledge. It
-//! performs no I/O of its own.
+//! This crate interprets package metadata without framework knowledge:
+//! manifests, package managers, lockfiles, and workspaces (`D-069` to
+//! `D-073`). It performs no I/O of its own and reads files only through
+//! the snapshot store.
 
 mod load;
 mod lockfile;
@@ -11,6 +13,7 @@ mod manifest;
 mod range;
 mod spec;
 mod version;
+mod workspace;
 
 pub use load::{
     LoadError, LoadLimits, LockfileState, ManifestState, PackageDirectory, PackageLimits,
@@ -30,6 +33,11 @@ pub use manifest::{
     Override, PackageManifest,
 };
 pub use spec::DependencySpec;
+pub use workspace::{
+    DeclarationFile, ListedDirectory, ListedManifest, ListingSelection, Member, PatternRejection,
+    ReleaseMembers, SelectedPackage, SelectionError, Workspace, WorkspaceLimits,
+    WorkspaceSemantics, load_workspace, release_members, select_members,
+};
 
 pub use range::{Comparator, Operator, RangeError, VersionRange};
 pub use version::{Identifier, MAX_VERSION_BYTES, MAX_VERSION_NUMBER, Version, VersionError};

@@ -1,0 +1,8 @@
+{
+  "name": "fictional-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "fictional-lib": "^1.0.0",
+    "fictional-format": "^2.0.0"
+  }
+}

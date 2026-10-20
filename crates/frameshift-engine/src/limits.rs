@@ -12,7 +12,7 @@ use frameshift_core::{
 };
 use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
-use frameshift_package::{LoadLimits, PackageLimits};
+use frameshift_package::{LoadLimits, PackageLimits, WorkspaceLimits};
 use frameshift_syntax::{JsonLimits, LexicalLimits, ParseLimits, YamlLimits, YarnLimits};
 use frameshift_transform::EditLimits;
 
@@ -51,6 +51,8 @@ pub struct Limits {
     pub yarn: YarnLimits,
     /// The package model, such as the lockfile size.
     pub package: PackageLimits,
+    /// Workspace patterns and their matching work.
+    pub workspace: WorkspaceLimits,
     /// One span rewrite.
     pub edit: EditLimits,
     /// One emitted output file.
@@ -158,7 +160,7 @@ impl Limits {
 
     /// Returns the limits that loading a package directory applies: the
     /// text bound of `package.json`, each JSON, YAML, and Yarn classic
-    /// lockfile parse, paths, and the lockfile size.
+    /// lockfile parse, paths, the lockfile size, and workspace patterns.
     pub fn package(&self) -> LoadLimits {
         LoadLimits {
             text: self.text,
@@ -167,6 +169,7 @@ impl Limits {
             yarn: self.yarn,
             path: self.path,
             package: self.package,
+            workspace: self.workspace,
         }
     }
 
@@ -174,7 +177,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 35] {
+    pub fn entries(&self) -> [LimitEntry; 39] {
         let Self {
             run,
             ignore,
@@ -188,6 +191,7 @@ impl Limits {
             yaml,
             yarn,
             package,
+            workspace,
             edit,
             emit,
         } = *self;
@@ -228,6 +232,12 @@ impl Limits {
             max_nodes: json_nodes,
         } = json;
         let PackageLimits { max_lockfile_bytes } = package;
+        let WorkspaceLimits {
+            max_patterns,
+            max_pattern_bytes,
+            max_alternatives,
+            max_match_work: workspace_match_work,
+        } = workspace;
         let YamlLimits {
             max_depth: yaml_depth,
             max_nodes: yaml_nodes,
@@ -290,6 +300,10 @@ impl Limits {
             entry("run.max-files", wide(max_files)),
             entry("run.max-total-bytes", max_total_bytes),
             entry("text.max-source-bytes", wide(max_source_bytes)),
+            entry("workspace.max-alternatives", wide(max_alternatives)),
+            entry("workspace.max-match-work", workspace_match_work),
+            entry("workspace.max-pattern-bytes", wide(max_pattern_bytes)),
+            entry("workspace.max-patterns", wide(max_patterns)),
             entry("yaml.max-depth", wide(yaml_depth)),
             entry("yaml.max-nodes", wide(yaml_nodes)),
             entry("yarn.max-depth", wide(yarn_depth)),

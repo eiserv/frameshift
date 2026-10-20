@@ -1,0 +1,9 @@
+{
+  "name": "fictional-classic-root",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "workspaces": [
+    "packages/*",
+    "!packages/old"
+  ]
+}

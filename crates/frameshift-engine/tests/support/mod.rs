@@ -109,3 +109,55 @@ fn convert(document: &JsonDocument<'_>, id: JsonId) -> Result<Json, String> {
         ),
     })
 }
+
+/// Renders a value as compact JSON text, escaping strings as JSON
+/// requires; the output is also a valid YAML flow scalar or collection.
+pub fn render(value: &Json) -> String {
+    let mut text = String::new();
+    render_into(value, &mut text);
+    text
+}
+
+fn render_into(value: &Json, text: &mut String) {
+    match value {
+        Json::Null => text.push_str("null"),
+        Json::Bool(value) => text.push_str(if *value { "true" } else { "false" }),
+        Json::Number(number) => text.push_str(&number.to_string()),
+        Json::String(string) => {
+            text.push('"');
+            for character in string.chars() {
+                match character {
+                    '"' => text.push_str("\\\""),
+                    '\\' => text.push_str("\\\\"),
+                    character if (character as u32) < 0x20 => {
+                        text.push_str(&format!("\\u{:04x}", character as u32));
+                    }
+                    character => text.push(character),
+                }
+            }
+            text.push('"');
+        }
+        Json::Array(items) => {
+            text.push('[');
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    text.push(',');
+                }
+                render_into(item, text);
+            }
+            text.push(']');
+        }
+        Json::Object(members) => {
+            text.push('{');
+            for (index, (key, item)) in members.iter().enumerate() {
+                if index > 0 {
+                    text.push(',');
+                }
+                render_into(&Json::String(key.clone()), text);
+                text.push(':');
+                render_into(item, text);
+            }
+            text.push('}');
+        }
+    }
+}

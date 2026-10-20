@@ -1,0 +1,9 @@
+releases bun-1.4
+declarations package.json
+complete true
+member packages/core name=fictional-bun-core
+member tools name=fictional-bun-tools
+package (root) lockfile-workspace ""
+package packages/core lockfile-workspace "packages/core"
+package tools lockfile-workspace "tools"
+findings:

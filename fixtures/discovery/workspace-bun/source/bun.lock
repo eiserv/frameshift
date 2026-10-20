@@ -1,0 +1,21 @@
+{
+  "lockfileVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "fictional-bun-root",
+    },
+    "packages/core": {
+      "name": "fictional-bun-core",
+      "version": "1.0.0",
+    },
+    "tools": {
+      "name": "fictional-bun-tools",
+      "version": "0.1.0",
+    },
+  },
+  "packages": {
+    "fictional-bun-core": ["fictional-bun-core@workspace:packages/core"],
+
+    "fictional-bun-tools": ["fictional-bun-tools@workspace:tools"],
+  }
+}

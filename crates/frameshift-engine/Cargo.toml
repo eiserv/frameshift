@@ -10,6 +10,7 @@ publish.workspace = true
 frameshift-core = { path = "../frameshift-core" }
 frameshift-emit = { path = "../frameshift-emit" }
 frameshift-input = { path = "../frameshift-input" }
+frameshift-nextjs = { path = "../frameshift-nextjs" }
 frameshift-package = { path = "../frameshift-package" }
 frameshift-syntax = { path = "../frameshift-syntax" }
 frameshift-transform = { path = "../frameshift-transform" }

@@ -49,6 +49,10 @@ fn documented_defaults_are_consistent() {
     assert_eq!(value("yarn.max-depth"), Some(64));
     assert_eq!(value("yarn.max-nodes"), Some(4_194_304));
     assert_eq!(value("package.max-lockfile-bytes"), Some(64 * 1024 * 1024));
+    assert_eq!(value("workspace.max-patterns"), Some(1024));
+    assert_eq!(value("workspace.max-pattern-bytes"), Some(4096));
+    assert_eq!(value("workspace.max-alternatives"), Some(256));
+    assert_eq!(value("workspace.max-match-work"), Some(100_000_000));
     let package = limits.package();
     assert_eq!(package.text, limits.text);
     assert_eq!(package.json, limits.json);
@@ -56,6 +60,7 @@ fn documented_defaults_are_consistent() {
     assert_eq!(package.yarn, limits.yarn);
     assert_eq!(package.path, limits.path);
     assert_eq!(package.package, limits.package);
+    assert_eq!(package.workspace, limits.workspace);
 }
 
 #[test]
@@ -113,8 +118,12 @@ fn entries_are_sorted_named_and_complete() {
     limits.yaml.max_nodes = value();
     limits.yarn.max_depth = value();
     limits.yarn.max_nodes = value();
+    limits.workspace.max_patterns = value();
+    limits.workspace.max_pattern_bytes = value();
+    limits.workspace.max_alternatives = value();
+    limits.workspace.max_match_work = value() as u64;
     let values: BTreeSet<u64> = limits.entries().iter().map(|entry| entry.value).collect();
-    assert_eq!(values, (1..=35).collect());
+    assert_eq!(values, (1..=39).collect());
     let entries = limits.entries();
     let named = |name: &str| entries.iter().find(|entry| entry.name == name).unwrap();
     assert_eq!(named("run.max-files").value, 1);
@@ -125,6 +134,7 @@ fn entries_are_sorted_named_and_complete() {
     assert_eq!(named("json.max-nodes").value, 30);
     assert_eq!(named("package.max-lockfile-bytes").value, 31);
     assert_eq!(named("yarn.max-nodes").value, 35);
+    assert_eq!(named("workspace.max-match-work").value, 39);
     assert_eq!(limits.entries(), entries);
 }
 

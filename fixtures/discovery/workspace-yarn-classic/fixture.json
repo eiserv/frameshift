@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "workspace",
+  "description": "A Yarn 1 workspace: Yarn 1 reads a leading ! literally, so the \"negated\" package stays a member, a member without a version is not one, and a declaration that a sibling satisfies is not reported as stale (D-073)."
+}

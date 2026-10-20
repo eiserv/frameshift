@@ -29,6 +29,7 @@ mod semver;
 mod supervisor;
 mod targets;
 mod worker;
+mod workspace;
 mod yaml;
 mod yarn;
 

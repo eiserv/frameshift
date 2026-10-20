@@ -1,0 +1,20 @@
+lockfileVersion: '9.0'
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+importers:
+  .: {}
+  apps/web:
+    dependencies:
+      fictional-format:
+        specifier: ^2.0.0
+        version: 2.4.1
+      fictional-kit:
+        specifier: workspace:*
+        version: link:../../packages/kit
+  packages/kit: {}
+packages:
+  fictional-format@2.4.1:
+    resolution: {integrity: sha512-fictional}
+snapshots:
+  fictional-format@2.4.1: {}

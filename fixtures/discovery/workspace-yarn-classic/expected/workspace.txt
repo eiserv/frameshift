@@ -1,0 +1,13 @@
+releases yarn-1
+declarations package.json
+complete true
+member packages/app name=fictional-app
+member packages/lib name=fictional-lib
+member packages/old name=fictional-old
+package (root) lockfile-workspace ""
+package packages/app lockfile-workspace "packages/app"
+  dependencies fictional-lib "^1.0.0": unresolved; sibling packages/lib
+  dependencies fictional-format "^2.0.0": fictional-format@2.2.0
+package packages/lib lockfile-workspace "packages/lib"
+package packages/old lockfile-workspace "packages/old"
+findings:

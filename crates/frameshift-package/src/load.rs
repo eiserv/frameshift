@@ -22,7 +22,8 @@ use crate::lockfile::{Lockfile, LockfileErrorKind, has_classic_header};
 use crate::manager::{
     Detection, IgnoredReason, LockfileKind, PackageManagerKind, PackageManagerSpec, detect,
 };
-use crate::manifest::{IssueKind, ManifestError, PackageManifest};
+use crate::manifest::{DependencyKind, IssueKind, ManifestError, PackageManifest};
+use crate::workspace::WorkspaceLimits;
 
 /// The package model's own limit (`D-069`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,6 +56,8 @@ pub struct LoadLimits {
     pub path: PathLimits,
     /// The lockfile size.
     pub package: PackageLimits,
+    /// Workspace patterns (`D-073`).
+    pub workspace: WorkspaceLimits,
 }
 
 /// The state of a directory's `package.json`.
@@ -131,10 +134,23 @@ pub fn load_package(
     findings: &mut FindingCollector,
 ) -> Result<PackageDirectory, LoadError> {
     let mut report = Reporter { findings };
+    load_directory(snapshot, directory, limits, &mut report, true).map(|(loaded, _)| loaded)
+}
+
+/// Loads one package directory and keeps the decoded `package.json`. The
+/// workspace loader checks staleness itself, once workspace members are
+/// known (`D-073`).
+pub(crate) fn load_directory(
+    snapshot: &Snapshot,
+    directory: Option<&SourcePath>,
+    limits: LoadLimits,
+    report: &mut Reporter<'_>,
+    check_stale: bool,
+) -> Result<(PackageDirectory, Option<SourceText>), LoadError> {
     let manifest_path = child(directory, "package.json", limits.path);
-    let (manifest, package_manager) = match &manifest_path {
-        Some(path) => read_manifest(snapshot, path, limits, &mut report)?,
-        None => (ManifestState::Absent, None),
+    let (manifest, package_manager, source) = match &manifest_path {
+        Some(path) => read_manifest(snapshot, path, limits, report)?,
+        None => (ManifestState::Absent, None, None),
     };
     let mut present = Vec::new();
     let mut paths = Vec::new();
@@ -178,20 +194,66 @@ pub fn load_package(
         None => LockfileState::None,
         Some(kind) => {
             let path = path_of(kind)?;
-            let lockfile = read_lockfile(snapshot, kind, &path, &manifest, limits, &mut report)?;
-            if let (LockfileState::Parsed(parsed), Some(spec)) = (&lockfile, &package_manager) {
-                yarn_generation(parsed, spec, &path, &mut report)?;
+            let lockfile = read_lockfile(snapshot, kind, &path, limits, report)?;
+            if let LockfileState::Parsed(parsed) = &lockfile {
+                if let (true, ManifestState::Analyzed(manifest)) = (check_stale, &manifest) {
+                    let stale = parsed.out_of_sync(manifest);
+                    report_stale(report, &path, parsed, &stale)?;
+                }
+                if let Some(spec) = &package_manager {
+                    yarn_generation(parsed, spec, &path, report)?;
+                }
             }
             lockfile
         }
     };
-    Ok(PackageDirectory {
+    let loaded = PackageDirectory {
         directory: directory.cloned(),
         manifest,
         package_manager,
         detection,
         lockfile,
-    })
+    };
+    Ok((loaded, source))
+}
+
+/// Reports that a lockfile is out of sync with a manifest in the listed
+/// dependency kinds (FS1027).
+pub(crate) fn report_stale(
+    report: &mut Reporter<'_>,
+    location: &SourcePath,
+    lockfile: &Lockfile,
+    stale: &[DependencyKind],
+) -> Result<(), LoadError> {
+    if stale.is_empty() {
+        return Ok(());
+    }
+    let kinds: Vec<&str> = stale.iter().map(|kind| kind.key()).collect();
+    let explanation = if lockfile.kind() == LockfileKind::Yarn && lockfile.version() == 1 {
+        format!(
+            "The Yarn classic lockfile has no entry for declarations of package.json in {}, so \
+             resolved versions may not match what an install would produce. Yarn 1 records no \
+             entry for a declaration that a workspace package satisfies.",
+            kinds.join(", ")
+        )
+    } else {
+        format!(
+            "The lockfile's root declarations differ from package.json in {}, so resolved \
+             versions may not match what an install would produce.",
+            kinds.join(", ")
+        )
+    };
+    report.file(
+        location,
+        FS1027,
+        Severity::Review,
+        FindingText {
+            message: "Lockfile is out of sync with package.json",
+            explanation: &explanation,
+            remediation: "Run an install with the package manager to update the lockfile, then \
+                          run Frameshift again.",
+        },
+    )
 }
 
 fn child(directory: Option<&SourcePath>, name: &str, limits: PathLimits) -> Option<SourcePath> {
@@ -204,7 +266,7 @@ fn child(directory: Option<&SourcePath>, name: &str, limits: PathLimits) -> Opti
 
 /// Decoded file content, or `None` when a finding already explains why
 /// there is none.
-fn decode(
+pub(crate) fn decode(
     snapshot: &Snapshot,
     path: &SourcePath,
     max_bytes: usize,
@@ -306,21 +368,29 @@ fn parse<'s>(
     Ok(Some(document))
 }
 
+/// What reading a `package.json` yields: the manifest, its valid
+/// `packageManager` field, and the decoded text when it was analyzed.
+pub(crate) type ReadManifest = (
+    ManifestState,
+    Option<PackageManagerSpec>,
+    Option<SourceText>,
+);
+
 /// Reads `package.json` and its valid `packageManager` field.
-fn read_manifest(
+pub(crate) fn read_manifest(
     snapshot: &Snapshot,
     path: &SourcePath,
     limits: LoadLimits,
     report: &mut Reporter<'_>,
-) -> Result<(ManifestState, Option<PackageManagerSpec>), LoadError> {
+) -> Result<ReadManifest, LoadError> {
     if snapshot.inventory().files().find(path).is_none() {
-        return Ok((ManifestState::Absent, None));
+        return Ok((ManifestState::Absent, None, None));
     }
     let Some(source) = decode(snapshot, path, limits.text.max_source_bytes, report)? else {
-        return Ok((ManifestState::NotAnalyzed, None));
+        return Ok((ManifestState::NotAnalyzed, None, None));
     };
     let Some(document) = parse(&source, path, JsonDialect::Json, limits.json, report)? else {
-        return Ok((ManifestState::NotAnalyzed, None));
+        return Ok((ManifestState::NotAnalyzed, None, None));
     };
     let manifest = match PackageManifest::from_json(&document) {
         Ok(manifest) => manifest,
@@ -333,7 +403,7 @@ fn read_manifest(
                 Severity::Unknown,
                 TEXT_NOT_OBJECT,
             )?;
-            return Ok((ManifestState::NotAnalyzed, None));
+            return Ok((ManifestState::NotAnalyzed, None, None));
         }
     };
     for issue in &manifest.issues {
@@ -374,14 +444,18 @@ fn read_manifest(
             }
         }
     }
-    Ok((ManifestState::Analyzed(Box::new(manifest)), package_manager))
+    drop(document);
+    Ok((
+        ManifestState::Analyzed(Box::new(manifest)),
+        package_manager,
+        Some(source),
+    ))
 }
 
 fn read_lockfile(
     snapshot: &Snapshot,
     kind: LockfileKind,
     path: &SourcePath,
-    manifest: &ManifestState,
     limits: LoadLimits,
     report: &mut Reporter<'_>,
 ) -> Result<LockfileState, LoadError> {
@@ -456,37 +530,6 @@ fn read_lockfile(
             return Ok(LockfileState::NotParsed(kind));
         }
     };
-    if let ManifestState::Analyzed(manifest) = manifest {
-        let stale = lockfile.out_of_sync(manifest);
-        if !stale.is_empty() {
-            let kinds: Vec<&str> = stale.iter().map(|kind| kind.key()).collect();
-            let explanation = if kind == LockfileKind::Yarn && lockfile.version() == 1 {
-                format!(
-                    "The Yarn classic lockfile has no entry for declarations of package.json in \
-                     {}, so resolved versions may not match what an install would produce. Yarn \
-                     1 records no entry for a declaration that a workspace package satisfies.",
-                    kinds.join(", ")
-                )
-            } else {
-                format!(
-                    "The lockfile's root declarations differ from package.json in {}, so \
-                     resolved versions may not match what an install would produce.",
-                    kinds.join(", ")
-                )
-            };
-            report.file(
-                path,
-                FS1027,
-                Severity::Review,
-                FindingText {
-                    message: "Lockfile is out of sync with package.json",
-                    explanation: &explanation,
-                    remediation: "Run an install with the package manager to update the lockfile, \
-                                  then run Frameshift again.",
-                },
-            )?;
-        }
-    }
     Ok(LockfileState::Parsed(Box::new(lockfile)))
 }
 
@@ -554,6 +597,18 @@ fn parse_yaml_lockfile(
     limits: YamlLimits,
     report: &mut Reporter<'_>,
 ) -> Result<Option<YamlStream>, LoadError> {
+    parse_yaml_file(source, path, limits, report, TEXT_FS1021_YAML)
+}
+
+/// Parses a YAML package file, reporting a syntax error and every
+/// duplicate key of a mapping with `duplicate` as its text.
+pub(crate) fn parse_yaml_file(
+    source: &SourceText,
+    path: &SourcePath,
+    limits: YamlLimits,
+    report: &mut Reporter<'_>,
+    duplicate: FindingText<'static>,
+) -> Result<Option<YamlStream>, LoadError> {
     let stream = match parse_yaml(source, limits) {
         Ok(stream) => stream,
         Err(error) => {
@@ -595,7 +650,7 @@ fn parse_yaml_lockfile(
                         previous,
                         FS1021,
                         Severity::Review,
-                        TEXT_FS1021_YAML,
+                        duplicate,
                     )?;
                 }
             }
@@ -724,12 +779,13 @@ const TEXT_FS2002: FindingText<'static> = FindingText {
 const TEXT_FS2003_REMEDIATION: &str = "Reduce the file size, or raise the limit if the file is \
                                        trusted.";
 
-struct Reporter<'a> {
-    findings: &'a mut FindingCollector,
+/// Turns problems into findings.
+pub(crate) struct Reporter<'a> {
+    pub(crate) findings: &'a mut FindingCollector,
 }
 
 impl Reporter<'_> {
-    fn push(
+    pub(crate) fn push(
         &mut self,
         location: FindingLocation,
         code: &str,
@@ -753,7 +809,7 @@ impl Reporter<'_> {
         self.findings.push(finding).map_err(LoadError::Findings)
     }
 
-    fn file(
+    pub(crate) fn file(
         &mut self,
         path: &SourcePath,
         code: &str,
@@ -763,7 +819,7 @@ impl Reporter<'_> {
         self.push(FindingLocation::File(path.clone()), code, severity, text)
     }
 
-    fn text_with(
+    pub(crate) fn text_with(
         &mut self,
         path: &SourcePath,
         source: &SourceText,
