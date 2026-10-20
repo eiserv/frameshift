@@ -1,0 +1,57 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "inspect",
+  "description": "An npm workspace whose structure consists of links created at test time: a member's next.config.mjs and app directory link to files and directories elsewhere in the root, a member's package.json links to a sibling's, a member's src directory is a link, a dangling app link makes Next.js fall back to src/app, a link to a member directory matches the workspace pattern, and the lockfile links outside the root. Nothing is followed; every link is reported, and what it hides stays unknown (D-064, D-073, D-074, D-076). Skipped on hosts that cannot create symbolic links. Manifests naming next are created at test time (Q-014).",
+  "createdAtTestTime": [
+    {
+      "kind": "file",
+      "path": "apps/site/package.json",
+      "content": "{\n  \"name\": \"fictional-site\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"next\": \"^15.5.0\"\n  }\n}\n"
+    },
+    {
+      "kind": "symlink",
+      "path": "apps/site/next.config.mjs",
+      "target": "../../shared/config/next.config.mjs"
+    },
+    {
+      "kind": "symlink",
+      "path": "apps/site/app",
+      "target": "../../shared/app"
+    },
+    {
+      "kind": "symlink",
+      "path": "apps/docs/package.json",
+      "target": "../site/package.json"
+    },
+    {
+      "kind": "file",
+      "path": "apps/web/package.json",
+      "content": "{\n  \"name\": \"fictional-web\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"next\": \"^15.5.0\"\n  }\n}\n"
+    },
+    {
+      "kind": "symlink",
+      "path": "apps/web/src",
+      "target": "../../shared"
+    },
+    {
+      "kind": "file",
+      "path": "apps/broken/package.json",
+      "content": "{\n  \"name\": \"fictional-broken\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"next\": \"^15.5.0\"\n  }\n}\n"
+    },
+    {
+      "kind": "symlink",
+      "path": "apps/broken/app",
+      "target": "missing"
+    },
+    {
+      "kind": "symlink",
+      "path": "apps/mirror",
+      "target": "site"
+    },
+    {
+      "kind": "symlink",
+      "path": "package-lock.json",
+      "target": "../outside-lockfile.json"
+    }
+  ]
+}

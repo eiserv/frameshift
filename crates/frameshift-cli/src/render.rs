@@ -148,7 +148,14 @@ fn json_string(output: &mut impl Write, value: &str) -> io::Result<()> {
             '\n' => output.write_all(b"\\n")?,
             '\r' => output.write_all(b"\\r")?,
             '\t' => output.write_all(b"\\t")?,
-            '\u{00}'..='\u{1f}' => write!(output, "\\u{:04x}", scalar as u32)?,
+            // As the engine's document writer does (`document.rs`).
+            '\u{00}'..='\u{1f}'
+            | '\u{7f}'..='\u{9f}'
+            | '\u{061c}'
+            | '\u{200e}'
+            | '\u{200f}'
+            | '\u{2028}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}' => write!(output, "\\u{:04x}", scalar as u32)?,
             _ => output.write_all(scalar.encode_utf8(&mut [0; 4]).as_bytes())?,
         }
     }
@@ -164,7 +171,8 @@ fn escape(text: &str) -> String {
     for scalar in text.chars() {
         match scalar {
             '\\' => out.push_str("\\\\"),
-            '\u{200e}'
+            '\u{061c}'
+            | '\u{200e}'
             | '\u{200f}'
             | '\u{2028}'
             | '\u{2029}'
@@ -434,10 +442,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn json_strings_escape_every_control_character_and_preserve_unicode() {
+    fn json_strings_escape_controls_and_bidi_formatting_and_preserve_unicode() {
         let mut output = Vec::new();
         let controls: String = ('\u{00}'..='\u{1f}').collect();
-        json_string(&mut output, &format!("{controls}\"\\é😀")).unwrap();
+        json_string(&mut output, &format!("{controls}\"\\é😀\u{9b}\u{2069}")).unwrap();
         assert_eq!(
             String::from_utf8(output).unwrap(),
             concat!(
@@ -445,7 +453,7 @@ mod tests {
                 "\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f",
                 "\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017",
                 "\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f",
-                "\\\"\\\\é😀\""
+                "\\\"\\\\é😀\\u009b\\u2069\""
             )
         );
     }
@@ -453,8 +461,8 @@ mod tests {
     #[test]
     fn terminal_text_escapes_controls_separators_and_bidi_formatting() {
         assert_eq!(
-            escape("a\u{1b}[31m\\b\u{7f}\u{85}\u{2028}\u{202e}\u{2066}é😀"),
-            "a\\u{1b}[31m\\\\b\\u{7f}\\u{85}\\u{2028}\\u{202e}\\u{2066}é😀"
+            escape("a\u{1b}[31m\\b\u{7f}\u{85}\u{2028}\u{202e}\u{2066}\u{61c}é😀"),
+            "a\\u{1b}[31m\\\\b\\u{7f}\\u{85}\\u{2028}\\u{202e}\\u{2066}\\u{61c}é😀"
         );
     }
 }

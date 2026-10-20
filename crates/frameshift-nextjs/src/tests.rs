@@ -18,6 +18,7 @@ fn router_kinds_follow_route_files() {
         config: None,
         app,
         pages,
+        ignored: Vec::new(),
     };
     assert_eq!(detection(Some(directory(2)), None).router(), Router::App);
     assert_eq!(detection(None, Some(directory(1))).router(), Router::Pages);

@@ -1,0 +1,24 @@
+Frameshift @ENGINE_VERSION@  inspect
+
+Files          6 admitted (568 bytes), 4 directories, 0 ignored, 0 other
+Package mgr    npm 11.11.0 (packageManager field)
+Lockfile       none
+Workspace      2 members, evaluated as npm-11
+
+Package        . (fictional-\u{1b}[31mred\u{1b}[0m\u{a}Package        apps/fake (fictional-fake))
+  Framework    no supported framework detected
+
+Package        apps/del\u{7f}\u{9b}2J (fictional-del)
+  Framework    Next.js evidence incomplete
+  Config       none
+  Router       no route files
+
+Package        apps/\u{202e}evil\u{61c} (fictional-\u{2028}line\u{9b}2J\\back\u{202e}txt.exe)
+  Framework    Next.js 15.0.0 or later (lowest version of the declared range)
+  Config       apps/\u{202e}evil\u{61c}/next.config.mjs
+  Router       App Router in apps/\u{202e}evil\u{61c}/app (1 route file)
+
+Migration      no migration path ships in this build
+Findings       2 (2 review)
+  review  FS1040  apps/del\u{7f}\u{9b}2J/package.json  Next.js evidence incomplete
+  review  FS1042  apps/\u{202e}evil\u{61c}/package.json  Next.js version imprecise

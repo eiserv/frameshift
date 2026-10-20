@@ -2,14 +2,15 @@
 //! (`D-062`, `D-075`).
 //!
 //! Each case of kind `inspect` copies `source/` into Cargo's temporary
-//! directory, creates the files and directories that `fixture.json` lists
-//! under `createdAtTestTime` (manifests naming the real `next` package
-//! exist only there, `Q-014`), inspects the root and every member twice, and
-//! compares the `frameshift.inspection` document with
+//! directory, creates the files, directories, and symbolic links that
+//! `fixture.json` lists under `createdAtTestTime` (manifests naming the real
+//! `next` package exist only there, `Q-014`), inspects the root and every
+//! member twice, and compares the `frameshift.inspection` document with
 //! `expected/inspection.json`, in which `@ENGINE_VERSION@` stands for the
-//! engine version. The CLI's tests compare its text with
-//! `expected/inspection.txt`. Goldens change only through the ignored
-//! `update_inspect_goldens` test.
+//! engine version. A case whose links the host cannot create (Windows
+//! without the privilege) is skipped and keeps its golden. The CLI's tests
+//! compare its text with `expected/inspection.txt`. Goldens change only
+//! through the ignored `update_inspect_goldens` test.
 
 mod support;
 
@@ -26,6 +27,7 @@ fn fixtures() -> PathBuf {
 enum Created {
     Directory(String),
     File(String, String),
+    Symlink(String, String),
 }
 
 struct Case {
@@ -70,6 +72,7 @@ fn cases() -> Vec<Case> {
                 created.push(match item.get("kind").and_then(Json::as_str) {
                     Some("directory") => Created::Directory(path),
                     Some("file") => Created::File(path, string(item, "content")),
+                    Some("symlink") => Created::Symlink(path, string(item, "target")),
                     other => panic!("{name}: input kind {other:?} is not used by inspect cases"),
                 });
             }
@@ -100,7 +103,9 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-fn prepare(case: &Case) -> PathBuf {
+/// Prepares the case's tree, or returns `None` when the host cannot create
+/// one of its links.
+fn prepare(case: &Case) -> Option<PathBuf> {
     let root = support::temporary()
         .join("inspect-fixtures")
         .join(&case.name);
@@ -116,15 +121,27 @@ fn prepare(case: &Case) -> PathBuf {
                 fs::create_dir_all(native.parent().unwrap()).unwrap();
                 fs::write(native, content).unwrap();
             }
+            Created::Symlink(path, target) => {
+                let native = root.join(path);
+                fs::create_dir_all(native.parent().unwrap()).unwrap();
+                if let Err(error) = support::symlink(&native, target) {
+                    if !cfg!(windows) {
+                        panic!("{}: {error}", case.name);
+                    }
+                    eprintln!("skipping {}: {error}", case.name);
+                    return None;
+                }
+            }
         }
     }
-    root
+    Some(root)
 }
 
 /// The document with the engine version replaced by its placeholder, so
-/// that version bumps leave the goldens unchanged.
-fn produce(case: &Case) -> String {
-    let root = prepare(case);
+/// that version bumps leave the goldens unchanged, or `None` for a skipped
+/// case.
+fn produce(case: &Case) -> Option<String> {
+    let root = prepare(case)?;
     let first = inspect(&root, &InspectOptions::default())
         .unwrap_or_else(|error| panic!("{}: {error}", case.name))
         .document();
@@ -135,7 +152,7 @@ fn produce(case: &Case) -> String {
     let version = frameshift_engine::version::info().engine_version;
     let line = format!("\n  \"engineVersion\": \"{version}\",\n");
     assert!(first.contains(&line), "{}", case.name);
-    first.replacen(&line, "\n  \"engineVersion\": \"@ENGINE_VERSION@\",\n", 1)
+    Some(first.replacen(&line, "\n  \"engineVersion\": \"@ENGINE_VERSION@\",\n", 1))
 }
 
 fn golden(case: &Case) -> PathBuf {
@@ -147,7 +164,9 @@ fn inspect_fixtures_match_goldens() {
     for case in cases() {
         let expected = fs::read_to_string(golden(&case))
             .unwrap_or_else(|error| panic!("{}: {error}", case.name));
-        assert_eq!(produce(&case), expected, "{}", case.name);
+        if let Some(produced) = produce(&case) {
+            assert_eq!(produced, expected, "{}", case.name);
+        }
     }
 }
 
@@ -155,7 +174,9 @@ fn inspect_fixtures_match_goldens() {
 #[ignore = "explicit golden update: cargo test -p frameshift-engine --test inspect_fixtures -- --ignored update_inspect_goldens"]
 fn update_inspect_goldens() {
     for case in cases() {
-        let text = produce(&case);
+        let Some(text) = produce(&case) else {
+            continue;
+        };
         fs::create_dir_all(golden(&case).parent().unwrap()).unwrap();
         fs::write(golden(&case), text).unwrap();
     }

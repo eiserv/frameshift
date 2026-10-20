@@ -13,7 +13,7 @@ use frameshift_core::{
     Finding, FindingCode, FindingCollector, FindingContext, FindingError, FindingLimits,
     FindingLocation, FindingText, PathLimits, Severity, SourcePath,
 };
-use frameshift_input::{EntryKind, Inventory};
+use frameshift_input::{Entry, EntryKind, Inventory, LinkReference, LinkTarget};
 use frameshift_package::{DependencyKind, DependencySpec, ManifestState, SelectedPackage, Version};
 
 /// The Next.js majors that V1 validates with fixtures (`D-023`).
@@ -83,8 +83,10 @@ pub enum ConfigLoad {
     /// Next.js 16 loads `next.config.mts` only when Node.js strips
     /// TypeScript types, which depends on the Node.js version.
     DependsOnNode,
-    /// Next.js ignores it (`next.config.ts` before Next.js 15) or fails on
-    /// it (`next.config.cjs`, `.cts`, `.json`, `.jsx`, `.tsx`).
+    /// The version does not load the name: Next.js 14 fails on
+    /// `next.config.ts`, `.jsx`, `.tsx`, and `.json` and ignores the other
+    /// names, and Next.js 15 and later fail on `next.config.cjs`, `.cts`,
+    /// `.json`, `.jsx`, `.tsx`, and, before 16, `.mts`.
     Unsupported,
 }
 
@@ -185,6 +187,13 @@ pub struct Detection {
     pub app: Option<RouterDirectory>,
     /// The `pages` directory that Next.js uses, if any.
     pub pages: Option<RouterDirectory>,
+    /// Entries of the package directory that Next.js ignores, in path
+    /// order: entries with a configuration file name other than the loaded
+    /// one, because Next.js loads only the first regular file it finds, and
+    /// `src/app` or `src/pages` beside the directory of the same name in
+    /// the package directory. Empty unless the verdict is
+    /// [`Verdict::NextJs`] and no rejected configuration name is used.
+    pub ignored: Vec<SourcePath>,
 }
 
 impl Detection {
@@ -242,23 +251,43 @@ pub fn detect(
         (version, version_problem) = resolve(package, dependency);
     }
     let major = version.version().map(Version::major);
-    let config = config(inventory, directory, major)?;
     let mut detection = Detection {
         verdict: Verdict::Absent,
         dependency,
         version,
-        config,
+        config: config(inventory, directory, major)?,
         app: router_directory(inventory, directory, "app", Route::App)?,
         pages: router_directory(inventory, directory, "pages", Route::Pages)?,
+        ignored: Vec::new(),
     };
+    // `findPagesDir` looks below `src/` only for a router directory that is
+    // missing in the package directory; through a `src` entry that
+    // discovery did not traverse, such a directory may exist unseen.
+    let src = child(directory, "src")?;
+    let src_hidden = (detection.app.is_none() || detection.pages.is_none())
+        && found(inventory, &src) != Found::Missing
+        && !matches!(
+            inventory.entry(&src).map(Entry::kind),
+            Some(EntryKind::Directory)
+        );
     let declared = detection
         .dependency
         .as_ref()
         .is_some_and(|dependency| dependency.kind != DependencyKind::Peer);
     let structural = detection.config.is_some() || detection.router() != Router::None;
+    // Without the declaration, only a configuration file of the package's
+    // own directory is evidence: one above it serves the packages below.
+    let own_config = detection.config.as_ref().is_some_and(|config| {
+        config
+            .path
+            .as_str()
+            .rsplit_once('/')
+            .map(|(parent, _)| parent)
+            == directory.map(SourcePath::as_str)
+    });
     detection.verdict = if declared && structural {
         Verdict::NextJs
-    } else if declared || detection.config.is_some() {
+    } else if declared || own_config {
         Verdict::Inconclusive
     } else {
         Verdict::Absent
@@ -284,10 +313,43 @@ pub fn detect(
                     remediation: "Check that the selected package is the Next.js application.",
                 },
             )?;
+            if src_hidden {
+                report_src(src, &mut report)?;
+            }
             return Ok(detection);
         }
         Verdict::NextJs => {}
     }
+    // Beside a loadable configuration file, and without any, Next.js ignores
+    // every other entry with a configuration file name in the package
+    // directory; a rejected name is FS1043's concern.
+    let loadable = detection
+        .config
+        .as_ref()
+        .is_none_or(|config| config.load != ConfigLoad::Unsupported);
+    if loadable {
+        for name in SUPPORTED.iter().chain(UNSUPPORTED.iter()) {
+            let path = child(directory, name)?;
+            let selected = detection
+                .config
+                .as_ref()
+                .is_some_and(|config| config.path == path);
+            if !selected && found(inventory, &path) != Found::Missing {
+                detection.ignored.push(path);
+            }
+        }
+    }
+    for (used, name) in [(&detection.app, "app"), (&detection.pages, "pages")] {
+        if let Some(used) = used
+            && !used.in_src
+        {
+            let hidden = child(directory, &format!("src/{name}"))?;
+            if found(inventory, &hidden) != Found::Missing {
+                detection.ignored.push(hidden);
+            }
+        }
+    }
+    detection.ignored.sort();
     if let Some(problem) = version_problem {
         let lockfile = package.lockfile().is_some();
         let explanation = match (problem, lockfile) {
@@ -335,6 +397,10 @@ pub fn detect(
     }
     report_config(&detection, directory, &mut report)?;
     report_routers(&detection, major, &mut report)?;
+    if src_hidden {
+        report_src(src, &mut report)?;
+    }
+    report_ignored(&detection, inventory, &mut report)?;
     Ok(detection)
 }
 
@@ -416,10 +482,64 @@ fn manifest_path(directory: Option<&SourcePath>) -> Result<SourcePath, DetectErr
     child(directory, "package.json")
 }
 
-/// Whether discovery recorded any entry at the path, as `fs.existsSync`
-/// would find something there.
-fn exists(inventory: &Inventory, path: &SourcePath) -> bool {
-    inventory.files().find(path).is_some() || inventory.entry(path).is_some()
+/// What Node.js would find at a path when it follows links, as far as the
+/// inventory tells without following them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Found {
+    /// A regular file.
+    File,
+    /// An entry that is not a regular file, such as a directory.
+    NotFile,
+    /// An entry whose type is not known, such as a link that leaves the
+    /// root or an ignored entry that is not a directory.
+    Unknown,
+    /// Nothing, as for a link whose target does not exist.
+    Missing,
+}
+
+fn found(inventory: &Inventory, path: &SourcePath) -> Found {
+    if inventory.files().find(path).is_some() {
+        return Found::File;
+    }
+    let Some(entry) = inventory.entry(path) else {
+        return Found::Missing;
+    };
+    match entry.kind() {
+        EntryKind::Oversized { .. } => Found::File,
+        EntryKind::Directory
+        | EntryKind::NotTraversed(_)
+        | EntryKind::Special
+        | EntryKind::Ignored {
+            directory: true, ..
+        }
+        | EntryKind::ReparsePoint { directory: true } => Found::NotFile,
+        EntryKind::Link(LinkTarget::Dangling) => Found::Missing,
+        EntryKind::Link(LinkTarget::Inside(LinkReference::Root)) => Found::NotFile,
+        // One step only: a target that is itself a link stays unknown.
+        EntryKind::Link(LinkTarget::Inside(LinkReference::Path(target))) => {
+            match inventory.entry(target).map(Entry::kind) {
+                Some(EntryKind::Link(_)) => Found::Unknown,
+                Some(_) | None => match found(inventory, target) {
+                    Found::File => Found::File,
+                    Found::NotFile => Found::NotFile,
+                    Found::Unknown | Found::Missing => Found::Unknown,
+                },
+            }
+        }
+        EntryKind::Link(LinkTarget::Escapes | LinkTarget::Unresolved(_))
+        | EntryKind::Ignored {
+            directory: false, ..
+        }
+        | EntryKind::ReparsePoint { directory: false }
+        | EntryKind::Uninspectable => Found::Unknown,
+    }
+}
+
+/// Whether `findUp`, which looks for regular files and follows links, may
+/// find a configuration file at the path. An entry of unknown type counts,
+/// so that a configuration that Next.js could load is never missed.
+fn config_candidate(inventory: &Inventory, path: &SourcePath) -> bool {
+    matches!(found(inventory, path), Found::File | Found::Unknown)
 }
 
 const SUPPORTED: [&str; 4] = [
@@ -476,7 +596,7 @@ fn config(
                 .map_err(|_| DetectError::Internal)?;
             for name in names {
                 let path = child(base.as_ref(), name)?;
-                if exists(inventory, &path) {
+                if config_candidate(inventory, &path) {
                     return Ok(Some(path));
                 }
             }
@@ -521,12 +641,13 @@ fn router_directory(
     name: &str,
     route: Route,
 ) -> Result<Option<RouterDirectory>, DetectError> {
+    // `fs.existsSync` follows links and finds an entry of any type.
     let direct = child(directory, name)?;
-    let (path, in_src) = if exists(inventory, &direct) {
+    let (path, in_src) = if found(inventory, &direct) != Found::Missing {
         (direct, false)
     } else {
         let src = child(directory, &format!("src/{name}"))?;
-        if !exists(inventory, &src) {
+        if found(inventory, &src) == Found::Missing {
             return Ok(None);
         }
         (src, true)
@@ -610,8 +731,9 @@ fn report_config(
         }) => (
             FindingLocation::File(path.clone()),
             Severity::Review,
-            "This Next.js version does not load a configuration file with this name: it ignores \
-             next.config.ts before Next.js 15 and fails on the other names.",
+            "This Next.js version does not load a configuration file with this name: depending \
+             on the name and the version, it fails on the file or ignores it and uses its \
+             defaults.",
         ),
     };
     report.push(
@@ -677,11 +799,71 @@ fn report_routers(
     Ok(())
 }
 
+fn report_src(src: SourcePath, report: &mut Reporter<'_>) -> Result<(), DetectError> {
+    report.push(
+        FindingLocation::File(src),
+        FS1044,
+        Severity::Review,
+        FindingText {
+            message: "Next.js router directory not fully known",
+            explanation: "Next.js looks for app or pages below src when the package directory \
+                          has none, but src is not a directory that discovery traversed, such \
+                          as a link or an ignored directory, so a router directory below it is \
+                          not known.",
+            remediation: "Make src an ordinary traversed directory, then run Frameshift again.",
+        },
+    )
+}
+
+fn report_ignored(
+    detection: &Detection,
+    inventory: &Inventory,
+    report: &mut Reporter<'_>,
+) -> Result<(), DetectError> {
+    for path in &detection.ignored {
+        let name = path.as_str().rsplit('/').next().unwrap_or_default();
+        let (explanation, remediation) = if !name.starts_with("next.config.") {
+            (
+                "Next.js uses the app or pages directory of the package directory and ignores \
+                 the one with the same name below src.",
+                "Move the routes into the directory that Next.js uses, and remove this one.",
+            )
+        } else if found(inventory, path) == Found::NotFile {
+            (
+                "Next.js looks only for regular files with a configuration file name, so it \
+                 ignores this entry, which is not a file.",
+                "Rename the entry, so that its name does not suggest a configuration file.",
+            )
+        } else {
+            (
+                "Next.js loads only the first configuration file that it finds, in the order \
+                 next.config.js, next.config.mjs, and from Next.js 15 next.config.ts and from \
+                 16 next.config.mts, and ignores every other configuration file beside the one \
+                 it loads.",
+                "Merge the settings into the configuration file that Next.js loads, and remove \
+                 this one.",
+            )
+        };
+        report.push(
+            FindingLocation::File(path.clone()),
+            FS1045,
+            Severity::Info,
+            FindingText {
+                message: "Next.js ignores this file or directory",
+                explanation,
+                remediation,
+            },
+        )?;
+    }
+    Ok(())
+}
+
 const FS1040: &str = "FS1040";
 const FS1041: &str = "FS1041";
 const FS1042: &str = "FS1042";
 const FS1043: &str = "FS1043";
 const FS1044: &str = "FS1044";
+const FS1045: &str = "FS1045";
 
 struct Reporter<'a> {
     findings: &'a mut FindingCollector,

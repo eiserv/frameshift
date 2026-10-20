@@ -1,0 +1,41 @@
+Frameshift @ENGINE_VERSION@  inspect
+
+Files          10 admitted (699 bytes), 11 directories, 0 ignored, 7 other
+Package mgr    npm 11.11.0 (packageManager field)
+Lockfile       none
+Workspace      3 members, evaluated as npm-11; 1 directory undetermined; incomplete
+
+Package        . (fictional-chain)
+  Framework    no supported framework detected
+
+Package        apps/broken (fictional-broken)
+  Framework    Next.js 15.5.0 or later (lowest version of the declared range)
+  Config       apps/broken/next.config.mjs
+  Router       App Router in apps/broken/src/app (1 route file)
+
+Package        apps/site (fictional-site)
+  Framework    Next.js 15.5.0 or later (lowest version of the declared range)
+  Config       apps/site/next.config.mjs
+  Router       Pages Router in apps/site/pages (1 route file)
+
+Package        apps/web (fictional-web)
+  Framework    Next.js 15.5.0 or later (lowest version of the declared range)
+  Config       apps/web/next.config.mjs
+  Router       no route files
+
+Migration      no migration path ships in this build
+Findings       14 (3 unknown, 5 review, 6 info)
+  unknown FS1036  apps/docs  Workspace membership not known
+  unknown FS1031  apps/mirror  Workspace pattern reaches an entry that discovery did not traverse
+  unknown FS1003  package-lock.json  Link target leaves the project root
+  review  FS1042  apps/broken/package.json  Next.js version imprecise
+  review  FS1044  apps/site/app  Next.js router directory not fully known
+  review  FS1042  apps/site/package.json  Next.js version imprecise
+  review  FS1042  apps/web/package.json  Next.js version imprecise
+  review  FS1044  apps/web/src  Next.js router directory not fully known
+  info    FS1007  apps/broken/app  Link target does not exist
+  info    FS1005  apps/docs/package.json  Link not followed; target inside the project recorded
+  info    FS1005  apps/mirror  Link not followed; target inside the project recorded
+  info    FS1005  apps/site/app  Link not followed; target inside the project recorded
+  info    FS1005  apps/site/next.config.mjs  Link not followed; target inside the project recorded
+  info    FS1005  apps/web/src  Link not followed; target inside the project recorded

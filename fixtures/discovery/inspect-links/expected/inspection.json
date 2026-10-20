@@ -1,0 +1,328 @@
+{
+  "kind": "frameshift.inspection",
+  "schemaVersion": 1,
+  "engineVersion": "@ENGINE_VERSION@",
+  "files": {
+    "complete": true,
+    "stop": null,
+    "admitted": 10,
+    "admittedBytes": 699,
+    "directories": 11,
+    "ignored": {
+      "vcs": 0,
+      "dependencies": 0,
+      "build-output": 0,
+      "environment": 0,
+      "gitignore": 0
+    },
+    "oversized": 0,
+    "links": 7,
+    "reparsePoints": 0,
+    "special": 0,
+    "notTraversed": 0,
+    "uninspectable": 0,
+    "unrepresentable": 0
+  },
+  "packageManager": {
+    "name": "npm",
+    "source": "package-manager-field",
+    "declared": {
+      "name": "npm",
+      "version": "11.11.0"
+    },
+    "lockfile": null,
+    "ignoredLockfiles": []
+  },
+  "workspace": {
+    "isWorkspace": true,
+    "declarations": [
+      "package.json"
+    ],
+    "releases": [
+      "npm-11"
+    ],
+    "complete": false,
+    "members": [
+      "apps/broken",
+      "apps/site",
+      "apps/web"
+    ],
+    "undetermined": [
+      "apps/docs"
+    ]
+  },
+  "packages": [
+    {
+      "directory": ".",
+      "name": "fictional-chain",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "absent",
+        "dependency": null,
+        "version": null,
+        "config": null,
+        "router": "none",
+        "app": null,
+        "pages": null
+      }
+    },
+    {
+      "directory": "apps/broken",
+      "name": "fictional-broken",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "nextjs",
+        "dependency": {
+          "field": "dependencies",
+          "specifier": "^15.5.0"
+        },
+        "version": {
+          "value": "15.5.0",
+          "evidence": "lower-bound"
+        },
+        "config": {
+          "path": "apps/broken/next.config.mjs",
+          "load": "loaded"
+        },
+        "router": "app",
+        "app": {
+          "path": "apps/broken/src/app",
+          "inSrc": true,
+          "state": "directory",
+          "routeFiles": 1,
+          "complete": true
+        },
+        "pages": null
+      }
+    },
+    {
+      "directory": "apps/site",
+      "name": "fictional-site",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "nextjs",
+        "dependency": {
+          "field": "dependencies",
+          "specifier": "^15.5.0"
+        },
+        "version": {
+          "value": "15.5.0",
+          "evidence": "lower-bound"
+        },
+        "config": {
+          "path": "apps/site/next.config.mjs",
+          "load": "loaded"
+        },
+        "router": "pages",
+        "app": {
+          "path": "apps/site/app",
+          "inSrc": false,
+          "state": "other",
+          "routeFiles": 0,
+          "complete": null
+        },
+        "pages": {
+          "path": "apps/site/pages",
+          "inSrc": false,
+          "state": "directory",
+          "routeFiles": 1,
+          "complete": true
+        }
+      }
+    },
+    {
+      "directory": "apps/web",
+      "name": "fictional-web",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "nextjs",
+        "dependency": {
+          "field": "dependencies",
+          "specifier": "^15.5.0"
+        },
+        "version": {
+          "value": "15.5.0",
+          "evidence": "lower-bound"
+        },
+        "config": {
+          "path": "apps/web/next.config.mjs",
+          "load": "loaded"
+        },
+        "router": "none",
+        "app": null,
+        "pages": null
+      }
+    }
+  ],
+  "migrationPaths": [],
+  "findings": [
+    {
+      "id": "F0001",
+      "code": "FS1036",
+      "severity": "unknown",
+      "location": {
+        "scope": "file",
+        "path": "apps/docs"
+      },
+      "message": "Workspace membership not known",
+      "explanation": "The directory's package.json is not an admitted file, for example because it is ignored or too large, so its workspace membership is not known.",
+      "remediation": "Make the manifest a package.json that discovery admits, then run Frameshift again."
+    },
+    {
+      "id": "F0002",
+      "code": "FS1031",
+      "severity": "unknown",
+      "location": {
+        "scope": "file",
+        "path": "apps/mirror"
+      },
+      "message": "Workspace pattern reaches an entry that discovery did not traverse",
+      "explanation": "A workspace pattern could select this entry or a directory below it, but discovery did not traverse it (it is ignored, a link, or not read), while the package manager may. The workspace members may be incomplete.",
+      "remediation": "Make the entry an ordinary traversed directory, or narrow the pattern, then run Frameshift again."
+    },
+    {
+      "id": "F0003",
+      "code": "FS1003",
+      "severity": "unknown",
+      "location": {
+        "scope": "file",
+        "path": "package-lock.json"
+      },
+      "message": "Link target leaves the project root",
+      "explanation": "Frameshift never follows links. This link's target resolves outside the project root, so its content is not analyzed or migrated.",
+      "remediation": "Replace the link with the content it should provide, or recreate it in the migrated project manually."
+    },
+    {
+      "id": "F0004",
+      "code": "FS1042",
+      "severity": "review",
+      "location": {
+        "scope": "file",
+        "path": "apps/broken/package.json"
+      },
+      "message": "Next.js version imprecise",
+      "explanation": "No lockfile was read, so the Next.js version is the lowest version of the declared range, or unknown. If this package is a member of a workspace, run Frameshift on the workspace root and select the package.",
+      "remediation": "Install the dependencies so that the lockfile resolves next, then run Frameshift again."
+    },
+    {
+      "id": "F0005",
+      "code": "FS1044",
+      "severity": "review",
+      "location": {
+        "scope": "file",
+        "path": "apps/site/app"
+      },
+      "message": "Next.js router directory not fully known",
+      "explanation": "The router directory is not a directory that discovery traversed, such as a file, a link, or an ignored directory, so its routes are not known.",
+      "remediation": "Make the router directory an ordinary traversed directory, then run Frameshift again."
+    },
+    {
+      "id": "F0006",
+      "code": "FS1042",
+      "severity": "review",
+      "location": {
+        "scope": "file",
+        "path": "apps/site/package.json"
+      },
+      "message": "Next.js version imprecise",
+      "explanation": "No lockfile was read, so the Next.js version is the lowest version of the declared range, or unknown. If this package is a member of a workspace, run Frameshift on the workspace root and select the package.",
+      "remediation": "Install the dependencies so that the lockfile resolves next, then run Frameshift again."
+    },
+    {
+      "id": "F0007",
+      "code": "FS1042",
+      "severity": "review",
+      "location": {
+        "scope": "file",
+        "path": "apps/web/package.json"
+      },
+      "message": "Next.js version imprecise",
+      "explanation": "No lockfile was read, so the Next.js version is the lowest version of the declared range, or unknown. If this package is a member of a workspace, run Frameshift on the workspace root and select the package.",
+      "remediation": "Install the dependencies so that the lockfile resolves next, then run Frameshift again."
+    },
+    {
+      "id": "F0008",
+      "code": "FS1044",
+      "severity": "review",
+      "location": {
+        "scope": "file",
+        "path": "apps/web/src"
+      },
+      "message": "Next.js router directory not fully known",
+      "explanation": "Next.js looks for app or pages below src when the package directory has none, but src is not a directory that discovery traversed, such as a link or an ignored directory, so a router directory below it is not known.",
+      "remediation": "Make src an ordinary traversed directory, then run Frameshift again."
+    },
+    {
+      "id": "F0009",
+      "code": "FS1007",
+      "severity": "info",
+      "location": {
+        "scope": "file",
+        "path": "apps/broken/app"
+      },
+      "message": "Link target does not exist",
+      "explanation": "The link's target does not exist in the project. Frameshift records the link, but there is no content to migrate for it.",
+      "remediation": "Remove the link or restore its target."
+    },
+    {
+      "id": "F0010",
+      "code": "FS1005",
+      "severity": "info",
+      "location": {
+        "scope": "file",
+        "path": "apps/docs/package.json"
+      },
+      "message": "Link not followed; target inside the project recorded",
+      "explanation": "Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.",
+      "remediation": "Recreate the link in the migrated project if it is still needed."
+    },
+    {
+      "id": "F0011",
+      "code": "FS1005",
+      "severity": "info",
+      "location": {
+        "scope": "file",
+        "path": "apps/mirror"
+      },
+      "message": "Link not followed; target inside the project recorded",
+      "explanation": "Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.",
+      "remediation": "Recreate the link in the migrated project if it is still needed."
+    },
+    {
+      "id": "F0012",
+      "code": "FS1005",
+      "severity": "info",
+      "location": {
+        "scope": "file",
+        "path": "apps/site/app"
+      },
+      "message": "Link not followed; target inside the project recorded",
+      "explanation": "Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.",
+      "remediation": "Recreate the link in the migrated project if it is still needed."
+    },
+    {
+      "id": "F0013",
+      "code": "FS1005",
+      "severity": "info",
+      "location": {
+        "scope": "file",
+        "path": "apps/site/next.config.mjs"
+      },
+      "message": "Link not followed; target inside the project recorded",
+      "explanation": "Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.",
+      "remediation": "Recreate the link in the migrated project if it is still needed."
+    },
+    {
+      "id": "F0014",
+      "code": "FS1005",
+      "severity": "info",
+      "location": {
+        "scope": "file",
+        "path": "apps/web/src"
+      },
+      "message": "Link not followed; target inside the project recorded",
+      "explanation": "Frameshift never follows links. The target lies inside the project, where it is processed at its own path, so it is not read twice.",
+      "remediation": "Recreate the link in the migrated project if it is still needed."
+    }
+  ]
+}

@@ -80,7 +80,7 @@
         "path": "next.config.cjs"
       },
       "message": "Next.js configuration file not loaded as expected",
-      "explanation": "This Next.js version does not load a configuration file with this name: it ignores next.config.ts before Next.js 15 and fails on the other names.",
+      "explanation": "This Next.js version does not load a configuration file with this name: depending on the name and the version, it fails on the file or ignores it and uses its defaults.",
       "remediation": "Use next.config.js, next.config.mjs, or, from Next.js 15, next.config.ts."
     },
     {

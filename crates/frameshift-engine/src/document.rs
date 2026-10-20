@@ -3,8 +3,10 @@
 //! A document is built as a value tree with members in a fixed order and
 //! printed with two-space indentation and LF line ends, ending with an LF, so
 //! equal values print equal bytes on every platform. Strings are escaped as
-//! RFC 8259 requires and otherwise kept as UTF-8. Numbers are nonnegative
-//! integers; documents carry no floating-point values.
+//! RFC 8259 requires, with DEL, C1 controls, line and paragraph separators,
+//! and bidirectional formatting characters escaped as well, and otherwise
+//! kept as UTF-8. Numbers are nonnegative integers; documents carry no
+//! floating-point values.
 
 use std::fmt::Write as _;
 
@@ -105,7 +107,17 @@ fn write_string(out: &mut String, text: &str) {
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
             '\t' => out.push_str("\\t"),
-            '\u{00}'..='\u{1f}' => {
+            // C0 controls as RFC 8259 requires; DEL, C1 controls, line and
+            // paragraph separators, and bidirectional formatting characters
+            // as well, so that a document shown in a terminal can neither
+            // start an escape sequence nor reorder the text around it.
+            '\u{00}'..='\u{1f}'
+            | '\u{7f}'..='\u{9f}'
+            | '\u{061c}'
+            | '\u{200e}'
+            | '\u{200f}'
+            | '\u{2028}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}' => {
                 let _ = write!(out, "\\u{:04x}", scalar as u32);
             }
             _ => out.push(scalar),
@@ -119,7 +131,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn values_print_deterministically_with_escapes() {
+    fn values_print_deterministically_with_escapes_for_terminals() {
         let controls: String = ('\u{00}'..='\u{1f}').collect();
         let document = Value::Object(vec![
             ("kind", Value::string("test")),
@@ -129,7 +141,12 @@ mod tests {
                 "items",
                 Value::Array(vec![Value::Null, Value::Bool(true), Value::Number(7)]),
             ),
-            ("text", Value::String(format!("{controls}\"\\é😀\u{7f}"))),
+            (
+                "text",
+                Value::String(format!(
+                    "{controls}\"\\é😀\u{7f}\u{9b}\u{61c}\u{200e}\u{2028}\u{202e}\u{2069}"
+                )),
+            ),
         ]);
         assert_eq!(
             print(&document),
@@ -143,7 +160,7 @@ mod tests {
                 "\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f",
                 "\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017",
                 "\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f",
-                "\\\"\\\\é😀\u{7f}\"\n",
+                "\\\"\\\\é😀\\u007f\\u009b\\u061c\\u200e\\u2028\\u202e\\u2069\"\n",
                 "}\n"
             )
         );

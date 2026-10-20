@@ -176,7 +176,7 @@ fn prepare(case: &Case) -> Option<PathBuf> {
             Created::Symlink(path, target) => {
                 let native = root.join(path);
                 fs::create_dir_all(native.parent().unwrap()).unwrap();
-                if let Err(error) = symlink(&native, target) {
+                if let Err(error) = support::symlink(&native, target) {
                     if !cfg!(windows) {
                         panic!("{}: {error}", case.name);
                     }
@@ -187,20 +187,6 @@ fn prepare(case: &Case) -> Option<PathBuf> {
         }
     }
     Some(root)
-}
-
-#[cfg(unix)]
-fn symlink(link: &Path, target: &str) -> std::io::Result<()> {
-    std::os::unix::fs::symlink(target, link)
-}
-
-#[cfg(windows)]
-fn symlink(link: &Path, target: &str) -> std::io::Result<()> {
-    if link.parent().unwrap().join(target).is_dir() {
-        std::os::windows::fs::symlink_dir(target, link)
-    } else {
-        std::os::windows::fs::symlink_file(target, link)
-    }
 }
 
 /// Escapes backslashes and control characters so that every path and line
