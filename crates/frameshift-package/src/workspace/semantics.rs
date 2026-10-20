@@ -503,6 +503,9 @@ impl Evaluator<'_> {
                     || last.and_then(Segment::literal).is_some());
             let depth = (depth && !pattern.trailing_slash)
                 .then(|| Matcher::from_segments(&expansion.segments, depth_rules));
+            // fast-glob looks a static `a/` up and keeps the `/` in the
+            // entry's path.
+            let slash_entry = pattern.trailing_slash && !pattern.negated && literal.is_some();
             forms.push(Form {
                 literal,
                 base: expansion.texts
@@ -513,10 +516,11 @@ impl Evaluator<'_> {
                 matches_nothing: !v4
                     && pattern.trailing_slash
                     && (pattern.negated || !pattern.is_literal()),
-                slash_entry: pattern.trailing_slash && !pattern.negated && pattern.is_literal(),
+                slash_entry,
                 // picomatch accepts a trailing `/` after a pattern whose
-                // last segment is `*`; other endings in `*` or a class are
-                // rejected next to a static `x/`.
+                // last segment is exactly `*`, as observed, but not after
+                // `t*` or `?*`; class endings are rejected next to a static
+                // `x/`.
                 optional_slash: expansion.texts.last().is_some_and(|text| text == "*"),
                 entry_slash: {
                     let mut segments = expansion.segments.clone();
@@ -611,16 +615,14 @@ impl Evaluator<'_> {
         if !rejected && self.semantics == WorkspaceSemantics::YarnBerryV4 {
             let uncertain = prepared.iter().any(|entry| {
                 entry.pattern.negated
-                    && entry.pattern.texts.last().is_some_and(|text| {
-                        &**text != "*"
-                            && &**text != "**"
-                            && (text.ends_with('*') || text.ends_with(']'))
-                    })
+                    && entry
+                        .pattern
+                        .texts
+                        .last()
+                        .is_some_and(|text| text.ends_with(']'))
             });
             for entry in &prepared {
-                let static_slash = !entry.pattern.negated
-                    && entry.pattern.trailing_slash
-                    && entry.pattern.is_literal();
+                let static_slash = entry.forms.iter().any(|form| form.slash_entry);
                 if uncertain && static_slash {
                     outcome
                         .rejected
