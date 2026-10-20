@@ -1,6 +1,6 @@
 # Command-Line Interface
 
-**Status: help and version shell implemented; remaining commands specified.** The `frameshift` executable provides `help`, `version`, `--help`/`-h`, `--version`, and version formatting (`D-050`). The project commands and other options below remain planned and are rejected by the current shell; `inspect` will build on the engine's read-only discovery, workspace detection, and Next.js detection, which exist (`D-064`, `D-073`, `D-074`). Samples for those commands are fictional. The available shell is documented in section 4.9 and [IMPLEMENTATION.md](IMPLEMENTATION.md), section 12.
+**Status: help, version, and inspect implemented; remaining commands specified.** The `frameshift` executable provides `help`, `version`, `inspect`, `--help`/`-h`, `--version`, `--format` for `version` and `inspect`, and `--package` for `inspect` (`D-050`, `D-075`). The other project commands and options below remain planned and are rejected as usage errors. Samples for planned commands are fictional. The implemented commands are documented in sections 4.1 and 4.9 and in sections 12 and 32 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 The CLI is Frameshift's only user interface in the current scope (`D-004`). It is meant to become a polished, production-quality developer tool, not a temporary prototype.
 
@@ -17,7 +17,7 @@ The CLI is Frameshift's only user interface in the current scope (`D-004`). It i
 
 | Command | Purpose | Writes files | Runs external tools |
 | --- | --- | --- | --- |
-| `inspect` | Identify a project: framework, version, router, package manager, structure | No | No |
+| `inspect` (implemented) | Identify a project: framework, version, router, package manager, structure | No | No |
 | `analyze` | Assess migratability to a target: units, statuses, metrics, findings | Only with `--report` | No |
 | `plan` | Compute the migration plan: operations, output paths, manual tasks | Only with `--out` or `--report` | No |
 | `migrate` | Execute the plan into a new output directory | Yes, output directory only | No |
@@ -38,7 +38,7 @@ Commands that were considered and not included in V1:
 
 ## 3. Global options
 
-Only `--help`/`-h`, `--version`, and `--format` for `version` are implemented. `--format` accepts `text` or `json`, as a separate value or with `=`, before or after the command. Duplicate options, incompatible combinations, and every other option are usage errors. No presentation environment variable is needed by this uncolored, progress-free shell; the remaining presentation options are planned.
+Only `--help`/`-h`, `--version`, `--format` for `version` and `inspect`, and the command option `--package` of `inspect` are implemented. `--format` accepts `text` or `json`, and `--package` its value, as a separate value or with `=`, before or after the command. Duplicate options, incompatible combinations, and every other option are usage errors. No presentation environment variable is needed by the uncolored, progress-free implemented commands; the remaining presentation options are planned.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -56,32 +56,57 @@ Only `--help`/`-h`, `--version`, and `--format` for `version` are implemented. `
 
 ### 4.1 `inspect`
 
-```text
-frameshift inspect [<source>]
-```
-
-Fast, read-only identification of a project. `<source>` defaults to the current directory. No target is needed. Inspection reads only what identification requires: manifests, lockfiles, configuration files, and directory structure.
+**Implemented (`D-075`).**
 
 ```text
-$ frameshift inspect ./lumen-site
-
-Frameshift 0.9.0  inspect
-
-Project        ./lumen-site
-Framework      Next.js 16.2.1 (from pnpm-lock.yaml)
-Router         App Router (app/); no Pages Router
-Language       TypeScript (tsconfig.json, strict)
-Package mgr    pnpm (packageManager field, pnpm-lock.yaml 9.0)
-Workspace      single package
-Styling        Tailwind CSS 4.1 (PostCSS), CSS Modules (3 files)
-Static export  configured (output: 'export')
-Files          201 accounted: 118 source, 71 verbatim, 12 out of scope
-
-Migration paths
-  nextjs-to-astro-preact   available   next: frameshift analyze ./lumen-site --to astro-preact
+frameshift inspect [<source>] [--package <dir>] [--format text|json]
 ```
 
-A project without a supported framework is a valid inspection result: the command reports what it found and exits with 0.
+Fast, read-only identification of a project. `<source>` defaults to the current directory, may be any native path, and is the workspace root: nothing above it is read (`D-073`). No target is needed. Inspection reads only what identification requires: directory listings, `.gitignore` files, `package.json` files, the selected lockfile, and `pnpm-workspace.yaml`. It never writes, runs project code, or uses the network, and it computes no snapshot identity.
+
+| Option | Meaning |
+| --- | --- |
+| `--package <dir>` | Inspect one package: a workspace member given relative to `<source>` with `/` separators, or the root with `.`. The value is never normalized; a backslash, a trailing slash, or `..` is a usage error. Without the option, the root and every member are inspected. |
+| `--format text\|json` | Text (default) or the `frameshift.inspection` document |
+
+The text output reports the files that discovery accounted for, the package manager with its source, the lockfile with its format version and the lockfiles that are ignored, the workspace with its members and the evaluated package manager releases, and for each package its Next.js verdict, version with its evidence, configuration file, and routers with their route file counts, followed by every finding on one line. It never prints the source path, and source-derived strings are escaped. The following output is the golden of the fictional fixture `inspect-next-workspace`, with its engine version filled in:
+
+```text
+$ frameshift inspect ./harbor
+
+Frameshift 0.0.0  inspect
+
+Files          10 admitted (1619 bytes), 9 directories, 2 ignored, 0 other
+Package mgr    npm 11.11.0 (packageManager field)
+Lockfile       package-lock.json (format 3)
+Workspace      3 members, evaluated as npm-11
+
+Package        . (fictional-harbor)
+  Framework    no supported framework detected
+
+Package        apps/docs (fictional-docs)
+  Framework    Next.js evidence incomplete
+  Config       none
+  Router       no route files
+
+Package        apps/site (fictional-site)
+  Framework    Next.js 15.5.2 (locked)
+  Config       apps/site/next.config.ts
+  Router       App Router in apps/site/app (1 route file); Pages Router in apps/site/pages (1 route file)
+
+Package        packages/ui (fictional-ui)
+  Framework    no supported framework detected
+
+Migration      no migration path ships in this build
+Findings       1 (1 review)
+  review  FS1040  apps/docs/package.json  Next.js evidence incomplete
+```
+
+`--format json` prints one `frameshift.inspection` document, schema version 1, described by [frameshift.inspection.schema.json](../schemas/frameshift.inspection.schema.json): the engine version, discovery counts, the package manager and lockfile, the workspace, one entry per inspected package with its Next.js detection, an empty `migrationPaths` array until a ruleset ships, and every finding with its ID, code, severity, location, and prose. Paths are relative to `<source>`, and `.` names the root.
+
+A project without a supported framework, an incomplete inventory, and unusable package files are valid inspection results: the command reports what it found and exits with 0. A source that is missing, unreadable, or not a directory, a file that changes during the run, a `--package` directory that is not a determined member, and a finding count beyond the collector limit exit with 3; an engine defect exits with 70. With `--format json`, these failures also print a `frameshift.error` document with the exit code.
+
+Language, styling, static export, and file accounting by unit, which an earlier sample of this section showed, need configuration evaluation (M4) and unit classification (M5) and are not reported yet.
 
 ### 4.2 `analyze`
 
@@ -266,7 +291,7 @@ Planned
 
 The `toolchain` value above is illustrative. It is captured at build time, never discovered from the runtime host. `frameshift --version` prints `frameshift 0.0.0` and rejects every additional argument, including `--format`.
 
-`frameshift`, `frameshift help`, `frameshift --help`, and `frameshift -h` print the command overview. `frameshift help help` prints help usage. `frameshift help version`, `frameshift version --help`, and `frameshift version -h` print version usage. Help is text only. Unavailable help topics, unavailable commands, unexpected operands, malformed native Unicode arguments, unknown options, and duplicated options exit with 2. Successful output goes only to standard output; errors go to standard error. Diagnostics never echo user argument text.
+`frameshift`, `frameshift help`, `frameshift --help`, and `frameshift -h` print the command overview. `frameshift help help` prints help usage. `frameshift help version`, `frameshift version --help`, and `frameshift version -h` print version usage, and `frameshift help inspect`, `frameshift inspect --help`, and `frameshift inspect -h` print inspect usage. Help is text only. Unavailable help topics, unavailable commands, unexpected operands, malformed native Unicode arguments, unknown options, and duplicated options exit with 2. Successful output goes only to standard output; errors go to standard error. Diagnostics never echo user argument text.
 
 If JSON was explicitly selected anywhere in an invalid invocation, standard output contains one `frameshift.error` v1 document with `kind`, `schemaVersion`, `exitCode: 2`, and a static English `message`. Standard error still contains the human-readable error. The schema is [frameshift.error.schema.json](../schemas/frameshift.error.schema.json). In text mode, usage errors leave standard output empty. A standard-stream write or flush failure exits with 6 and cannot guarantee a complete JSON document.
 
@@ -309,11 +334,11 @@ V1 supports an optional project configuration file (`D-027`):
 | 0 | Success |
 | 1 | Completed, but a requested condition failed: `--fail-on` matched, `--strict` aborted the commit, or verification failed or found differences |
 | 2 | Usage error: invalid arguments, a missing required option, or a missing authorization flag for a requested action |
-| 3 | Input error: source missing or unreadable, no supported framework for `analyze`, `plan`, or `migrate`, an invalid or stale plan document, or a source that no longer matches a plan or manifest |
+| 3 | Input error: source missing or unreadable, a source that changed during the run, or an unknown `--package` (implemented for `inspect`); no supported framework for `analyze`, `plan`, or `migrate`, an invalid or stale plan document, or a source that no longer matches a plan or manifest (planned) |
 | 4 | Output refused: output location exists or is unsafe, a staging directory from an interrupted run is present, or managed output was modified |
 | 5 | Completed with failures: output committed, but one or more units failed |
 | 6 | Environment error: a standard-stream write or flush failed (implemented), or a required external tool is missing or failed before its checks could run (planned) |
-| 70 | Internal error: an engine defect (finding `FS9001`). Results of this run are not trustworthy. 70 follows the BSD `sysexits` convention for internal software errors. |
+| 70 | Internal error: an engine defect (finding `FS9001`). Results of this run are not trustworthy. 70 follows the BSD `sysexits` convention for internal software errors. `inspect` exits with 70 when the engine reports a defect (implemented). |
 | 130 | Interrupted by the user. Nothing was committed. |
 
 When several conditions apply, the code earliest in this order wins: 70, 130, 2, 3, 4, 6, 5, 1, 0.

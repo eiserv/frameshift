@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Frameshift error document",
-  "description": "A command failure. The current shell emits usage failures with exitCode 2.",
+  "description": "A command failure. The CLI emits usage failures with exitCode 2, inspect input failures with 3, and engine defects with 70.",
   "type": "object",
   "required": ["kind", "schemaVersion", "exitCode", "message"],
   "properties": {
