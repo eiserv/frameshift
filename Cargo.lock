@@ -97,6 +97,7 @@ dependencies = [
  "frameshift-core",
  "frameshift-emit",
  "frameshift-input",
+ "frameshift-nextjs",
  "frameshift-package",
  "frameshift-syntax",
  "frameshift-transform",
@@ -124,6 +125,15 @@ name = "frameshift-input"
 version = "0.0.0"
 dependencies = [
  "frameshift-core",
+]
+
+[[package]]
+name = "frameshift-nextjs"
+version = "0.0.0"
+dependencies = [
+ "frameshift-core",
+ "frameshift-input",
+ "frameshift-package",
 ]
 
 [[package]]

@@ -13,8 +13,10 @@
 //! read-only, matches `.gitignore` patterns, and reads admitted files once
 //! through the snapshot store; it is the only part that reads the source
 //! filesystem. The package API models SemVer versions and npm ranges,
-//! `package.json`, the package manager, and npm and Bun lockfiles, which it
-//! reads through the snapshot store. The facade contains no
+//! `package.json`, the package manager, npm, Bun, pnpm, and Yarn lockfiles,
+//! and workspace members, which it reads through the snapshot store. The
+//! Next.js API detects the framework, version, configuration file, and
+//! routers of the selected package. The facade contains no
 //! project inspection, migration, or verification pipeline. The M1 help and
 //! version CLI consumes this facade, including immutable build identity,
 //! rather than lower layers.
@@ -29,9 +31,12 @@ pub use frameshift_core as foundation;
 pub use frameshift_emit as emit;
 /// Read-only project discovery, `.gitignore` matching, and the snapshot store.
 pub use frameshift_input as input;
+/// The Next.js source adapter: framework, version, configuration, and
+/// router detection of the selected package.
+pub use frameshift_nextjs as nextjs;
 /// npm ecosystem facts: SemVer versions and npm ranges, the `package.json`
-/// model, `packageManager` and package manager detection, and npm and Bun
-/// lockfiles, read through the snapshot store.
+/// model, `packageManager` and package manager detection, npm, Bun, pnpm,
+/// and Yarn lockfiles, and workspaces, read through the snapshot store.
 pub use frameshift_package as package;
 /// Language and JSON parsing, lexical scanning, and character reference decoding.
 pub use frameshift_syntax as syntax;
