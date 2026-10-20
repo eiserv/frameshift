@@ -1,0 +1,156 @@
+{
+  "kind": "frameshift.inspection",
+  "schemaVersion": 1,
+  "engineVersion": "@ENGINE_VERSION@",
+  "files": {
+    "complete": true,
+    "stop": null,
+    "admitted": 10,
+    "admittedBytes": 1619,
+    "directories": 9,
+    "ignored": {
+      "vcs": 0,
+      "dependencies": 1,
+      "build-output": 1,
+      "environment": 0,
+      "gitignore": 0
+    },
+    "oversized": 0,
+    "links": 0,
+    "reparsePoints": 0,
+    "special": 0,
+    "notTraversed": 0,
+    "uninspectable": 0,
+    "unrepresentable": 0
+  },
+  "packageManager": {
+    "name": "npm",
+    "source": "package-manager-field",
+    "declared": {
+      "name": "npm",
+      "version": "11.11.0"
+    },
+    "lockfile": {
+      "path": "package-lock.json",
+      "status": "parsed",
+      "formatVersion": 3
+    },
+    "ignoredLockfiles": []
+  },
+  "workspace": {
+    "isWorkspace": true,
+    "declarations": [
+      "package.json"
+    ],
+    "releases": [
+      "npm-11"
+    ],
+    "complete": true,
+    "members": [
+      "apps/docs",
+      "apps/site",
+      "packages/ui"
+    ],
+    "undetermined": []
+  },
+  "packages": [
+    {
+      "directory": ".",
+      "name": "fictional-harbor",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "absent",
+        "dependency": null,
+        "version": null,
+        "config": null,
+        "router": "none",
+        "app": null,
+        "pages": null
+      }
+    },
+    {
+      "directory": "apps/docs",
+      "name": "fictional-docs",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "inconclusive",
+        "dependency": {
+          "field": "devDependencies",
+          "specifier": "~15.5.0"
+        },
+        "version": {
+          "value": "15.5.2",
+          "evidence": "locked"
+        },
+        "config": null,
+        "router": "none",
+        "app": null,
+        "pages": null
+      }
+    },
+    {
+      "directory": "apps/site",
+      "name": "fictional-site",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "nextjs",
+        "dependency": {
+          "field": "dependencies",
+          "specifier": "~15.5.0"
+        },
+        "version": {
+          "value": "15.5.2",
+          "evidence": "locked"
+        },
+        "config": {
+          "path": "apps/site/next.config.ts",
+          "load": "loaded"
+        },
+        "router": "hybrid",
+        "app": {
+          "path": "apps/site/app",
+          "inSrc": false,
+          "state": "directory",
+          "routeFiles": 1,
+          "complete": true
+        },
+        "pages": {
+          "path": "apps/site/pages",
+          "inSrc": false,
+          "state": "directory",
+          "routeFiles": 1,
+          "complete": true
+        }
+      }
+    },
+    {
+      "directory": "packages/ui",
+      "name": "fictional-ui",
+      "manifest": "analyzed",
+      "nextjs": {
+        "verdict": "absent",
+        "dependency": null,
+        "version": null,
+        "config": null,
+        "router": "none",
+        "app": null,
+        "pages": null
+      }
+    }
+  ],
+  "migrationPaths": [],
+  "findings": [
+    {
+      "id": "F0001",
+      "code": "FS1040",
+      "severity": "review",
+      "location": {
+        "scope": "file",
+        "path": "apps/docs/package.json"
+      },
+      "message": "Next.js evidence incomplete",
+      "explanation": "The package declares next, but has neither a next.config file nor route files in app or pages, so it is not classified as a Next.js project.",
+      "remediation": "Check that the selected package is the Next.js application."
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+Frameshift @ENGINE_VERSION@  inspect
+
+Files          5 admitted (376 bytes), 2 directories, 0 ignored, 0 other
+Package mgr    not determined
+Lockfile       none
+Workspace      single package
+
+Package        . (fictional-legacy)
+  Framework    Next.js 13.5.0 or later (lowest version of the declared range)
+  Config       next.config.cjs (ignored or rejected by this Next.js version)
+  Router       Pages Router in pages (2 route files)
+
+Migration      no migration path ships in this build
+Findings       3 (3 review)
+  review  FS1043  next.config.cjs  Next.js configuration file not loaded as expected
+  review  FS1041  package.json  Next.js version outside the validated range
+  review  FS1042  package.json  Next.js version imprecise

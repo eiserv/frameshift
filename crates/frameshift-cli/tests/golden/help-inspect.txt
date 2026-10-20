@@ -1,0 +1,10 @@
+Usage: frameshift inspect [<source>] [--package <dir>] [--format text|json]
+Identify the project at <source>, by default the current directory: its files, package
+manager, lockfile, workspace, and the framework, version, configuration file, and routers
+of each package. Inspection reads directory listings, .gitignore files, package.json files,
+the lockfile, and pnpm-workspace.yaml. It never writes, runs project code, or uses the network.
+<source> is the workspace root; nothing above it is read. Without --package, the root and
+every member are inspected. --package <dir> inspects one member, given relative to <source>
+with / separators, or the root with '.'.
+A project without a supported framework is a valid result. Exit status: 0 on success,
+2 for invalid arguments, 3 when the source cannot be read or changes during the run.

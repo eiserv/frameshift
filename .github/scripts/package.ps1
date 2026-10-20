@@ -12,6 +12,8 @@ if ($env:BUILD_OS -eq 'windows') { $binary += '.exe' }
 $identity = & $binary version --format json | ConvertFrom-Json
 if ($identity.engineVersion -ne $version -or $identity.buildCommit -ne $env:FRAMESHIFT_BUILD_COMMIT) { throw 'Binary build identity differs from the packaged commit.' }
 & $binary help
+$inspection = & $binary inspect fixtures/discovery/workspace-npm/source --format json | ConvertFrom-Json
+if ($inspection.kind -ne 'frameshift.inspection' -or ($inspection.workspace.members -join ',') -ne 'packages/site,packages/ui') { throw 'Binary inspect smoke test failed.' }
 $epoch = git show -s --format=%ct HEAD
 New-Item -ItemType Directory -Path target/archives, target/repeat | Out-Null
 foreach ($dir in @('target/archives', 'target/repeat')) {

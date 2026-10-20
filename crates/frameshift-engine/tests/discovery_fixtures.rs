@@ -4,8 +4,8 @@
 //! inputs that `fixture.json` lists under `createdAtTestTime`, applies its
 //! limit overrides, runs discovery twice, and compares a deterministic text
 //! rendering of the inventory and findings with `expected/discovery.txt`.
-//! The rendering is a test format, not a product document; it is replaced
-//! by the `inspect` and analysis documents once they exist. Goldens change
+//! The rendering is a test format, not a product document: it lists every
+//! entry, which the `frameshift.inspection` document only counts. Goldens change
 //! only through the ignored `update_discovery_goldens` test.
 
 mod support;
@@ -63,11 +63,12 @@ fn cases() -> Vec<Case> {
             let directory = fixtures().join(&name);
             let text = fs::read_to_string(directory.join("fixture.json")).unwrap();
             let metadata = support::parse(&text).unwrap_or_else(|error| panic!("{name}: {error}"));
-            // Package and workspace cases have their own harnesses
-            // (`package_fixtures.rs`, `workspace_fixtures.rs`).
+            // Package, workspace, and inspect cases have their own harnesses
+            // (`package_fixtures.rs`, `workspace_fixtures.rs`,
+            // `inspect_fixtures.rs`).
             if matches!(
                 metadata.get("kind").and_then(Json::as_str),
-                Some("package" | "workspace")
+                Some("package" | "workspace" | "inspect")
             ) {
                 return None;
             }

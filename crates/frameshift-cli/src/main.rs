@@ -1,39 +1,18 @@
-//! Thin command-line adapter for Frameshift's implemented engine shell.
+//! Thin command-line adapter for Frameshift's implemented engine commands.
 
 mod args;
 mod render;
 
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::ExitCode;
 
-use args::{Format, Request, UsageError};
+use args::{Format, InspectRequest, Request, UsageError};
+use frameshift_engine::inspect::{InspectOptions, inspect};
 
 fn main() -> ExitCode {
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
-    let mut strings = Vec::with_capacity(arguments.len());
-    let mut invalid_encoding = false;
-    for argument in arguments {
-        match argument.into_string() {
-            Ok(value) => strings.push(value),
-            Err(_) => {
-                invalid_encoding = true;
-                // Preserve option/value adjacency when deciding error format.
-                strings.push(String::new());
-            }
-        }
-    }
-    let request = if invalid_encoding {
-        let format = match args::parse(&strings) {
-            Ok(Request::Version(format)) | Err(UsageError { format, .. }) => format,
-            Ok(Request::Help(_)) | Ok(Request::ShortVersion) => Format::Text,
-        };
-        Err(UsageError {
-            format,
-            message: "command arguments must be valid UTF-8",
-        })
-    } else {
-        args::parse(&strings)
-    };
+    let request = args::parse(&arguments);
     let mut stdout = io::stdout().lock();
     let mut stderr = io::stderr().lock();
     match run(request, &mut stdout, &mut stderr) {
@@ -67,17 +46,51 @@ fn run(
             )?;
             0
         }
-        Err(error) => {
-            match error.format {
-                Format::Text => {}
-                Format::Json => render::usage_error(stdout, error.message)?,
-            }
-            writeln!(stderr, "error: {}", error.message)?;
-            2
-        }
+        Ok(Request::Inspect(request)) => run_inspect(&request, stdout, stderr)?,
+        Err(error) => fail(stdout, stderr, error.format, 2, error.message)?,
     };
     stdout.flush()?;
     stderr.flush()?;
+    Ok(code)
+}
+
+fn run_inspect(
+    request: &InspectRequest,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> io::Result<u8> {
+    let options = InspectOptions {
+        packages: request.packages.clone(),
+        ..InspectOptions::default()
+    };
+    match inspect(Path::new(&request.source), &options) {
+        Ok(inspection) => {
+            match request.format {
+                Format::Text => render::inspection(stdout, &inspection)?,
+                Format::Json => stdout.write_all(inspection.document().as_bytes())?,
+            }
+            Ok(0)
+        }
+        // Engine errors describe categories, never paths or source text.
+        Err(error) => {
+            let code = if error.is_internal() { 70 } else { 3 };
+            fail(stdout, stderr, request.format, code, &error.to_string())
+        }
+    }
+}
+
+fn fail(
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+    format: Format,
+    code: u8,
+    message: &str,
+) -> io::Result<u8> {
+    match format {
+        Format::Text => {}
+        Format::Json => render::error_document(stdout, code, message)?,
+    }
+    writeln!(stderr, "error: {message}")?;
     Ok(code)
 }
 
@@ -89,8 +102,7 @@ mod tests {
     fn output_failures_are_returned_instead_of_reporting_success() {
         let mut output = io::Cursor::new([0_u8; 0]);
         let mut errors = Vec::new();
-        let request = Ok(Request::ShortVersion);
-        assert!(run(request, &mut output, &mut errors).is_err());
+        assert!(run(Ok(Request::ShortVersion), &mut output, &mut errors).is_err());
         let error = Err(UsageError {
             format: Format::Text,
             message: "invalid command",
@@ -107,7 +119,7 @@ mod tests {
                 Err(io::Error::other("test flush failure"))
             }
         }
-        assert!(run(request, &mut FlushFailure, &mut errors).is_err());
-        assert!(run(request, &mut errors, &mut FlushFailure).is_err());
+        assert!(run(Ok(Request::ShortVersion), &mut FlushFailure, &mut errors).is_err());
+        assert!(run(Ok(Request::ShortVersion), &mut errors, &mut FlushFailure).is_err());
     }
 }

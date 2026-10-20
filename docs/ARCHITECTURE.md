@@ -89,7 +89,7 @@ flowchart TB
 
 | Phase | Input | Output | Side effects | Planned command |
 | --- | --- | --- | --- | --- |
-| Inspect | Source path | Project identity summary | Reads a bounded set of files | `frameshift inspect` |
+| Inspect | Source path | Project identity summary | Reads a bounded set of files | `frameshift inspect` (implemented, `D-075`) |
 | Analyze | Source path, target | Project model, assessment, findings | Reads source files | `frameshift analyze` |
 | Plan | Analysis, target profile, ruleset | Plan with ordered operations | None | `frameshift plan` |
 | Execute | Plan, output location | Output project, manifest | Writes to staging, then commits | `frameshift migrate` |
@@ -151,7 +151,7 @@ Boundary rules:
 - **Migration** computes. Planning is a pure function of the model, options, and ruleset.
 - **Output** is the only layer that writes files, and only to staging and output locations given by the planner and executor.
 - **Assurance** is the only layer allowed to start external processes, and only behind an explicit authorization flag.
-- **Reporting** turns the ledger into documents. Terminal formatting belongs to the CLI, not to the engine.
+- **Reporting** turns the ledger into documents. Terminal formatting belongs to the CLI, not to the engine. The engine's deterministic JSON document writer and the `frameshift.inspection` document exist (`D-075`, section 32 of [IMPLEMENTATION.md](IMPLEMENTATION.md)); the ledger and the migration documents remain planned.
 
 ## 7. Project discovery
 
@@ -410,7 +410,7 @@ The evidence ledger holds four entry types: findings, decisions (which rule was 
 
 ## 18. Interfaces
 
-- **Engine API.** A small in-process interface: `inspect`, `analyze`, `plan`, `execute`, `verify`, and `render`. Each takes explicit options and returns structured results. The engine never reads global state, environment variables, or terminal properties. Cancellation is cooperative.
+- **Engine API.** A small in-process interface: `inspect`, `analyze`, `plan`, `execute`, `verify`, and `render`. Each takes explicit options and returns structured results. `inspect` exists as `frameshift_engine::inspect::inspect`, whose result renders its own document (`D-075`); the others are planned. The engine never reads global state, environment variables, or terminal properties. Cancellation is cooperative.
 - **Documents.** Analysis, plan, report, and manifest are versioned JSON documents (`kind` plus `schemaVersion`). They form the stable contract for tools and future frontends.
 - **Progress events.** The engine emits structured progress events (phase started, file parsed, operation emitted). The CLI renders them to the terminal. A planned NDJSON event stream exposes them to other programs.
 - **CLI.** Parses arguments, calls the engine, renders results, and maps outcomes to exit codes. It contains no migration logic.

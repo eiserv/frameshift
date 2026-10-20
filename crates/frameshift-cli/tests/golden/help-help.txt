@@ -1,2 +1,2 @@
-Usage: frameshift help [help|version]
+Usage: frameshift help [help|inspect|version]
 Print usage for the available commands. Without a topic, print the command overview.

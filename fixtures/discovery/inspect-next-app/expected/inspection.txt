@@ -1,0 +1,15 @@
+Frameshift @ENGINE_VERSION@  inspect
+
+Files          11 admitted (1017 bytes), 8 directories, 1 ignored, 0 other
+Package mgr    pnpm 10.34.7 (packageManager field)
+Lockfile       pnpm-lock.yaml (format 9); ignored: package-lock.json (other package manager)
+Workspace      single package
+
+Package        . (fictional-lumen)
+  Framework    Next.js 16.2.1 (locked)
+  Config       next.config.mjs
+  Router       App Router in src/app (3 route files)
+
+Migration      no migration path ships in this build
+Findings       1 (1 review)
+  review  FS1023  package-lock.json  Lockfile of another package manager ignored

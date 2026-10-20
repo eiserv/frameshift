@@ -179,7 +179,7 @@ Pins were resolved from official repository tags on 2026-10-14 and locally check
 ### 6.3 Packaging
 
 1. Build the binary for each target with the pinned Rust toolchain and reproducibility flags (section 9), on native runners per operating system. Both macOS architectures can be built on an ARM64 macOS runner. Linux binaries are statically linked against musl, so they run on any distribution without depending on its glibc version. If musl's memory allocator measurably affects performance, a dedicated allocator is evaluated under its own decision record.
-2. Smoke-test each binary on a native runner. `frameshift version` must report the exact packaged version and commit, and help must succeed. An `inspect` fixture smoke test starts only when that command exists in M2.
+2. Smoke-test each binary on a native runner. `frameshift version` must report the exact packaged version and commit, help must succeed, and `frameshift inspect` of the committed `workspace-npm` fixture must print a `frameshift.inspection` document with its two members (implemented, `D-075`).
 3. Create deterministic archives (section 8).
 4. Generate the checksum file.
 5. Verify archive contents and checksums before upload.

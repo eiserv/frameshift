@@ -1,0 +1,22 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "inspect",
+  "description": "A Next.js App Router project in src/app with a pnpm 9.0 lockfile that resolves next, a configuration file, a private folder whose page is not a route, a route handler, and a .gitignore'd build directory (D-074, D-075). The manifest and both lockfiles name the real next package, so the harness creates them at test time (Q-014); the npm lockfile of another package manager is ignored.",
+  "createdAtTestTime": [
+    {
+      "kind": "file",
+      "path": "package.json",
+      "content": "{\n  \"name\": \"fictional-lumen\",\n  \"private\": true,\n  \"packageManager\": \"pnpm@10.34.7\",\n  \"dependencies\": {\n    \"next\": \"^16.2.0\"\n  }\n}\n"
+    },
+    {
+      "kind": "file",
+      "path": "pnpm-lock.yaml",
+      "content": "lockfileVersion: '9.0'\n\nsettings:\n  autoInstallPeers: true\n  excludeLinksFromLockfile: false\n\nimporters:\n\n  .:\n    dependencies:\n      next:\n        specifier: ^16.2.0\n        version: 16.2.1\n\npackages:\n\n  next@16.2.1:\n    resolution: {integrity: sha512-fictional}\n\nsnapshots:\n\n  next@16.2.1: {}\n"
+    },
+    {
+      "kind": "file",
+      "path": "package-lock.json",
+      "content": "{\n  \"name\": \"fictional-lumen\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"fictional-lumen\",\n      \"dependencies\": {\n        \"next\": \"^16.2.0\"\n      }\n    }\n  }\n}\n"
+    }
+  ]
+}
