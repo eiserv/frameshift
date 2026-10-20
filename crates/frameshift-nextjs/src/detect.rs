@@ -32,6 +32,17 @@ pub enum Verdict {
     Absent,
 }
 
+impl Verdict {
+    /// Returns the stable lowercase spelling used in reports.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NextJs => "nextjs",
+            Self::Inconclusive => "inconclusive",
+            Self::Absent => "absent",
+        }
+    }
+}
+
 /// The package's `next` declaration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NextDependency {
@@ -75,6 +86,17 @@ pub enum ConfigLoad {
     /// Next.js ignores it (`next.config.ts` before Next.js 15) or fails on
     /// it (`next.config.cjs`, `.cts`, `.json`, `.jsx`, `.tsx`).
     Unsupported,
+}
+
+impl ConfigLoad {
+    /// Returns the stable lowercase spelling used in reports.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Loaded => "loaded",
+            Self::DependsOnNode => "depends-on-node",
+            Self::Unsupported => "unsupported",
+        }
+    }
 }
 
 /// The `next.config.*` file nearest to the package directory.
@@ -134,6 +156,18 @@ pub enum Router {
     Hybrid,
     /// No route files.
     None,
+}
+
+impl Router {
+    /// Returns the stable lowercase spelling used in reports.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::App => "app",
+            Self::Pages => "pages",
+            Self::Hybrid => "hybrid",
+            Self::None => "none",
+        }
+    }
 }
 
 /// The detection result.

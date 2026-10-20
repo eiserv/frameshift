@@ -191,6 +191,16 @@ pub enum DetectionSource {
     Lockfile,
 }
 
+impl DetectionSource {
+    /// Returns the stable lowercase spelling used in reports.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Field => "package-manager-field",
+            Self::Lockfile => "lockfile",
+        }
+    }
+}
+
 /// Why a present lockfile is not used.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IgnoredReason {
@@ -201,6 +211,17 @@ pub enum IgnoredReason {
     /// Lockfiles of several package managers are present and no valid
     /// `packageManager` field decides.
     Ambiguous,
+}
+
+impl IgnoredReason {
+    /// Returns the stable lowercase spelling used in reports.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::OtherManager => "other-manager",
+            Self::Superseded => "superseded",
+            Self::Ambiguous => "ambiguous",
+        }
+    }
 }
 
 /// A present lockfile that is not used, with the reason.

@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frameshift inspection document",
+  "description": "The result of frameshift inspect (D-075): discovery counts, the root's package manager and lockfile, the workspace, Next.js detection per inspected package, and every finding. Paths are relative to the inspected root with slash separators; \".\" names the root. Consumers must accept additional fields.",
+  "type": "object",
+  "required": [
+    "kind",
+    "schemaVersion",
+    "engineVersion",
+    "files",
+    "packageManager",
+    "workspace",
+    "packages",
+    "migrationPaths",
+    "findings"
+  ],
+  "properties": {
+    "kind": { "const": "frameshift.inspection" },
+    "schemaVersion": { "const": 1 },
+    "engineVersion": { "type": "string", "minLength": 1 },
+    "files": {
+      "type": "object",
+      "required": [
+        "complete",
+        "stop",
+        "admitted",
+        "admittedBytes",
+        "directories",
+        "ignored",
+        "oversized",
+        "links",
+        "reparsePoints",
+        "special",
+        "notTraversed",
+        "uninspectable",
+        "unrepresentable"
+      ],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "stop": {
+          "description": "The cumulative limit that stopped discovery.",
+          "enum": [
+            null,
+            "run.max-files",
+            "run.max-total-bytes",
+            "run.max-entries",
+            "ignore.max-total-bytes",
+            "ignore.max-match-work"
+          ]
+        },
+        "admitted": { "$ref": "#/$defs/count" },
+        "admittedBytes": { "$ref": "#/$defs/count" },
+        "directories": { "$ref": "#/$defs/count" },
+        "ignored": {
+          "type": "object",
+          "required": ["vcs", "dependencies", "build-output", "environment", "gitignore"],
+          "properties": {
+            "vcs": { "$ref": "#/$defs/count" },
+            "dependencies": { "$ref": "#/$defs/count" },
+            "build-output": { "$ref": "#/$defs/count" },
+            "environment": { "$ref": "#/$defs/count" },
+            "gitignore": { "$ref": "#/$defs/count" }
+          }
+        },
+        "oversized": { "$ref": "#/$defs/count" },
+        "links": { "$ref": "#/$defs/count" },
+        "reparsePoints": { "$ref": "#/$defs/count" },
+        "special": { "$ref": "#/$defs/count" },
+        "notTraversed": { "$ref": "#/$defs/count" },
+        "uninspectable": { "$ref": "#/$defs/count" },
+        "unrepresentable": { "$ref": "#/$defs/count" }
+      }
+    },
+    "packageManager": {
+      "type": "object",
+      "required": ["name", "source", "declared", "lockfile", "ignoredLockfiles"],
+      "properties": {
+        "name": { "enum": [null, "npm", "pnpm", "yarn", "bun"] },
+        "source": { "enum": [null, "package-manager-field", "lockfile"] },
+        "declared": {
+          "description": "The valid packageManager field of the root package.json.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["name", "version"],
+              "properties": {
+                "name": { "enum": ["npm", "pnpm", "yarn", "bun"] },
+                "version": { "type": "string", "minLength": 1 }
+              }
+            }
+          ]
+        },
+        "lockfile": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["path", "status", "formatVersion"],
+              "properties": {
+                "path": { "$ref": "#/$defs/lockfile" },
+                "status": { "enum": ["parsed", "not-parsed"] },
+                "formatVersion": {
+                  "description": "The format major of a parsed lockfile, null otherwise.",
+                  "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/count" }]
+                }
+              }
+            }
+          ]
+        },
+        "ignoredLockfiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "reason"],
+            "properties": {
+              "path": { "$ref": "#/$defs/lockfile" },
+              "reason": { "enum": ["other-manager", "superseded", "ambiguous"] }
+            }
+          }
+        }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "required": ["isWorkspace", "declarations", "releases", "complete", "members", "undetermined"],
+      "properties": {
+        "isWorkspace": { "type": "boolean" },
+        "declarations": {
+          "type": "array",
+          "items": { "enum": ["package.json", "pnpm-workspace.yaml"] }
+        },
+        "releases": {
+          "description": "The package manager releases whose workspace semantics were evaluated (D-073).",
+          "type": "array",
+          "items": {
+            "enum": ["npm-11", "yarn-1", "yarn-2", "yarn-4", "pnpm-10", "pnpm-11", "pnpm-12", "bun-1.4"]
+          }
+        },
+        "complete": { "type": "boolean" },
+        "members": { "type": "array", "items": { "$ref": "#/$defs/path" } },
+        "undetermined": { "type": "array", "items": { "$ref": "#/$defs/path" } }
+      }
+    },
+    "packages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["directory", "name", "manifest", "nextjs"],
+        "properties": {
+          "directory": {
+            "oneOf": [{ "const": "." }, { "$ref": "#/$defs/path" }]
+          },
+          "name": { "oneOf": [{ "type": "null" }, { "type": "string" }] },
+          "manifest": { "enum": ["absent", "not-analyzed", "analyzed"] },
+          "nextjs": {
+            "type": "object",
+            "required": ["verdict", "dependency", "version", "config", "router", "app", "pages"],
+            "properties": {
+              "verdict": { "enum": ["nextjs", "inconclusive", "absent"] },
+              "dependency": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "required": ["field", "specifier"],
+                    "properties": {
+                      "field": {
+                        "enum": [
+                          "dependencies",
+                          "devDependencies",
+                          "peerDependencies",
+                          "optionalDependencies"
+                        ]
+                      },
+                      "specifier": { "type": "string" }
+                    }
+                  }
+                ]
+              },
+              "version": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "required": ["value", "evidence"],
+                    "properties": {
+                      "value": { "type": "string", "minLength": 1 },
+                      "evidence": { "enum": ["locked", "lower-bound"] }
+                    }
+                  }
+                ]
+              },
+              "config": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "required": ["path", "load"],
+                    "properties": {
+                      "path": { "$ref": "#/$defs/path" },
+                      "load": { "enum": ["loaded", "depends-on-node", "unsupported"] }
+                    }
+                  }
+                ]
+              },
+              "router": { "enum": ["app", "pages", "hybrid", "none"] },
+              "app": { "$ref": "#/$defs/router" },
+              "pages": { "$ref": "#/$defs/router" }
+            }
+          }
+        }
+      }
+    },
+    "migrationPaths": {
+      "description": "The migration paths that this build ships for the project; empty until a ruleset ships.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "code", "severity", "location", "message", "explanation", "remediation"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^F[0-9]{4,}$" },
+          "code": { "type": "string", "pattern": "^FS[0-9]{4}$" },
+          "severity": { "enum": ["error", "blocker", "unknown", "review", "info"] },
+          "location": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["scope"],
+                "properties": { "scope": { "const": "project" } }
+              },
+              {
+                "type": "object",
+                "required": ["scope", "path"],
+                "properties": {
+                  "scope": { "const": "file" },
+                  "path": { "$ref": "#/$defs/path" }
+                }
+              },
+              {
+                "type": "object",
+                "required": ["scope", "path", "start", "end"],
+                "properties": {
+                  "scope": { "const": "text" },
+                  "path": { "$ref": "#/$defs/path" },
+                  "start": { "$ref": "#/$defs/position" },
+                  "end": { "$ref": "#/$defs/position" }
+                }
+              }
+            ]
+          },
+          "unit": { "type": "string", "minLength": 1 },
+          "feature": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 },
+          "explanation": { "type": "string", "minLength": 1 },
+          "remediation": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "path": {
+      "description": "A canonical path relative to the inspected root, with slash separators.",
+      "type": "string",
+      "pattern": "^[^/\\\\]+(/[^/\\\\]+)*$"
+    },
+    "lockfile": {
+      "enum": [
+        "npm-shrinkwrap.json",
+        "package-lock.json",
+        "bun.lock",
+        "bun.lockb",
+        "pnpm-lock.yaml",
+        "yarn.lock"
+      ]
+    },
+    "position": {
+      "type": "object",
+      "required": ["offset", "line", "column"],
+      "properties": {
+        "offset": { "$ref": "#/$defs/count" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "router": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["path", "inSrc", "state", "routeFiles", "complete"],
+          "properties": {
+            "path": { "$ref": "#/$defs/path" },
+            "inSrc": { "type": "boolean" },
+            "state": { "enum": ["directory", "other"] },
+            "routeFiles": { "$ref": "#/$defs/count" },
+            "complete": {
+              "description": "Whether every entry below a directory was traversed; null for other entries.",
+              "oneOf": [{ "type": "null" }, { "type": "boolean" }]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

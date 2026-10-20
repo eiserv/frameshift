@@ -16,11 +16,14 @@
 //! `package.json`, the package manager, npm, Bun, pnpm, and Yarn lockfiles,
 //! and workspace members, which it reads through the snapshot store. The
 //! Next.js API detects the framework, version, configuration file, and
-//! routers of the selected package. The facade contains no
-//! project inspection, migration, or verification pipeline. The M1 help and
-//! version CLI consumes this facade, including immutable build identity,
-//! rather than lower layers.
+//! routers of the selected package. The `inspect` pipeline combines them into
+//! a read-only identification of a project with its versioned JSON document;
+//! the facade contains no migration or verification pipeline. The CLI
+//! consumes this facade, including immutable build identity, rather than
+//! lower layers.
 
+mod document;
+pub mod inspect;
 pub mod limits;
 pub mod version;
 

@@ -211,3 +211,16 @@ pub enum Stop {
     /// `ignore.max-match-work`.
     IgnoreWork,
 }
+
+impl Stop {
+    /// Returns the canonical name of the limit, as `Limits::entries` lists it.
+    pub const fn limit_name(self) -> &'static str {
+        match self {
+            Self::Files => "run.max-files",
+            Self::TotalBytes => "run.max-total-bytes",
+            Self::Entries => "run.max-entries",
+            Self::IgnoreBytes => "ignore.max-total-bytes",
+            Self::IgnoreWork => "ignore.max-match-work",
+        }
+    }
+}
