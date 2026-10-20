@@ -150,7 +150,7 @@
         "required": ["directory", "name", "manifest", "nextjs"],
         "properties": {
           "directory": {
-            "oneOf": [{ "const": "." }, { "$ref": "#/$defs/path" }]
+            "anyOf": [{ "const": "." }, { "$ref": "#/$defs/path" }]
           },
           "name": { "oneOf": [{ "type": "null" }, { "type": "string" }] },
           "manifest": { "enum": ["absent", "not-analyzed", "analyzed"] },
