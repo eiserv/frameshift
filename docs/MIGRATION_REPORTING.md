@@ -229,7 +229,7 @@ The following assessment and outcome propagation remains planned. Severities cor
 | `FS7xxx` | Output and filesystem safety | `FS7001` output location exists. `FS7002` output location inside the source. `FS7003` unsafe output path rejected. `FS7004` managed output was modified since generation. |
 | `FS9xxx` | Internal | `FS9001` internal error. Results of this run are not trustworthy. |
 
-The discovery walker, the snapshot store, the package loader, workspace detection, and the Next.js source adapter emit the following assigned codes (`D-064`, `D-065`, `D-067`, `D-069`, `D-073`, `D-074`, sections 22, 24, 26, 30, and 31 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Locations are the named path, a text range in it where the problem has a span, or, for entries directly in the root, project scope. Package and workspace findings name fields, kinds, paths, releases, and limits, never package names, patterns, or values. Severities follow the status mapping above: `unknown` where content is not analyzed, `error` for operational failures, and `info` where nothing is lost.
+The discovery walker, the snapshot store, the package loader, workspace detection, and the Next.js source adapter emit the following assigned codes (`D-064`, `D-065`, `D-067`, `D-069`, `D-073`, `D-074`, `D-076`, sections 22, 24, 26, 30, and 31 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Locations are the named path, a text range in it where the problem has a span, or, for entries directly in the root, project scope. Package and workspace findings name fields, kinds, paths, releases, and limits, never package names, patterns, or values. Severities follow the status mapping above: `unknown` where content is not analyzed, `error` for operational failures, and `info` where nothing is lost.
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
@@ -271,11 +271,12 @@ The discovery walker, the snapshot store, the package loader, workspace detectio
 | `FS1036` | unknown | A matched directory's manifest is hidden from discovery or only in a format that Frameshift does not read (`yarn.json`, `package.yaml`, `package.json5`), or a member's nested declaration is unusable. |
 | `FS1037` | review | `packageManager` names a release whose workspace semantics are not modeled; every modeled release of that manager is evaluated. |
 | `FS1038` | unknown | A workspace limit (`workspace.max-patterns` or `workspace.max-match-work`) is reached; members are not determined. |
-| `FS1040` | review | Next.js evidence is incomplete: `next` is declared without a configuration file or route files, or a configuration file exists without the declaration; the package is not classified as Next.js (`D-074`). |
+| `FS1040` | review | Next.js evidence is incomplete: `next` is declared without a configuration file or route files, or a configuration file exists in the package directory without the declaration; the package is not classified as Next.js (`D-074`, `D-076`). |
 | `FS1041` | review | The Next.js version lies outside the validated range 14 to 16 (`D-023`). |
 | `FS1042` | review | The Next.js version is imprecise or unknown: no lockfile resolution, so the lower bound of the declared range is used, or a source other than the registry. |
 | `FS1043` | review or info | The Next.js configuration file is not loaded as expected: a name that the version ignores or rejects, or `next.config.mts`, which depends on Node.js; `info` when no configuration exists inside the root. |
-| `FS1044` | review | A Next.js router directory is not fully known: not a traversed directory, untraversed entries below it, or `app` and `pages` in different directories, which Next.js 15 and later reject. |
+| `FS1044` | review | A Next.js router directory is not fully known: not a traversed directory, untraversed entries below it, `app` and `pages` in different directories, which Next.js 15 and later reject, or a `src` entry that is not a traversed directory where Next.js would look for a missing router directory (`D-076`). |
+| `FS1045` | info | Next.js ignores this entry of the package directory: another configuration file name beside the one it loads, an entry with a configuration file name that is not a regular file, or `src/app` or `src/pages` beside the directory of the same name (`D-076`). |
 | `FS2001` | unknown | Syntax error; the file is not analyzed. The package loader reports it for JSON, JSONC, YAML, and Yarn classic package files, including their parse limits and Yarn classic files with merge conflict markers. |
 | `FS2002` | unknown | Unsupported text encoding (not UTF-8); the file is not analyzed. |
 | `FS2003` | unknown | File exceeds the text size limit; it is not decoded or analyzed. |

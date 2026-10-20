@@ -229,10 +229,131 @@ fn version_and_configuration_outside_what_next_supports() {
     );
     write(&root, "next.config.mts", "export default {};\n");
     let (detection, findings) = run(&root, None);
-    // next.config.ts comes first in Next.js's order; app and pages in
-    // different directories fail from Next.js 15 (FS1044).
-    assert_eq!(codes(&findings), ["FS1042", "FS1044"]);
+    // next.config.ts comes first in Next.js's order, so next.config.mts is
+    // ignored (FS1045); app and pages in different directories fail from
+    // Next.js 15 (FS1044).
+    assert_eq!(codes(&findings), ["FS1042", "FS1044", "FS1045"]);
     assert_eq!(detection.config.as_ref().unwrap().load, ConfigLoad::Loaded);
+    assert_eq!(detection.ignored, [path("next.config.mts")]);
+}
+
+#[test]
+fn ignored_entries_and_entries_that_are_not_files() {
+    let root = scratch("shadowed");
+    write(
+        &root,
+        "package.json",
+        r#"{ "name": "fictional-site", "dependencies": { "next": "15.5.2" } }"#,
+    );
+    // `findUp` looks for regular files, so a directory named like a
+    // configuration file is no configuration; the file beside it wins, and
+    // Next.js ignores every other configuration name (FS1045).
+    write(&root, "next.config.js/index.js", "");
+    write(&root, "next.config.cjs", "module.exports = {};\n");
+    write(&root, "next.config.mjs", "export default {};\n");
+    write(&root, "next.config.ts", "export default {};\n");
+    write(&root, "app/page.tsx", "");
+    write(&root, "src/app/page.tsx", "");
+    write(&root, "pages/index.tsx", "");
+    write(&root, "src/pages/about.tsx", "");
+    let (detection, findings) = run(&root, None);
+    let config = detection.config.as_ref().unwrap();
+    assert_eq!(config.path, path("next.config.mjs"));
+    assert_eq!(config.load, ConfigLoad::Loaded);
+    assert_eq!(
+        detection.ignored,
+        [
+            path("next.config.cjs"),
+            path("next.config.js"),
+            path("next.config.ts"),
+            path("src/app"),
+            path("src/pages"),
+        ]
+    );
+    assert_eq!(
+        codes(&findings),
+        ["FS1042", "FS1045", "FS1045", "FS1045", "FS1045", "FS1045"]
+    );
+    assert_eq!(detection.router(), Router::Hybrid);
+    assert_eq!(detection.app.as_ref().unwrap().routes(), 1);
+
+    // Only a directory named like a configuration file: no configuration
+    // (FS1043, info), and the directory is ignored (FS1045).
+    let root = scratch("config-directory");
+    write(
+        &root,
+        "package.json",
+        r#"{ "name": "fictional-site", "dependencies": { "next": "14.2.35" } }"#,
+    );
+    write(&root, "next.config.mjs/index.js", "");
+    write(&root, "pages/index.tsx", "");
+    let (detection, findings) = run(&root, None);
+    assert_eq!(detection.config, None);
+    assert_eq!(detection.ignored, [path("next.config.mjs")]);
+    assert_eq!(codes(&findings), ["FS1042", "FS1043", "FS1045"]);
+
+    // A member without the declaration is not evidence for the root's
+    // configuration file, which serves the packages below it.
+    let root = scratch("member-below-config");
+    write(
+        &root,
+        "package.json",
+        r#"{ "name": "fictional-root", "private": true, "packageManager": "npm@11.11.0",
+             "workspaces": ["packages/*"],
+             "dependencies": { "next": "15.5.2" } }"#,
+    );
+    write(
+        &root,
+        "next.config.mjs",
+        "export default {};
+",
+    );
+    write(&root, "app/page.tsx", "");
+    write(
+        &root,
+        "packages/ui/package.json",
+        r#"{ "name": "fictional-ui" }"#,
+    );
+    let (detection, findings) = run(&root, Some("packages/ui"));
+    assert_eq!(detection.verdict, Verdict::Absent);
+    assert_eq!(
+        detection.config.as_ref().unwrap().path,
+        path("next.config.mjs")
+    );
+    assert!(codes(&findings).iter().all(|code| *code != "FS1040"));
+}
+
+/// A dangling `app` link is missing for `fs.existsSync`, so Next.js takes
+/// `src/app`; a `src` link hides what lies below it (FS1044).
+#[cfg(unix)]
+#[test]
+fn links_in_router_lookups() {
+    let root = scratch("router-links");
+    write(
+        &root,
+        "package.json",
+        r#"{ "name": "fictional-site", "dependencies": { "next": "15.5.2" } }"#,
+    );
+    write(&root, "next.config.mjs", "export default {};\n");
+    write(&root, "src/app/page.tsx", "");
+    std::os::unix::fs::symlink("missing", root.join("app")).unwrap();
+    let (detection, findings) = run(&root, None);
+    assert_eq!(detection.app.as_ref().unwrap().path, path("src/app"));
+    assert_eq!(detection.router(), Router::App);
+    assert_eq!(codes(&findings), ["FS1007", "FS1042"]);
+
+    let root = scratch("src-link");
+    write(
+        &root,
+        "package.json",
+        r#"{ "name": "fictional-site", "dependencies": { "next": "15.5.2" } }"#,
+    );
+    write(&root, "next.config.mjs", "export default {};\n");
+    write(&root, "shared/app/page.tsx", "");
+    std::os::unix::fs::symlink("shared", root.join("src")).unwrap();
+    let (detection, findings) = run(&root, None);
+    assert_eq!(detection.app, None);
+    assert_eq!(codes(&findings), ["FS1005", "FS1042", "FS1044"]);
 }
 
 #[test]
