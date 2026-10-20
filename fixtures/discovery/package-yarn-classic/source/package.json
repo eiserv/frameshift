@@ -1,0 +1,18 @@
+{
+  "name": "fictional-classic-root",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "dependencies": {
+    "fictional-ranged": "^1.2.0",
+    "fictional-alias": "npm:fictional-ranged@^2.0.0",
+    "fictional-tagged": "latest",
+    "fictional-local": "file:./local/thing",
+    "fictional-linked": "link:./local/linked"
+  },
+  "devDependencies": {
+    "@fictional/scoped": "~3.1.0"
+  },
+  "optionalDependencies": {
+    "fictional-optional": "^0.4.0"
+  }
+}

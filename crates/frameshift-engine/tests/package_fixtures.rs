@@ -76,6 +76,8 @@ fn cases() -> Vec<Case> {
                     "json.max-nodes" => limits.json.max_nodes = size(),
                     "yaml.max-depth" => limits.yaml.max_depth = size(),
                     "yaml.max-nodes" => limits.yaml.max_nodes = size(),
+                    "yarn.max-depth" => limits.yarn.max_depth = size(),
+                    "yarn.max-nodes" => limits.yarn.max_nodes = size(),
                     other => panic!("{name}: unknown limit {other}"),
                 }
             }
@@ -207,7 +209,7 @@ fn render_directory(out: &mut String, loaded: &PackageDirectory) {
                         .and_then(|range| range.min_version())
                         .map_or("-".to_owned(), |version| version.to_string());
                     let resolved = lockfile.map_or("no lockfile".to_owned(), |lockfile| {
-                        locked(lockfile.resolve("", &entry.key))
+                        locked(lockfile.resolve_declared("", &entry.key, &dependency.text))
                     });
                     writeln!(
                         out,

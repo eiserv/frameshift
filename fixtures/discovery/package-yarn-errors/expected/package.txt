@@ -1,0 +1,76 @@
+directory syntax
+  manifest absent
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile not parsed yarn.lock
+directory conflict
+  manifest absent
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile not parsed yarn.lock
+directory newer
+  manifest absent
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile not parsed yarn.lock
+directory duplicate
+  manifest absent
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile not parsed yarn.lock
+directory missing
+  manifest absent
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile not parsed yarn.lock
+directory berry-version
+  manifest absent
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile not parsed yarn.lock
+directory no-metadata
+  manifest absent
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile not parsed yarn.lock
+directory limit
+  manifest absent
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile not parsed yarn.lock
+directory generation
+  manifest name=fictional-generation version=- parsed-version=- private=true type=-
+  dependencies fictional-a "^1.0.0": range >=1.0.0 <2.0.0-0; min 1.0.0; fictional-a@1.0.0
+  packageManager yarn 1.22.22
+  detected yarn from field lockfile yarn.lock
+  lockfile yarn.lock version 8: 1 workspaces, 2 packages
+directory stale
+  manifest name=fictional-stale version=- parsed-version=- private=true type=-
+  dependencies fictional-a "^1.1.0": range >=1.1.0 <2.0.0-0; min 1.1.0; unresolved
+  dependencies fictional-b "^2.0.0": range >=2.0.0 <3.0.0-0; min 2.0.0; fictional-b@2.0.0
+  packageManager -
+  detected yarn from lockfile lockfile yarn.lock
+  lockfile yarn.lock version 1: 0 workspaces, 2 packages
+findings:
+  F0001 unknown FS1010 berry-version/yarn.lock:2:12: Lockfile format not parsed
+    Frameshift does not read this lockfile format or format version, so resolved versions fall back to the ranges declared in package.json and are imprecise.
+  F0002 unknown FS2001 conflict/yarn.lock:6:1: Syntax error, file not analyzed
+    The file is not a Yarn classic lockfile that Yarn 1 reads as written (merge conflict markers at bytes 102..109), so it is not analyzed.
+  F0003 unknown FS1026 duplicate/yarn.lock:5:1: Lockfile structure not valid
+    The lockfile does not have the structure of its format, so it is not used and versions fall back to the declared ranges.
+  F0004 unknown FS2001 limit/yarn.lock:33:11: Syntax error, file not analyzed
+    The file is not a Yarn classic lockfile that Yarn 1 reads as written (the lockfile exceeds 40 values and keys (yarn.max-nodes) at bytes 427..434), so it is not analyzed.
+  F0005 unknown FS1026 missing/yarn.lock:6:3: Lockfile structure not valid
+    The lockfile does not have the structure of its format, so it is not used and versions fall back to the declared ranges.
+  F0006 unknown FS1010 newer/yarn.lock:5:1: Lockfile format not parsed
+    Frameshift does not read this lockfile format or format version, so resolved versions fall back to the ranges declared in package.json and are imprecise.
+  F0007 unknown FS1010 no-metadata/yarn.lock:1:1: Lockfile format not parsed
+    Frameshift does not read this lockfile format or format version, so resolved versions fall back to the ranges declared in package.json and are imprecise.
+  F0008 unknown FS2001 syntax/yarn.lock:6:1: Syntax error, file not analyzed
+    The file is not a Yarn classic lockfile that Yarn 1 reads as written (invalid indentation at bytes 102..105), so it is not analyzed.
+  F0009 review FS1021 duplicate/yarn.lock:5:1: Duplicate key in a package file
+    A key repeats in one object of the Yarn classic lockfile, where Yarn uses the last occurrence. The lockfile is ambiguous and is rejected as a whole.
+  F0010 review FS1029 generation/yarn.lock: Lockfile format does not match the Yarn version
+    packageManager names Yarn 1, which ignores a Yarn Berry lockfile, so the next install resolves every version anew.
+  F0011 review FS1027 stale/yarn.lock: Lockfile is out of sync with package.json
+    The Yarn classic lockfile has no entry for declarations of package.json in dependencies, so resolved versions may not match what an install would produce. Yarn 1 records no entry for a declaration that a workspace package satisfies.

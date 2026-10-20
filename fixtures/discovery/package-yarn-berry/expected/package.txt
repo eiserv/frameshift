@@ -1,0 +1,22 @@
+directory (root)
+  manifest name=fictional-berry-root version=- parsed-version=- private=true type=-
+  workspaces packages/*
+  dependencies @fictional/side "workspace:^": workspace ^; min -; workspace packages/side
+  dependencies fictional-ranged "^1.2.0": range >=1.2.0 <2.0.0-0; min 1.2.0; fictional-ranged@1.2.5
+  dependencies fictional-alias "npm:fictional-ranged@^2.0.0": alias fictional-ranged range >=2.0.0 <3.0.0-0; min 2.0.0; fictional-ranged@2.0.3
+  dependencies fictional-local "file:./local/thing": local; min -; fictional-local other fictional-local@file:./local/thing#./local/thing::hash=000000&locator=fictional-berry-root%40workspace%3A.
+  dependencies fictional-portal "portal:./local/portal": local; min -; fictional-portal other fictional-portal@portal:./local/portal::locator=fictional-berry-root%40workspace%3A.
+  devDependencies fictional-tagged "latest": tag latest; min -; fictional-tagged@4.0.0
+  optionalDependencies fictional-optional "^0.4.0": range >=0.4.0 <0.5.0-0; min 0.4.0; fictional-optional@0.4.1
+  packageManager yarn 4.18.1
+  detected yarn from field lockfile yarn.lock
+  lockfile yarn.lock version 10: 2 workspaces, 8 packages
+  workspace packages/side fictional-ranged "npm:^1.0.0": fictional-ranged@1.2.5
+directory legacy
+  manifest name=fictional-legacy-root version=- parsed-version=- private=true type=-
+  dependencies fictional-ranged "^1.0.0": range >=1.0.0 <2.0.0-0; min 1.0.0; fictional-ranged@1.1.0
+  dependencies fictional-tagged "latest": tag latest; min -; fictional-tagged@4.0.0
+  packageManager yarn 3.8.7
+  detected yarn from field lockfile yarn.lock
+  lockfile yarn.lock version 6: 1 workspaces, 3 packages
+findings:

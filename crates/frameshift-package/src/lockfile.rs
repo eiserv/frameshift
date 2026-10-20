@@ -1,7 +1,9 @@
 //! Lockfile models of npm (`package-lock.json` and `npm-shrinkwrap.json`,
-//! versions 2 and 3) and Bun (`bun.lock`, versions 1 and 2) (`D-069`).
+//! versions 2 and 3) and Bun (`bun.lock`, versions 1 and 2) (`D-069`), pnpm
+//! (`pnpm-lock.yaml`, version 9.0) (`D-071`), and Yarn (`yarn.lock`, classic
+//! version 1 and Berry versions 4 to 10) (`D-072`).
 //!
-//! Both formats become one model: the workspaces with the dependencies
+//! Every format becomes one model: the workspaces with the dependencies
 //! they declare, and the locked packages with the versions they resolve to.
 //! A lockfile whose structure differs from its format is rejected as a
 //! whole, because a partly read lockfile could resolve a dependency to the
@@ -10,14 +12,20 @@
 mod bun;
 mod npm;
 mod pnpm;
+mod yarn_berry;
+mod yarn_classic;
 
+pub(crate) use yarn_classic::has_classic_header;
+
+use std::collections::BTreeMap;
 use std::fmt;
 
 use frameshift_core::Span;
-use frameshift_syntax::{JsonDocument, YamlStream};
+use frameshift_syntax::{JsonDocument, YamlStream, YarnDocument};
 
 use crate::manager::LockfileKind;
 use crate::manifest::{DependencyKind, PackageManifest};
+use crate::range::VersionRange;
 use crate::version::Version;
 
 /// A dependency name and specifier text, as a lockfile records them.
@@ -56,7 +64,8 @@ pub enum Resolution {
     Registry(Version),
     /// npm: a link to another location of the lockfile, such as a workspace.
     Link(Box<str>),
-    /// Bun: a workspace package at this path.
+    /// Bun and Yarn Berry: a workspace package at this path, empty for the
+    /// root.
     Workspace(Box<str>),
     /// Anything else, such as a Git, file, or tarball source, or a version
     /// that is not exact SemVer; the text as recorded.
@@ -66,7 +75,9 @@ pub enum Resolution {
 /// A package that the lockfile installs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LockedPackage {
-    /// The key: an install path for npm, a path of package names for Bun.
+    /// The key: an install path for npm, a path of package names for Bun,
+    /// the snapshot key with peer contexts for pnpm, the patterns joined
+    /// with `, ` for Yarn classic, and the resolution locator for Yarn Berry.
     pub key: Box<str>,
     /// The span of the entry's value.
     pub span: Span,
@@ -100,8 +111,10 @@ impl LockedPackage {
 /// What is wrong with a lockfile.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LockfileErrorKind {
-    /// `lockfileVersion` names a format version that is not read: npm 1,
-    /// Bun 0, or an unknown version.
+    /// The format or format version is not read: npm 1, Bun 0, pnpm other
+    /// than 9.0, a Yarn classic version above 1, a Yarn Berry version that
+    /// no stable release writes, a `yarn.lock` with neither `__metadata` nor
+    /// the classic header, or an unknown version.
     UnsupportedVersion,
     /// The document does not have the structure of its format.
     Structure,
@@ -139,7 +152,7 @@ impl fmt::Display for LockfileError {
 
 impl std::error::Error for LockfileError {}
 
-/// A parsed npm, Bun, or pnpm 9.0 lockfile.
+/// A parsed npm, Bun, pnpm 9.0, or Yarn lockfile.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Lockfile {
     kind: LockfileKind,
@@ -147,6 +160,8 @@ pub struct Lockfile {
     workspaces: Vec<LockedWorkspace>,
     packages: Vec<LockedPackage>,
     pnpm_references: pnpm::References,
+    yarn_patterns: yarn_classic::Patterns,
+    yarn_index: yarn_berry::Index,
 }
 
 impl Lockfile {
@@ -177,6 +192,8 @@ impl Lockfile {
             workspaces,
             packages,
             pnpm_references: Default::default(),
+            yarn_patterns: BTreeMap::new(),
+            yarn_index: Default::default(),
         })
     }
 
@@ -192,7 +209,53 @@ impl Lockfile {
             workspaces: read.workspaces,
             packages: read.packages,
             pnpm_references: read.references,
+            yarn_patterns: BTreeMap::new(),
+            yarn_index: Default::default(),
         })
+    }
+
+    /// Interprets a Yarn classic lockfile, format version 1. Duplicate
+    /// keys, patterns of one entry that name different packages, values of
+    /// unexpected types, and dependencies without their own entry fail
+    /// closed. The model records no workspaces, because Yarn 1 does not.
+    pub fn from_yarn_classic(document: &YarnDocument<'_>) -> Result<Self, LockfileError> {
+        let read = yarn_classic::read(document)?;
+        Ok(Self {
+            kind: LockfileKind::Yarn,
+            version: 1,
+            workspaces: Vec::new(),
+            packages: read.packages,
+            pnpm_references: Default::default(),
+            yarn_patterns: read.patterns,
+            yarn_index: Default::default(),
+        })
+    }
+
+    /// Interprets exactly one YAML document as a Yarn Berry lockfile of a
+    /// format version that a stable Yarn release writes (4, 5, 6, 8, 9, or
+    /// 10). Scalars are strings, as under Yarn's failsafe schema. Duplicate
+    /// or complex keys, ambiguous descriptors, and values of unexpected
+    /// types fail closed. A dependency whose descriptor the root's
+    /// `resolutions` or a catalog replaced has no entry and resolves to
+    /// nothing.
+    /// A document without `__metadata` is not a Berry lockfile and fails
+    /// with [`LockfileErrorKind::UnsupportedVersion`].
+    pub fn from_yarn_berry(stream: &YamlStream) -> Result<Self, LockfileError> {
+        let read = yarn_berry::read(stream)?;
+        Ok(Self {
+            kind: LockfileKind::Yarn,
+            version: read.version,
+            workspaces: read.workspaces,
+            packages: read.packages,
+            pnpm_references: Default::default(),
+            yarn_patterns: BTreeMap::new(),
+            yarn_index: read.index,
+        })
+    }
+
+    /// Returns whether this is a Yarn classic lockfile.
+    const fn is_yarn_classic(&self) -> bool {
+        matches!(self.kind, LockfileKind::Yarn) && self.version == 1
     }
 
     /// Returns a pnpm importer's exact recorded dependency reference,
@@ -209,7 +272,8 @@ impl Lockfile {
         self.kind
     }
 
-    /// Returns the format major: npm/Bun's integer or 9 for pnpm 9.0.
+    /// Returns the format major: npm's or Bun's integer, 9 for pnpm 9.0, 1
+    /// for Yarn classic, and `__metadata.version` for Yarn Berry.
     pub const fn version(&self) -> u64 {
         self.version
     }
@@ -249,7 +313,23 @@ impl Lockfile {
     /// workspace's package name down to the bare name.
     /// pnpm follows the importer's exact snapshot reference, preserving
     /// peer contexts and aliases; local `link:` references return `None`.
+    /// Yarn Berry looks up the descriptor that the workspace's entry
+    /// records, normalized and bound as Yarn does. Yarn classic records no
+    /// workspaces and returns `None`; use [`Lockfile::resolve_declared`].
     pub fn resolve(&self, workspace: &str, name: &str) -> Option<&LockedPackage> {
+        if self.kind == LockfileKind::Yarn {
+            if self.is_yarn_classic() {
+                return None;
+            }
+            let declared = self
+                .workspace(workspace)?
+                .declared(DependencyKind::Production);
+            let index = declared
+                .binary_search_by(|dependency| dependency.name.as_ref().cmp(name))
+                .ok()?;
+            let parent = self.yarn_index.workspaces.get(workspace);
+            return self.resolve_berry(name, &declared[index].spec, parent.map(AsRef::as_ref));
+        }
         match self.kind {
             LockfileKind::Pnpm => {
                 pnpm::find(&self.packages, name, self.pnpm_reference(workspace, name)?)
@@ -269,8 +349,56 @@ impl Lockfile {
         }
     }
 
+    /// Resolves a dependency that a workspace's `package.json` declares with
+    /// the specifier text `spec`.
+    ///
+    /// Yarn looks up declarations by name and range: classic finds the
+    /// pattern `<name>@<spec>`, or the bare name when the lockfile has it,
+    /// and Berry the descriptor of `spec`, normalized and bound to the
+    /// workspace. A specifier that changed after the last install therefore
+    /// resolves to nothing, as for Yarn. The other formats record installs
+    /// by name and resolve as [`Lockfile::resolve`] does.
+    pub fn resolve_declared(
+        &self,
+        workspace: &str,
+        name: &str,
+        spec: &str,
+    ) -> Option<&LockedPackage> {
+        if self.kind != LockfileKind::Yarn {
+            return self.resolve(workspace, name);
+        }
+        if self.is_yarn_classic() {
+            let key = yarn_classic::find(&self.yarn_patterns, name, spec)?;
+            return self.package(key);
+        }
+        let parent = self.yarn_index.workspaces.get(workspace);
+        self.resolve_berry(name, spec, parent.map(AsRef::as_ref))
+    }
+
+    fn resolve_berry(
+        &self,
+        name: &str,
+        spec: &str,
+        parent: Option<&str>,
+    ) -> Option<&LockedPackage> {
+        let descriptor = yarn_berry::descriptor(name, spec, parent);
+        self.package(self.yarn_index.descriptors.get(descriptor.as_str())?)
+    }
+
     /// Resolves a dependency of a locked package.
     pub fn resolve_from(&self, package: &LockedPackage, name: &str) -> Option<&LockedPackage> {
+        if self.kind == LockfileKind::Yarn {
+            let index = package
+                .dependencies
+                .binary_search_by(|dependency| dependency.name.as_ref().cmp(name))
+                .ok()?;
+            let spec = &package.dependencies[index].spec;
+            if self.is_yarn_classic() {
+                let key = self.yarn_patterns.get(format!("{name}@{spec}").as_str())?;
+                return self.package(key);
+            }
+            return self.resolve_berry(name, spec, Some(&package.key));
+        }
         match self.kind {
             LockfileKind::Pnpm => {
                 let index = package
@@ -329,7 +457,21 @@ impl Lockfile {
     /// Lists the dependency kinds whose declarations in the manifest differ
     /// from the root workspace's declarations in the lockfile, by name and
     /// specifier text. A difference means that the lockfile may be stale.
+    ///
+    /// Yarn classic records no workspaces, so a kind is listed when one of
+    /// its declarations has no pattern in the lockfile; a declaration that a
+    /// workspace package satisfies has none either. Yarn Berry merges a
+    /// workspace's production, optional, and development dependencies,
+    /// development last, so their effective declarations are compared with
+    /// normalized ranges, and peer ranges as Yarn records them.
     pub fn out_of_sync(&self, manifest: &PackageManifest) -> Vec<DependencyKind> {
+        if self.kind == LockfileKind::Yarn {
+            return if self.is_yarn_classic() {
+                self.out_of_sync_classic(manifest)
+            } else {
+                self.out_of_sync_berry(manifest)
+            };
+        }
         let empty = LockedWorkspace {
             path: "".into(),
             name: None,
@@ -356,6 +498,83 @@ impl Lockfile {
                 declared.sort();
                 declared != root.declared(*kind)
             })
+            .collect()
+    }
+}
+
+impl Lockfile {
+    fn out_of_sync_classic(&self, manifest: &PackageManifest) -> Vec<DependencyKind> {
+        // Yarn 1 does not install peer dependencies.
+        [
+            DependencyKind::Production,
+            DependencyKind::Development,
+            DependencyKind::Optional,
+        ]
+        .into_iter()
+        .filter(|kind| {
+            manifest.dependencies_of(*kind).iter().any(|entry| {
+                yarn_classic::find(&self.yarn_patterns, &entry.key, &entry.value.text).is_none()
+            })
+        })
+        .collect()
+    }
+
+    fn out_of_sync_berry(&self, manifest: &PackageManifest) -> Vec<DependencyKind> {
+        let empty = Vec::new();
+        let root = self.workspace("");
+        let recorded =
+            |kind: DependencyKind| root.map_or(&empty, |root| &root.declared[kind as usize]);
+        // The effective declarations: optional over production, development
+        // over both.
+        let mut effective: BTreeMap<&str, (DependencyKind, String)> = BTreeMap::new();
+        for kind in [
+            DependencyKind::Production,
+            DependencyKind::Optional,
+            DependencyKind::Development,
+        ] {
+            for entry in manifest.dependencies_of(kind) {
+                effective.insert(&entry.key, (kind, yarn_berry::normalize(&entry.value.text)));
+            }
+        }
+        let locked: BTreeMap<&str, String> = recorded(DependencyKind::Production)
+            .iter()
+            .map(|declared| {
+                (
+                    declared.name.as_ref(),
+                    yarn_berry::normalize(&declared.spec),
+                )
+            })
+            .collect();
+        let mut stale = Vec::new();
+        for (name, (kind, spec)) in &effective {
+            if locked.get(name) != Some(spec) {
+                stale.push(*kind);
+            }
+        }
+        if locked.keys().any(|name| !effective.contains_key(name)) {
+            stale.push(DependencyKind::Production);
+        }
+        // Yarn records an invalid peer range as `*`.
+        let mut peers: Vec<Declared> = manifest
+            .dependencies_of(DependencyKind::Peer)
+            .iter()
+            .map(|entry| {
+                let text = &entry.value.text;
+                let valid = text.starts_with("workspace:")
+                    || (!text.contains(':') && VersionRange::parse(text).is_ok());
+                Declared {
+                    name: entry.key.clone(),
+                    spec: if valid { text.clone() } else { "*".into() },
+                }
+            })
+            .collect();
+        peers.sort();
+        if peers != recorded(DependencyKind::Peer).as_slice() {
+            stale.push(DependencyKind::Peer);
+        }
+        DependencyKind::ALL
+            .into_iter()
+            .filter(|kind| stale.contains(kind))
             .collect()
     }
 }

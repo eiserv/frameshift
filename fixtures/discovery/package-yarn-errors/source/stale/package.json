@@ -1,0 +1,8 @@
+{
+  "name": "fictional-stale",
+  "private": true,
+  "dependencies": {
+    "fictional-a": "^1.1.0",
+    "fictional-b": "^2.0.0"
+  }
+}

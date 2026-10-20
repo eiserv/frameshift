@@ -1,0 +1,13 @@
+directory (root)
+  manifest name=fictional-classic-root version=- parsed-version=- private=true type=-
+  dependencies fictional-ranged "^1.2.0": range >=1.2.0 <2.0.0-0; min 1.2.0; fictional-ranged@1.2.5
+  dependencies fictional-alias "npm:fictional-ranged@^2.0.0": alias fictional-ranged range >=2.0.0 <3.0.0-0; min 2.0.0; fictional-ranged@2.0.3
+  dependencies fictional-tagged "latest": tag latest; min -; fictional-tagged@4.0.0
+  dependencies fictional-local "file:./local/thing": local; min -; fictional-local other file:./local/thing
+  dependencies fictional-linked "link:./local/linked": local; min -; fictional-linked other link:./local/linked
+  devDependencies @fictional/scoped "~3.1.0": range >=3.1.0 <3.2.0-0; min 3.1.0; @fictional/scoped@3.1.4
+  optionalDependencies fictional-optional "^0.4.0": range >=0.4.0 <0.5.0-0; min 0.4.0; fictional-optional@0.4.1
+  packageManager yarn 1.22.22
+  detected yarn from field lockfile yarn.lock
+  lockfile yarn.lock version 1: 0 workspaces, 7 packages
+findings:
