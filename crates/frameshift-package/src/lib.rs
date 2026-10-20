@@ -34,8 +34,9 @@ pub use manifest::{
 };
 pub use spec::DependencySpec;
 pub use workspace::{
-    DeclarationFile, Member, PatternRejection, ReleaseMembers, SelectedPackage, SelectionError,
-    Workspace, WorkspaceLimits, WorkspaceSemantics, load_workspace, release_members,
+    DeclarationFile, ListedDirectory, ListedManifest, ListingSelection, Member, PatternRejection,
+    ReleaseMembers, SelectedPackage, SelectionError, Workspace, WorkspaceLimits,
+    WorkspaceSemantics, load_workspace, release_members, select_members,
 };
 
 pub use range::{Comparator, Operator, RangeError, VersionRange};

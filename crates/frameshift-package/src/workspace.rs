@@ -11,6 +11,7 @@
 //! directory is a member only when all evaluated releases select it;
 //! nothing below the root is guessed.
 
+mod listing;
 mod matcher;
 mod pattern;
 mod semantics;
@@ -18,6 +19,7 @@ mod semantics;
 #[cfg(test)]
 mod tests;
 
+pub use listing::{ListedDirectory, ListedManifest, ListingSelection, select_members};
 pub use pattern::PatternRejection;
 pub use semantics::WorkspaceSemantics;
 
