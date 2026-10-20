@@ -380,11 +380,17 @@ fn berry_versions_and_structure_fail_closed() {
         let text = BERRY.replace("version: 10\n", &format!("version: {version}\n"));
         assert!(berry(&text).is_ok(), "{version}");
     }
-    // A YAML lockfile without metadata is not a Berry lockfile.
+    // A YAML lockfile without metadata is not a Berry lockfile, nor is one
+    // of comments only, which Yarn reads as an empty object.
     assert_eq!(
         kind("\"a@npm:1\":\n  resolution: \"a@npm:1.0.0\"\n  linkType: hard\n"),
         unsupported
     );
+    assert_eq!(kind("# only a comment\n"), unsupported);
+    assert_eq!(kind(""), unsupported);
+    // A scalar or sequence at the top is no object at all.
+    assert_eq!(kind("text\n"), structure);
+    assert_eq!(kind("- a\n"), structure);
     // Scalars are strings, as under Yarn's failsafe schema.
     let plain = "__metadata:\n  version: 10\n\"a@npm:1\":\n  version: 1.0.0\n  resolution: \"a@npm:1.0.0\"\n  dependencies:\n    b: true\n  linkType: hard\n\"b@npm:true\":\n  resolution: \"b@npm:1.0.0\"\n  linkType: hard\n";
     let lockfile = berry(plain).unwrap();

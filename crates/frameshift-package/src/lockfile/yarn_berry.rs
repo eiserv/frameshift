@@ -303,6 +303,16 @@ pub(super) fn read(stream: &YamlStream) -> Result<Read, LockfileError> {
             reader.maps.insert(id, map);
         }
     }
+    // Yarn reads a document without content, such as one of comments only,
+    // as an empty object without metadata.
+    let empty = matches!(
+        stream.node(root),
+        Some(node) if node.tag.is_none()
+            && node.value == YamlValue::Scalar { text: "".into(), style: YamlScalarStyle::Plain }
+    );
+    if empty {
+        return Err(unsupported(reader.span(root)));
+    }
     let Some(metadata) = reader.field(root, "__metadata")? else {
         return Err(unsupported(reader.span(root)));
     };
