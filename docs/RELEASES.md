@@ -1,6 +1,6 @@
 # Releases and CI/CD
 
-**Status: CI and gated release foundation implemented (`D-051`, `D-052`).** Workflows, release configuration, and a release manifest exist. No release has been published. Release PR automation is active and its environment-secret authentication was verified on 2026-10-19; M1 was accepted on 2026-10-19 (`D-063`), and the owner authorized publication of 0.1.0 on 2026-10-21 and `FRAMESHIFT_M1_RELEASE_READY=true` was set and verified. Section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) records actual local and remote evidence. The remaining signing, immutable release, binary reproducibility, scheduled verification, and product smoke-test requirements below are plans for later milestones.
+**Status: CI and gated release foundation implemented (`D-051`, `D-052`).** Workflows, release configuration, and a release manifest exist. Version 0.1.0 is published: the owner merged release PR #6 on 2026-10-21, and Release run `39513431273` created the tag `v0.1.0` and the GitHub release with six archives and a checksum list (section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Release PR automation is active and its environment-secret authentication was verified on 2026-10-19; M1 was accepted on 2026-10-19 (`D-063`), and the owner authorized publication of 0.1.0 on 2026-10-21 and `FRAMESHIFT_M1_RELEASE_READY=true` was set and verified. Section 13 of [IMPLEMENTATION.md](IMPLEMENTATION.md) records actual local and remote evidence. The remaining signing, immutable release, binary reproducibility, scheduled verification, and product smoke-test requirements below are plans for later milestones.
 
 ### Current controls and commands
 
@@ -93,7 +93,7 @@ Recommended scopes are listed in section 8 of [ENGINEERING.md](ENGINEERING.md).
 
 Frameshift follows [Semantic Versioning](https://semver.org/).
 
-- **Before 1.0.0:** Release Please will be configured with `bump-minor-pre-major`. Breaking changes and features bump the minor version, and fixes bump the patch version. The first release is 0.1.0 (the completed M1 shell). The current help and version shell still reports Cargo's unreleased default version `0.0.0`; no release has been created (`D-050`).
+- **Before 1.0.0:** Release Please is configured with `bump-minor-pre-major`. Breaking changes and features bump the minor version, and fixes bump the patch version. The first release is 0.1.0, published on 2026-10-21 with the M1 shell and the M2 work then on main. `frameshift version` reports the workspace version that Release Please manages (`D-050`).
 - **1.0.0** is declared deliberately with `Release-As: 1.0.0` when V1's acceptance criteria are met (see [ROADMAP.md](ROADMAP.md)). Product stages (V1, V2, V3) are not tied to major versions after that.
 - **Breaking changes** include:
   - removing or renaming commands or options, or changing their meaning;

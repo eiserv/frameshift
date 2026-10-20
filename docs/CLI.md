@@ -69,12 +69,12 @@ Fast, read-only identification of a project. `<source>` defaults to the current 
 | `--package <dir>` | Inspect one package: a workspace member given relative to `<source>` with `/` separators, or the root with `.`. The value is never normalized; a backslash, a trailing slash, or `..` is a usage error. Without the option, the root and every member are inspected. |
 | `--format text\|json` | Text (default) or the `frameshift.inspection` document |
 
-The text output reports the files that discovery accounted for, the package manager with its source, the lockfile with its format version and the lockfiles that are ignored, the workspace with its members and the evaluated package manager releases, and for each package its Next.js verdict, version with its evidence, configuration file, and routers with their route file counts, followed by every finding on one line. It never prints the source path, and source-derived strings are escaped. The following output is the golden of the fictional fixture `inspect-next-workspace`, with its engine version filled in:
+The text output reports the files that discovery accounted for, the package manager with its source, the lockfile with its format version and the lockfiles that are ignored, the workspace with its members and the evaluated package manager releases, and for each package its Next.js verdict, version with its evidence, configuration file, and routers with their route file counts, followed by every finding on one line. It never prints the source path, and source-derived strings are escaped; the JSON document spells DEL, C1 controls, line and paragraph separators, and bidirectional formatting characters as \u escapes (`D-076`). The following output is the golden of the fictional fixture `inspect-next-workspace`, with its engine version filled in:
 
 ```text
 $ frameshift inspect ./harbor
 
-Frameshift 0.0.0  inspect
+Frameshift 0.1.0  inspect
 
 Files          10 admitted (1619 bytes), 9 directories, 2 ignored, 0 other
 Package mgr    npm 11.11.0 (packageManager field)
@@ -272,7 +272,7 @@ Planned
 
 ### 4.9 `version` and `help`
 
-**Implemented.** `frameshift version` prints the engine version, shipped rulesets, knowledge bases and target profiles, build commit, and the actual Rust compiler used to build the engine. The current catalogs are empty: the E2 driver does not ship product migration data. The build commit is unknown in ordinary local builds; CI and packaging explicitly embed the checked-out commit (`D-051`). The version remains the workspace's unreleased `0.0.0`. Release Please manages versions; none is bumped manually.
+**Implemented.** `frameshift version` prints the engine version, shipped rulesets, knowledge bases and target profiles, build commit, and the actual Rust compiler used to build the engine. The current catalogs are empty: the E2 driver does not ship product migration data. The build commit is unknown in ordinary local builds; CI and packaging explicitly embed the checked-out commit (`D-051`). The version is the workspace version, 0.1.0 since the first release. Release Please manages versions; none is bumped manually.
 
 `frameshift version --format json` produces one LF-terminated UTF-8 `frameshift.version` document with `schemaVersion: 1`, in the field order below. The schema is [frameshift.version.schema.json](../schemas/frameshift.version.schema.json). Consumers must accept additional fields.
 
@@ -280,7 +280,7 @@ Planned
 {
   "kind": "frameshift.version",
   "schemaVersion": 1,
-  "engineVersion": "0.0.0",
+  "engineVersion": "0.1.0",
   "rulesets": [],
   "knowledgeBases": [],
   "targetProfiles": [],
@@ -289,7 +289,7 @@ Planned
 }
 ```
 
-The `toolchain` value above is illustrative. It is captured at build time, never discovered from the runtime host. `frameshift --version` prints `frameshift 0.0.0` and rejects every additional argument, including `--format`.
+The `toolchain` value above is illustrative. It is captured at build time, never discovered from the runtime host. `frameshift --version` prints `frameshift 0.1.0` for this release and rejects every additional argument, including `--format`.
 
 `frameshift`, `frameshift help`, `frameshift --help`, and `frameshift -h` print the command overview. `frameshift help help` prints help usage. `frameshift help version`, `frameshift version --help`, and `frameshift version -h` print version usage, and `frameshift help inspect`, `frameshift inspect --help`, and `frameshift inspect -h` print inspect usage. Help is text only. Unavailable help topics, unavailable commands, unexpected operands, malformed native Unicode arguments, unknown options, and duplicated options exit with 2. Successful output goes only to standard output; errors go to standard error. Diagnostics never echo user argument text.
 

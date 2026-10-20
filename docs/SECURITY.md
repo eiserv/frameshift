@@ -154,7 +154,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 
 The implemented finding records (`D-057`, IMPLEMENTATION.md section 17) retain original paths and prose. Messages reject controls and line separators, but explanation and remediation can contain controls and line breaks. They are evidence values, not escaped output or automatic secret redaction. Consumers must apply the rendering rules below.
 
-- All source-derived strings printed to a terminal have control characters escaped, including ANSI escape sequences and carriage returns. `frameshift inspect` implements this: its text output also escapes backslashes, line and paragraph separators, and bidirectional formatting characters, so a file or package name cannot disguise the text around it (`D-075`).
+- All source-derived strings printed to a terminal have control characters escaped, including ANSI escape sequences and carriage returns. `frameshift inspect` implements this: its text output also escapes backslashes, line and paragraph separators, and bidirectional formatting characters, so a file or package name cannot disguise the text around it (`D-075`). Its JSON documents spell DEL, the C1 controls (including the control sequence introducer U+009B), the separators, and the Bidi_Control characters as \u escapes, so a document shown in a terminal is as safe as the text output (`D-076`); the `inspect-hostile-names` fixture checks both.
 - Markdown output escapes source-derived text. HTML rendering, if ever added, escapes by context.
 
 ### 7.9 Plan and manifest integrity
