@@ -1,0 +1,26 @@
+Frameshift @ENGINE_VERSION@  inspect
+
+Files          10 admitted (1619 bytes), 9 directories, 2 ignored, 0 other
+Package mgr    npm 11.11.0 (packageManager field)
+Lockfile       package-lock.json (format 3)
+Workspace      3 members, evaluated as npm-11
+
+Package        . (fictional-harbor)
+  Framework    no supported framework detected
+
+Package        apps/docs (fictional-docs)
+  Framework    Next.js evidence incomplete
+  Config       none
+  Router       no route files
+
+Package        apps/site (fictional-site)
+  Framework    Next.js 15.5.2 (locked)
+  Config       apps/site/next.config.ts
+  Router       App Router in apps/site/app (1 route file); Pages Router in apps/site/pages (1 route file)
+
+Package        packages/ui (fictional-ui)
+  Framework    no supported framework detected
+
+Migration      no migration path ships in this build
+Findings       1 (1 review)
+  review  FS1040  apps/docs/package.json  Next.js evidence incomplete

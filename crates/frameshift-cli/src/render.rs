@@ -1,7 +1,13 @@
-//! Presentation of shell results. No migration policy lives here.
+//! Presentation of command results. No migration policy lives here.
 
 use std::io::{self, Write};
 
+use frameshift_engine::foundation::{FindingList, FindingLocation, Severity, SourcePath};
+use frameshift_engine::inspect::{FileSummary, Inspection, PackageInspection};
+use frameshift_engine::nextjs::{
+    ConfigLoad, Detection, Router, RouterDirectory, Verdict, VersionEvidence,
+};
+use frameshift_engine::package::{DetectionSource, IgnoredReason, LockfileState, Workspace};
 use frameshift_engine::version::VersionInfo;
 
 use crate::args::{Format, HelpTopic};
@@ -10,21 +16,35 @@ const ROOT_HELP: &str = concat!(
     "Frameshift: deterministic framework migration engine\n",
     "\nUsage: frameshift <command> [options]\n",
     "\nCommands available in this build:\n",
-    "  help [command]      Print usage for help or version\n",
+    "  help [command]      Print usage for help, inspect, or version\n",
+    "  inspect [<source>]  Identify a project without changing it\n",
     "  version             Print engine and build information\n",
     "\nOptions:\n",
     "  -h, --help          Print usage\n",
     "  --version           Print the short version string\n",
-    "  --format text|json  Select version output (default: text)\n",
-    "\nProject inspection, analysis, migration, and verification are not implemented.\n",
+    "  --format text|json  Select inspect or version output (default: text)\n",
+    "  --package <dir>     Inspect one package of a workspace\n",
+    "\nAnalysis, migration, and verification are not implemented.\n",
 );
 
 pub(crate) fn help(topic: HelpTopic) -> &'static str {
     match topic {
         HelpTopic::Root => ROOT_HELP,
         HelpTopic::Help => {
-            "Usage: frameshift help [help|version]\n\
+            "Usage: frameshift help [help|inspect|version]\n\
 Print usage for the available commands. Without a topic, print the command overview.\n"
+        }
+        HelpTopic::Inspect => {
+            "Usage: frameshift inspect [<source>] [--package <dir>] [--format text|json]\n\
+Identify the project at <source>, by default the current directory: its files, package\n\
+manager, lockfile, workspace, and the framework, version, configuration file, and routers\n\
+of each package. Inspection reads directory listings, .gitignore files, package.json files,\n\
+the lockfile, and pnpm-workspace.yaml. It never writes, runs project code, or uses the network.\n\
+<source> is the workspace root; nothing above it is read. Without --package, the root and\n\
+every member are inspected. --package <dir> inspects one member, given relative to <source>\n\
+with / separators, or the root with '.'.\n\
+A project without a supported framework is a valid result. Exit status: 0 on success,\n\
+2 for invalid arguments, 3 when the source cannot be read or changes during the run.\n"
         }
         HelpTopic::Version => {
             "Usage: frameshift version [--format text|json]\n\
@@ -100,14 +120,23 @@ fn json_catalog(output: &mut impl Write, items: &[&str]) -> io::Result<()> {
     output.write_all(b"]")
 }
 
-pub(crate) fn usage_error(output: &mut impl Write, message: &str) -> io::Result<()> {
-    output.write_all(b"{\n  \"kind\": \"frameshift.error\",\n  \"schemaVersion\": 1,\n  \"exitCode\": 2,\n  \"message\": ")?;
+/// Writes a `frameshift.error` document. `exit_code` is one of the codes
+/// that the error schema lists.
+pub(crate) fn error_document(
+    output: &mut impl Write,
+    exit_code: u8,
+    message: &str,
+) -> io::Result<()> {
+    write!(
+        output,
+        "{{\n  \"kind\": \"frameshift.error\",\n  \"schemaVersion\": 1,\n  \"exitCode\": {exit_code},\n  \"message\": "
+    )?;
     json_string(output, message)?;
     output.write_all(b"\n}\n")
 }
 
-// This shell writes strings, not arbitrary JSON values. A general document
-// writer belongs to the later reporting layer and is not needed here.
+// The shell's own documents hold strings, not arbitrary JSON values; the
+// engine renders its versioned documents itself.
 fn json_string(output: &mut impl Write, value: &str) -> io::Result<()> {
     output.write_all(b"\"")?;
     for scalar in value.chars() {
@@ -124,6 +153,280 @@ fn json_string(output: &mut impl Write, value: &str) -> io::Result<()> {
         }
     }
     output.write_all(b"\"")
+}
+
+/// Escapes text from the source project for a terminal: backslashes,
+/// control characters, line and paragraph separators, and bidirectional
+/// formatting characters, so that a name can neither inject escape
+/// sequences nor disguise the text around it.
+fn escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for scalar in text.chars() {
+        match scalar {
+            '\\' => out.push_str("\\\\"),
+            '\u{200e}'
+            | '\u{200f}'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}' => out.push_str(&format!("\\u{{{:x}}}", scalar as u32)),
+            scalar if scalar.is_control() => {
+                out.push_str(&format!("\\u{{{:x}}}", scalar as u32));
+            }
+            scalar => out.push(scalar),
+        }
+    }
+    out
+}
+
+fn directory(path: Option<&SourcePath>) -> String {
+    path.map_or_else(|| ".".to_owned(), |path| escape(path.as_str()))
+}
+
+fn plural(count: usize, one: &str, many: &str) -> String {
+    format!("{count} {}", if count == 1 { one } else { many })
+}
+
+pub(crate) fn inspection(output: &mut impl Write, inspection: &Inspection) -> io::Result<()> {
+    let info = frameshift_engine::version::info();
+    writeln!(output, "Frameshift {}  inspect\n", info.engine_version)?;
+    writeln!(output, "Files          {}", files(&inspection.files))?;
+    package_manager(output, &inspection.workspace)?;
+    writeln!(
+        output,
+        "Workspace      {}",
+        workspace(&inspection.workspace)
+    )?;
+    for package in &inspection.packages {
+        output.write_all(b"\n")?;
+        self::package(output, package)?;
+    }
+    output.write_all(b"\nMigration      no migration path ships in this build\n")?;
+    findings(output, &inspection.findings)
+}
+
+fn files(summary: &FileSummary) -> String {
+    let bytes = summary.admitted_bytes;
+    let mut text = format!(
+        "{} admitted ({bytes} {}), {}, {} ignored, {} other",
+        summary.admitted,
+        if bytes == 1 { "byte" } else { "bytes" },
+        plural(summary.directories, "directory", "directories"),
+        summary.ignored_total(),
+        summary.other_total(),
+    );
+    if summary.unrepresentable != 0 {
+        text.push_str(&format!(", {} unrepresentable", summary.unrepresentable));
+    }
+    if !summary.complete {
+        text.push_str("; incomplete");
+        if let Some(stop) = summary.stop {
+            text.push_str(&format!(" (stopped at {})", stop.limit_name()));
+        }
+    }
+    text
+}
+
+fn package_manager(output: &mut impl Write, workspace: &Workspace) -> io::Result<()> {
+    let root = &workspace.root;
+    let detection = &root.detection;
+    let manager = match detection.manager {
+        None => "not determined".to_owned(),
+        Some(kind) => {
+            let mut text = kind.name().to_owned();
+            if let Some(spec) = root
+                .package_manager
+                .as_ref()
+                .filter(|spec| spec.kind == kind)
+            {
+                text.push_str(&format!(" {}", spec.version));
+            }
+            match detection.source {
+                Some(DetectionSource::Field) => text.push_str(" (packageManager field)"),
+                Some(DetectionSource::Lockfile) => text.push_str(" (from the lockfile)"),
+                None => {}
+            }
+            text
+        }
+    };
+    writeln!(output, "Package mgr    {manager}")?;
+    let mut lockfile = match detection.lockfile {
+        None => "none".to_owned(),
+        Some(kind) => match &root.lockfile {
+            LockfileState::Parsed(lockfile) => {
+                format!("{} (format {})", kind.file_name(), lockfile.version())
+            }
+            LockfileState::NotParsed(_) | LockfileState::None => {
+                format!("{} (not parsed)", kind.file_name())
+            }
+        },
+    };
+    if !detection.ignored.is_empty() {
+        let ignored: Vec<String> = detection
+            .ignored
+            .iter()
+            .map(|ignored| {
+                let reason = match ignored.reason {
+                    IgnoredReason::OtherManager => "other package manager",
+                    IgnoredReason::Superseded => "superseded",
+                    IgnoredReason::Ambiguous => "ambiguous",
+                };
+                format!("{} ({reason})", ignored.kind.file_name())
+            })
+            .collect();
+        lockfile.push_str(&format!("; ignored: {}", ignored.join(", ")));
+    }
+    writeln!(output, "Lockfile       {lockfile}")
+}
+
+fn workspace(workspace: &Workspace) -> String {
+    if !workspace.is_workspace() {
+        return "single package".to_owned();
+    }
+    let releases: Vec<&str> = workspace
+        .semantics
+        .iter()
+        .map(|release| release.as_str())
+        .collect();
+    let mut text = format!(
+        "{}, evaluated as {}",
+        plural(workspace.members.len(), "member", "members"),
+        releases.join(", ")
+    );
+    if !workspace.undetermined.is_empty() {
+        text.push_str(&format!(
+            "; {} undetermined",
+            plural(workspace.undetermined.len(), "directory", "directories")
+        ));
+    }
+    if !workspace.complete {
+        text.push_str("; incomplete");
+    }
+    text
+}
+
+fn package(output: &mut impl Write, package: &PackageInspection) -> io::Result<()> {
+    write!(
+        output,
+        "Package        {}",
+        directory(package.directory.as_ref())
+    )?;
+    match (&package.name, package.manifest) {
+        (Some(name), _) => write!(output, " ({})", escape(name))?,
+        (None, frameshift_engine::inspect::ManifestStatus::Absent) => {
+            output.write_all(b" (no package.json)")?;
+        }
+        (None, frameshift_engine::inspect::ManifestStatus::NotAnalyzed) => {
+            output.write_all(b" (package.json not analyzed)")?;
+        }
+        (None, frameshift_engine::inspect::ManifestStatus::Analyzed) => {}
+    }
+    output.write_all(b"\n")?;
+    let detection = &package.nextjs;
+    writeln!(output, "  Framework    {}", framework(detection))?;
+    if detection.verdict == Verdict::Absent {
+        return Ok(());
+    }
+    let config = match &detection.config {
+        None => "none".to_owned(),
+        Some(config) => {
+            let note = match config.load {
+                ConfigLoad::Loaded => "",
+                ConfigLoad::DependsOnNode => " (loaded only when Node.js strips types)",
+                ConfigLoad::Unsupported => " (ignored or rejected by this Next.js version)",
+            };
+            format!("{}{note}", escape(config.path.as_str()))
+        }
+    };
+    writeln!(output, "  Config       {config}")?;
+    let router = |name: &str, directory: &Option<RouterDirectory>| {
+        directory.as_ref().map_or_else(String::new, |directory| {
+            format!(
+                "{name} in {} ({})",
+                escape(directory.path.as_str()),
+                plural(directory.routes(), "route file", "route files")
+            )
+        })
+    };
+    let routers = match detection.router() {
+        Router::App => router("App Router", &detection.app),
+        Router::Pages => router("Pages Router", &detection.pages),
+        Router::Hybrid => format!(
+            "{}; {}",
+            router("App Router", &detection.app),
+            router("Pages Router", &detection.pages)
+        ),
+        Router::None => "no route files".to_owned(),
+    };
+    writeln!(output, "  Router       {routers}")
+}
+
+fn framework(detection: &Detection) -> String {
+    match detection.verdict {
+        Verdict::Absent => "no supported framework detected".to_owned(),
+        Verdict::Inconclusive => "Next.js evidence incomplete".to_owned(),
+        Verdict::NextJs => match &detection.version {
+            VersionEvidence::Locked(version) => format!("Next.js {version} (locked)"),
+            VersionEvidence::LowerBound(version) => {
+                format!("Next.js {version} or later (lowest version of the declared range)")
+            }
+            VersionEvidence::Unknown => "Next.js, version unknown".to_owned(),
+        },
+    }
+}
+
+const SEVERITIES: [Severity; 5] = [
+    Severity::Error,
+    Severity::Blocker,
+    Severity::Unknown,
+    Severity::Review,
+    Severity::Info,
+];
+
+fn findings(output: &mut impl Write, findings: &FindingList) -> io::Result<()> {
+    let list = findings.as_slice();
+    if list.is_empty() {
+        return output.write_all(b"Findings       none\n");
+    }
+    let counts: Vec<String> = SEVERITIES
+        .iter()
+        .filter_map(|severity| {
+            let count = list
+                .iter()
+                .filter(|finding| finding.severity() == *severity)
+                .count();
+            (count != 0).then(|| format!("{count} {}", severity.as_str()))
+        })
+        .collect();
+    writeln!(
+        output,
+        "Findings       {} ({})",
+        list.len(),
+        counts.join(", ")
+    )?;
+    for finding in list {
+        let location = match finding.location() {
+            FindingLocation::Project => "project".to_owned(),
+            FindingLocation::File(path) => escape(path.as_str()),
+            FindingLocation::Text(text) => {
+                let start = text.start();
+                format!(
+                    "{}:{}:{}",
+                    escape(text.file().as_str()),
+                    start.line,
+                    start.column
+                )
+            }
+        };
+        writeln!(
+            output,
+            "  {:<8}{}  {location}  {}",
+            finding.severity().as_str(),
+            finding.code().as_str(),
+            escape(finding.message())
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -144,6 +447,14 @@ mod tests {
                 "\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f",
                 "\\\"\\\\é😀\""
             )
+        );
+    }
+
+    #[test]
+    fn terminal_text_escapes_controls_separators_and_bidi_formatting() {
+        assert_eq!(
+            escape("a\u{1b}[31m\\b\u{7f}\u{85}\u{2028}\u{202e}\u{2066}é😀"),
+            "a\\u{1b}[31m\\\\b\\u{7f}\\u{85}\\u{2028}\\u{202e}\\u{2066}é😀"
         );
     }
 }

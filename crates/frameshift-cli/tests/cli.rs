@@ -42,6 +42,7 @@ const GOLDENS: &[(&[&str], &str, i32)] = &[
     (&["help"], "help.txt", 0),
     (&["help", "help"], "help-help.txt", 0),
     (&["help", "version"], "help-version.txt", 0),
+    (&["help", "inspect"], "help-inspect.txt", 0),
     (&["version"], "version.txt", 0),
     (&["version", "--format", "json"], "version.json", 0),
     (&["--version"], "short-version.txt", 0),
@@ -83,6 +84,12 @@ fn aliases_and_global_format_position_have_identical_output() {
         assert_eq!(output.stdout, expected("help-version.txt"));
         assert!(output.stderr.is_empty());
     }
+    for arguments in [&["inspect", "-h"][..], &["--help", "inspect"]] {
+        let output = invoke(arguments);
+        assert!(output.status.success());
+        assert_eq!(output.stdout, expected("help-inspect.txt"));
+        assert!(output.stderr.is_empty());
+    }
     for arguments in [
         &["--format", "json", "version"][..],
         &["--format=json", "version"],
@@ -102,7 +109,6 @@ fn aliases_and_global_format_position_have_identical_output() {
 #[test]
 fn invalid_arguments_and_planned_commands_fail_without_echoing_input() {
     let cases: &[&[&str]] = &[
-        &["inspect"],
         &["analyze"],
         &["plan"],
         &["migrate"],
