@@ -16,7 +16,7 @@ use frameshift_engine::{
 
 use crate::{
     astro, collections, edits, gitignore, hashes, identifiers, json, lexical, package, paths,
-    seeds, semver, yaml,
+    seeds, semver, yaml, yarn,
 };
 
 /// A fuzzed engine entry point with its contracts.
@@ -54,6 +54,9 @@ pub enum Target {
     Package,
     /// Full YAML syntax, unexpanded graph references, and the JSON subset.
     Yaml,
+    /// Yarn classic lockfile syntax and model, with a write and reparse
+    /// round trip.
+    Yarn,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -70,7 +73,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -87,6 +90,7 @@ impl Target {
         Self::Semver,
         Self::Package,
         Self::Yaml,
+        Self::Yarn,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -108,6 +112,7 @@ impl Target {
             Self::Semver => "semver",
             Self::Package => "package",
             Self::Yaml => "yaml",
+            Self::Yarn => "yarn",
         }
     }
 
@@ -165,7 +170,10 @@ impl Target {
                 "package.json and npm and Bun lockfile models on JSON and JSONC; spans, sorting, and resolution"
             }
             Self::Yaml => {
-                "YAML streams, spans, graph references, deterministic errors, bounds, and agreement on the JSON subset"
+                "YAML streams, spans, graph references, deterministic errors, bounds, agreement on the JSON subset, and the pnpm and Yarn Berry models"
+            }
+            Self::Yarn => {
+                "Yarn classic lockfiles: spans, node bound, duplicate keys, the classic model, and a write and reparse round trip"
             }
         }
     }
@@ -183,7 +191,7 @@ impl Target {
             | Self::Hashes
             | Self::Collections
             | Self::Package => 4_096,
-            Self::Yaml => 1_024,
+            Self::Yaml | Self::Yarn => 1_024,
             Self::RegExp | Self::References | Self::Gitignore | Self::Json | Self::Semver => 1_024,
             Self::Lexical => 512,
         }
@@ -219,6 +227,7 @@ impl Target {
             Self::Semver => semver::run(input),
             Self::Package => package::run(input),
             Self::Yaml => yaml::run(input),
+            Self::Yarn => yarn::run(input),
         }
     }
 }

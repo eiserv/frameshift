@@ -1,0 +1,9 @@
+{
+  "name": "fictional-legacy-root",
+  "private": true,
+  "packageManager": "yarn@3.8.7",
+  "dependencies": {
+    "fictional-ranged": "^1.0.0",
+    "fictional-tagged": "latest"
+  }
+}

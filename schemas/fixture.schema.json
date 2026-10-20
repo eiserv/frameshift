@@ -32,7 +32,9 @@
           "run.max-total-bytes",
           "text.max-source-bytes",
           "yaml.max-depth",
-          "yaml.max-nodes"
+          "yaml.max-nodes",
+          "yarn.max-depth",
+          "yarn.max-nodes"
         ]
       },
       "additionalProperties": { "type": "integer", "minimum": 0 }

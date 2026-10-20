@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "Yarn Berry lockfiles: format 10 of Yarn 4 with a workspace member, an npm alias, a tag, a bound file source, and a portal, and format 6 of Yarn 3, whose ranges omit the npm protocol. Descriptors resolve after Yarn's normalization and binding (D-072).",
+  "directories": [
+    "",
+    "legacy"
+  ]
+}

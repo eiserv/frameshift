@@ -30,6 +30,7 @@ mod supervisor;
 mod targets;
 mod worker;
 mod yaml;
+mod yarn;
 
 use std::{
     env, fs, io,

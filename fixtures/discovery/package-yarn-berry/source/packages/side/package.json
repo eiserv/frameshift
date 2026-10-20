@@ -1,0 +1,10 @@
+{
+  "name": "@fictional/side",
+  "version": "1.0.0",
+  "dependencies": {
+    "fictional-ranged": "^1.0.0"
+  },
+  "peerDependencies": {
+    "fictional-peer": "^2.0.0"
+  }
+}

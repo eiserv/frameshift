@@ -116,6 +116,12 @@ pub(crate) fn check_lockfile(
                 {
                     return Err("a resolution is not a locked package".to_owned());
                 }
+                if let Some(package) =
+                    lockfile.resolve_declared(&workspace.path, &declared.name, &declared.spec)
+                    && lockfile.package(&package.key) != Some(package)
+                {
+                    return Err("a declared resolution is not a locked package".to_owned());
+                }
             }
         }
     }
@@ -126,7 +132,11 @@ pub(crate) fn check_lockfile(
             .chain(&package.peer_dependencies)
             .take(64)
         {
-            lockfile.resolve_from(package, &declared.name);
+            if let Some(found) = lockfile.resolve_from(package, &declared.name)
+                && lockfile.package(&found.key) != Some(found)
+            {
+                return Err("a transitive resolution is not a locked package".to_owned());
+            }
         }
     }
     if let Some(manifest) = manifest {

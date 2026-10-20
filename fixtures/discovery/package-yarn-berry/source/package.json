@@ -1,0 +1,21 @@
+{
+  "name": "fictional-berry-root",
+  "private": true,
+  "packageManager": "yarn@4.18.1",
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "@fictional/side": "workspace:^",
+    "fictional-ranged": "^1.2.0",
+    "fictional-alias": "npm:fictional-ranged@^2.0.0",
+    "fictional-local": "file:./local/thing",
+    "fictional-portal": "portal:./local/portal"
+  },
+  "devDependencies": {
+    "fictional-tagged": "latest"
+  },
+  "optionalDependencies": {
+    "fictional-optional": "^0.4.0"
+  }
+}

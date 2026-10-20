@@ -1,7 +1,8 @@
 //! Framework-independent JavaScript and TypeScript scanners and parsers for
-//! the E1 parser experiment, and the JSON and JSONC parser for manifests,
-//! lockfiles, and configuration (`D-068`). A parsed tree does not authorize
-//! transformations.
+//! the E1 parser experiment, the JSON and JSONC parser for manifests,
+//! lockfiles, and configuration (`D-068`), YAML 1.2 syntax (`D-071`), and
+//! the Yarn classic lockfile syntax (`D-072`). A parsed tree does not
+//! authorize transformations.
 
 mod ast;
 mod identifier;
@@ -21,6 +22,7 @@ mod typescript;
 mod unicode;
 mod value;
 mod yaml;
+mod yarn;
 #[rustfmt::skip]
 mod entity_tables;
 #[rustfmt::skip]
@@ -69,4 +71,8 @@ pub use unicode_tables::UNICODE_VERSION;
 pub use yaml::{
     YamlDocument, YamlError, YamlErrorKind, YamlId, YamlLimits, YamlNode, YamlScalarStyle,
     YamlStream, YamlValue, parse_yaml,
+};
+pub use yarn::{
+    YarnDocument, YarnError, YarnErrorKind, YarnId, YarnKey, YarnLimits, YarnMember, YarnObject,
+    YarnValue, parse_yarn_lockfile,
 };

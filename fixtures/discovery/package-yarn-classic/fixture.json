@@ -1,0 +1,5 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "A Yarn classic lockfile in the format that Yarn 1.22.22 writes, with shared patterns, a tag, an npm alias, and file and link sources. Yarn 1 records no workspaces, so declarations resolve by their patterns (D-072)."
+}

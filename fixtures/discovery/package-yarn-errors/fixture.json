@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "package",
+  "description": "Yarn lockfiles fail closed: odd indentation, merge conflict markers, a newer classic version, a duplicate pattern, a dependency without an entry, a Berry version that no stable release writes, YAML without metadata, and a lockfile over yarn.max-nodes. A Berry lockfile under packageManager Yarn 1 and a classic declaration without a pattern are review findings (D-072).",
+  "limits": {
+    "yarn.max-nodes": 40
+  },
+  "directories": [
+    "syntax",
+    "conflict",
+    "newer",
+    "duplicate",
+    "missing",
+    "berry-version",
+    "no-metadata",
+    "limit",
+    "generation",
+    "stale"
+  ]
+}

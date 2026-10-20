@@ -14,11 +14,14 @@ use frameshift_core::{
 };
 use frameshift_input::{FileRead, Snapshot, SnapshotError};
 use frameshift_syntax::{
-    JsonDialect, JsonDocument, JsonLimits, YamlLimits, parse_json, parse_yaml,
+    JsonDialect, JsonDocument, JsonLimits, YamlLimits, YamlStream, YamlValue, YarnDocument,
+    YarnErrorKind, YarnLimits, parse_json, parse_yaml, parse_yarn_lockfile,
 };
 
-use crate::lockfile::{Lockfile, LockfileErrorKind};
-use crate::manager::{Detection, IgnoredReason, LockfileKind, PackageManagerSpec, detect};
+use crate::lockfile::{Lockfile, LockfileErrorKind, has_classic_header};
+use crate::manager::{
+    Detection, IgnoredReason, LockfileKind, PackageManagerKind, PackageManagerSpec, detect,
+};
 use crate::manifest::{IssueKind, ManifestError, PackageManifest};
 
 /// The package model's own limit (`D-069`).
@@ -46,6 +49,8 @@ pub struct LoadLimits {
     pub json: JsonLimits,
     /// Each YAML stream.
     pub yaml: YamlLimits,
+    /// Each Yarn classic lockfile.
+    pub yarn: YarnLimits,
     /// The paths of the files in the directory.
     pub path: PathLimits,
     /// The lockfile size.
@@ -68,8 +73,8 @@ pub enum ManifestState {
 pub enum LockfileState {
     /// No lockfile is selected.
     None,
-    /// The lockfile is not read or not usable; a finding says why. Yarn
-    /// lockfiles, `bun.lockb`, and unsupported format versions are here.
+    /// The lockfile is not read or not usable; a finding says why.
+    /// `bun.lockb` and unsupported formats or format versions are here.
     NotParsed(LockfileKind),
     /// The parsed lockfile.
     Parsed(Box<Lockfile>),
@@ -118,7 +123,7 @@ impl std::error::Error for LoadError {}
 
 /// Reads and interprets the package files of one directory of a snapshot:
 /// `package.json`, the `packageManager` field, the lockfiles present, and the
-/// selected lockfile if it is an npm or Bun text lockfile.
+/// selected lockfile if it is an npm, Bun text, pnpm, or Yarn lockfile.
 pub fn load_package(
     snapshot: &Snapshot,
     directory: Option<&SourcePath>,
@@ -173,7 +178,11 @@ pub fn load_package(
         None => LockfileState::None,
         Some(kind) => {
             let path = path_of(kind)?;
-            read_lockfile(snapshot, kind, &path, &manifest, limits, &mut report)?
+            let lockfile = read_lockfile(snapshot, kind, &path, &manifest, limits, &mut report)?;
+            if let (LockfileState::Parsed(parsed), Some(spec)) = (&lockfile, &package_manager) {
+                yarn_generation(parsed, spec, &path, &mut report)?;
+            }
+            lockfile
         }
     };
     Ok(PackageDirectory {
@@ -379,8 +388,8 @@ fn read_lockfile(
     let dialect = match kind {
         LockfileKind::NpmShrinkwrap | LockfileKind::NpmPackageLock => Some(JsonDialect::Json),
         LockfileKind::BunText => Some(JsonDialect::Jsonc),
-        LockfileKind::Pnpm => None,
-        LockfileKind::Yarn | LockfileKind::BunBinary => {
+        LockfileKind::Pnpm | LockfileKind::Yarn => None,
+        LockfileKind::BunBinary => {
             report.file(path, FS1010, Severity::Unknown, TEXT_FS1010)?;
             return Ok(LockfileState::NotParsed(kind));
         }
@@ -421,36 +430,20 @@ fn read_lockfile(
             return Ok(LockfileState::NotParsed(kind));
         };
         Lockfile::from_json(kind, &document)
-    } else {
-        let stream = match parse_yaml(&source, limits.yaml) {
-            Ok(stream) => stream,
-            Err(error) => {
-                let explanation =
-                    format!("The file is not usable YAML ({error}), so it is not analyzed.");
-                report.text_with(path, &source, error.span, FS2001, Severity::Unknown, FindingText { message: "Syntax error, file not analyzed", explanation: &explanation, remediation: "Fix the syntax error or raise the reported YAML limit, then run Frameshift again." })?;
-                return Ok(LockfileState::NotParsed(kind));
-            }
+    } else if kind == LockfileKind::Yarn && has_classic_header(source.as_str()) {
+        let Some(document) = parse_classic(&source, path, limits.yarn, report)? else {
+            return Ok(LockfileState::NotParsed(kind));
         };
-        for node in stream.nodes() {
-            if let frameshift_syntax::YamlValue::Mapping { entries, .. } = &node.value {
-                let mut seen = std::collections::BTreeMap::new();
-                for (key, _) in entries {
-                    let key_node = stream.node(*key).ok_or(LoadError::Internal)?;
-                    let target = match key_node.value {
-                        frameshift_syntax::YamlValue::Alias(target) => target,
-                        frameshift_syntax::YamlValue::Scalar { .. }
-                        | frameshift_syntax::YamlValue::Sequence { .. }
-                        | frameshift_syntax::YamlValue::Mapping { .. } => *key,
-                    };
-                    if let Some(text) = stream.scalar(target)
-                        && let Some(previous) = seen.insert(text, key_node.span)
-                    {
-                        report.text_with(path, &source, previous, FS1021, Severity::Review, FindingText { message: "Duplicate key in a package file", explanation: "A YAML mapping repeats a decoded key. The lockfile is ambiguous and is rejected as a whole.", remediation: "Remove the duplicate key." })?;
-                    }
-                }
-            }
+        Lockfile::from_yarn_classic(&document)
+    } else {
+        let Some(stream) = parse_yaml_lockfile(&source, path, limits.yaml, report)? else {
+            return Ok(LockfileState::NotParsed(kind));
+        };
+        if kind == LockfileKind::Yarn {
+            Lockfile::from_yarn_berry(&stream)
+        } else {
+            Lockfile::from_yaml(&stream)
         }
-        Lockfile::from_yaml(&stream)
     };
     let lockfile = match parsed {
         Ok(lockfile) => lockfile,
@@ -467,11 +460,20 @@ fn read_lockfile(
         let stale = lockfile.out_of_sync(manifest);
         if !stale.is_empty() {
             let kinds: Vec<&str> = stale.iter().map(|kind| kind.key()).collect();
-            let explanation = format!(
-                "The lockfile's root declarations differ from package.json in {}, so resolved \
-                 versions may not match what an install would produce.",
-                kinds.join(", ")
-            );
+            let explanation = if kind == LockfileKind::Yarn && lockfile.version() == 1 {
+                format!(
+                    "The Yarn classic lockfile has no entry for declarations of package.json in \
+                     {}, so resolved versions may not match what an install would produce. Yarn \
+                     1 records no entry for a declaration that a workspace package satisfies.",
+                    kinds.join(", ")
+                )
+            } else {
+                format!(
+                    "The lockfile's root declarations differ from package.json in {}, so \
+                     resolved versions may not match what an install would produce.",
+                    kinds.join(", ")
+                )
+            };
             report.file(
                 path,
                 FS1027,
@@ -488,6 +490,156 @@ fn read_lockfile(
     Ok(LockfileState::Parsed(Box::new(lockfile)))
 }
 
+/// Parses a Yarn classic lockfile, reporting a syntax error or a newer
+/// format version and every duplicate key.
+fn parse_classic<'s>(
+    source: &'s SourceText,
+    path: &SourcePath,
+    limits: YarnLimits,
+    report: &mut Reporter<'_>,
+) -> Result<Option<YarnDocument<'s>>, LoadError> {
+    let document = match parse_yarn_lockfile(source, limits) {
+        Ok(document) => document,
+        Err(error) if error.kind() == YarnErrorKind::UnsupportedVersion => {
+            report.text_with(
+                path,
+                source,
+                error.span(),
+                FS1010,
+                Severity::Unknown,
+                TEXT_FS1010,
+            )?;
+            return Ok(None);
+        }
+        Err(error) => {
+            let explanation = format!(
+                "The file is not a Yarn classic lockfile that Yarn 1 reads as written ({error}), \
+                 so it is not analyzed."
+            );
+            report.text_with(
+                path,
+                source,
+                error.span(),
+                FS2001,
+                Severity::Unknown,
+                FindingText {
+                    message: "Syntax error, file not analyzed",
+                    explanation: &explanation,
+                    remediation: "Fix the syntax error or resolve merge conflicts, for example \
+                                  by running an install, or raise the reported limit, then run \
+                                  Frameshift again.",
+                },
+            )?;
+            return Ok(None);
+        }
+    };
+    for key in document.duplicate_keys() {
+        report.text_with(
+            path,
+            source,
+            key.span(),
+            FS1021,
+            Severity::Review,
+            TEXT_FS1021_CLASSIC,
+        )?;
+    }
+    Ok(Some(document))
+}
+
+/// Parses a YAML lockfile, reporting a syntax error and every duplicate
+/// key of a mapping.
+fn parse_yaml_lockfile(
+    source: &SourceText,
+    path: &SourcePath,
+    limits: YamlLimits,
+    report: &mut Reporter<'_>,
+) -> Result<Option<YamlStream>, LoadError> {
+    let stream = match parse_yaml(source, limits) {
+        Ok(stream) => stream,
+        Err(error) => {
+            let explanation =
+                format!("The file is not usable YAML ({error}), so it is not analyzed.");
+            report.text_with(
+                path,
+                source,
+                error.span,
+                FS2001,
+                Severity::Unknown,
+                FindingText {
+                    message: "Syntax error, file not analyzed",
+                    explanation: &explanation,
+                    remediation: "Fix the syntax error or raise the reported YAML limit, then \
+                                  run Frameshift again.",
+                },
+            )?;
+            return Ok(None);
+        }
+    };
+    for node in stream.nodes() {
+        if let YamlValue::Mapping { entries, .. } = &node.value {
+            let mut seen = std::collections::BTreeMap::new();
+            for (key, _) in entries {
+                let key_node = stream.node(*key).ok_or(LoadError::Internal)?;
+                let target = match key_node.value {
+                    YamlValue::Alias(target) => target,
+                    YamlValue::Scalar { .. }
+                    | YamlValue::Sequence { .. }
+                    | YamlValue::Mapping { .. } => *key,
+                };
+                if let Some(text) = stream.scalar(target)
+                    && let Some(previous) = seen.insert(text, key_node.span)
+                {
+                    report.text_with(
+                        path,
+                        source,
+                        previous,
+                        FS1021,
+                        Severity::Review,
+                        TEXT_FS1021_YAML,
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(Some(stream))
+}
+
+/// Reports a Yarn lockfile whose format belongs to another Yarn generation
+/// than the one `packageManager` names (FS1029).
+fn yarn_generation(
+    lockfile: &Lockfile,
+    spec: &PackageManagerSpec,
+    path: &SourcePath,
+    report: &mut Reporter<'_>,
+) -> Result<(), LoadError> {
+    if lockfile.kind() != LockfileKind::Yarn || spec.kind != PackageManagerKind::Yarn {
+        return Ok(());
+    }
+    let classic = lockfile.version() == 1;
+    let explanation = match (spec.version.major() == 1, classic) {
+        (true, false) => {
+            "packageManager names Yarn 1, which ignores a Yarn Berry lockfile, so the next \
+             install resolves every version anew."
+        }
+        (false, true) => {
+            "packageManager names Yarn 2 or later, which migrates a Yarn classic lockfile on \
+             the next install, so locked versions may change."
+        }
+        (true, true) | (false, false) => return Ok(()),
+    };
+    report.file(
+        path,
+        FS1029,
+        Severity::Review,
+        FindingText {
+            message: "Lockfile format does not match the Yarn version",
+            explanation,
+            remediation: "Run an install with the Yarn version that packageManager names, then \
+                          run Frameshift again.",
+        },
+    )
+}
+
 const FS1010: &str = "FS1010";
 const FS1020: &str = "FS1020";
 const FS1021: &str = "FS1021";
@@ -498,6 +650,7 @@ const FS1025: &str = "FS1025";
 const FS1026: &str = "FS1026";
 const FS1027: &str = "FS1027";
 const FS1028: &str = "FS1028";
+const FS1029: &str = "FS1029";
 const FS2001: &str = "FS2001";
 const FS2002: &str = "FS2002";
 const FS2003: &str = "FS2003";
@@ -518,6 +671,18 @@ const TEXT_FS1021: FindingText<'static> = FindingText {
     message: "Duplicate key in a package file",
     explanation: "The key occurs again later in the same object. Frameshift uses the last \
                   occurrence, as npm does, but other tools may read the file differently.",
+    remediation: "Remove the duplicate key.",
+};
+const TEXT_FS1021_YAML: FindingText<'static> = FindingText {
+    message: "Duplicate key in a package file",
+    explanation: "A YAML mapping repeats a decoded key. The lockfile is ambiguous and is rejected \
+                  as a whole.",
+    remediation: "Remove the duplicate key.",
+};
+const TEXT_FS1021_CLASSIC: FindingText<'static> = FindingText {
+    message: "Duplicate key in a package file",
+    explanation: "A key repeats in one object of the Yarn classic lockfile, where Yarn uses the \
+                  last occurrence. The lockfile is ambiguous and is rejected as a whole.",
     remediation: "Remove the duplicate key.",
 };
 const TEXT_FS1022: FindingText<'static> = FindingText {

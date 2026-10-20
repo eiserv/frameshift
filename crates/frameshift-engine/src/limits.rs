@@ -13,7 +13,7 @@ use frameshift_core::{
 use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
 use frameshift_package::{LoadLimits, PackageLimits};
-use frameshift_syntax::{JsonLimits, LexicalLimits, ParseLimits, YamlLimits};
+use frameshift_syntax::{JsonLimits, LexicalLimits, ParseLimits, YamlLimits, YarnLimits};
 use frameshift_transform::EditLimits;
 
 // Entry values widen `usize` limits without loss.
@@ -47,6 +47,8 @@ pub struct Limits {
     pub json: JsonLimits,
     /// One YAML stream, with aliases retained as references.
     pub yaml: YamlLimits,
+    /// One Yarn classic lockfile.
+    pub yarn: YarnLimits,
     /// The package model, such as the lockfile size.
     pub package: PackageLimits,
     /// One span rewrite.
@@ -155,13 +157,14 @@ impl Limits {
     }
 
     /// Returns the limits that loading a package directory applies: the
-    /// text bound of `package.json`, each JSON parse, paths, and the
-    /// lockfile size.
+    /// text bound of `package.json`, each JSON, YAML, and Yarn classic
+    /// lockfile parse, paths, and the lockfile size.
     pub fn package(&self) -> LoadLimits {
         LoadLimits {
             text: self.text,
             json: self.json,
             yaml: self.yaml,
+            yarn: self.yarn,
             path: self.path,
             package: self.package,
         }
@@ -171,7 +174,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 33] {
+    pub fn entries(&self) -> [LimitEntry; 35] {
         let Self {
             run,
             ignore,
@@ -183,6 +186,7 @@ impl Limits {
             parse,
             json,
             yaml,
+            yarn,
             package,
             edit,
             emit,
@@ -228,6 +232,10 @@ impl Limits {
             max_depth: yaml_depth,
             max_nodes: yaml_nodes,
         } = yaml;
+        let YarnLimits {
+            max_depth: yarn_depth,
+            max_nodes: yarn_nodes,
+        } = yarn;
         let LexicalLimits {
             max_comments,
             max_string_bytes,
@@ -284,6 +292,8 @@ impl Limits {
             entry("text.max-source-bytes", wide(max_source_bytes)),
             entry("yaml.max-depth", wide(yaml_depth)),
             entry("yaml.max-nodes", wide(yaml_nodes)),
+            entry("yarn.max-depth", wide(yarn_depth)),
+            entry("yarn.max-nodes", wide(yarn_nodes)),
         ]
     }
 }

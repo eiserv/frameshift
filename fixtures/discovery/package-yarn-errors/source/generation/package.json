@@ -1,0 +1,8 @@
+{
+  "name": "fictional-generation",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "dependencies": {
+    "fictional-a": "^1.0.0"
+  }
+}

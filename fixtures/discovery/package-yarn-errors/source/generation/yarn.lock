@@ -1,0 +1,18 @@
+__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"fictional-a@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "fictional-a@npm:1.0.0"
+  checksum: 10c0/00
+  languageName: node
+  linkType: hard
+
+"fictional-generation@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "fictional-generation@workspace:."
+  dependencies:
+    fictional-a: "npm:^1.0.0"
+  languageName: unknown
+  linkType: soft

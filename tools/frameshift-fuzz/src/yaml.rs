@@ -45,6 +45,18 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                         .map_err(|_| "pnpm error span is invalid")?;
                 }
             }
+            let berry = frameshift_engine::package::Lockfile::from_yarn_berry(&stream);
+            if berry != frameshift_engine::package::Lockfile::from_yarn_berry(&stream) {
+                return Err("Yarn Berry model is not deterministic".into());
+            }
+            match berry {
+                Ok(lockfile) => crate::package::check_lockfile(&lockfile, None)?,
+                Err(error) => {
+                    source
+                        .slice(error.span)
+                        .map_err(|_| "Yarn Berry error span is invalid")?;
+                }
+            }
             for node in stream.nodes() {
                 source
                     .slice(node.span)
