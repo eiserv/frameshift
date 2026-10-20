@@ -23,6 +23,7 @@ use crate::manager::{
     Detection, IgnoredReason, LockfileKind, PackageManagerKind, PackageManagerSpec, detect,
 };
 use crate::manifest::{DependencyKind, IssueKind, ManifestError, PackageManifest};
+use crate::workspace::WorkspaceLimits;
 
 /// The package model's own limit (`D-069`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,6 +56,8 @@ pub struct LoadLimits {
     pub path: PathLimits,
     /// The lockfile size.
     pub package: PackageLimits,
+    /// Workspace patterns (`D-073`).
+    pub workspace: WorkspaceLimits,
 }
 
 /// The state of a directory's `package.json`.
@@ -134,8 +137,9 @@ pub fn load_package(
     load_directory(snapshot, directory, limits, &mut report, true).map(|(loaded, _)| loaded)
 }
 
-/// Loads one package directory and keeps the decoded `package.json`, with
-/// the staleness check optional for callers that check it themselves.
+/// Loads one package directory and keeps the decoded `package.json`. The
+/// workspace loader checks staleness itself, once workspace members are
+/// known (`D-073`).
 pub(crate) fn load_directory(
     snapshot: &Snapshot,
     directory: Option<&SourcePath>,
