@@ -2,7 +2,9 @@
 //!
 //! The inspect fixtures below `fixtures/discovery/` are materialized in
 //! Cargo's temporary directory with the inputs that `fixture.json` creates
-//! at test time (manifests naming the real `next` package, `Q-014`). Text
+//! at test time (manifests naming the real `next` package, `Q-014`, and
+//! symbolic links, without which a case is skipped on hosts that cannot
+//! create them). Text
 //! output is compared with `expected/inspection.txt`, which changes only
 //! through the ignored `update_inspect_text_goldens` test, and JSON output
 //! with the engine's `expected/inspection.json`.
@@ -87,10 +89,11 @@ fn cases() -> Vec<String> {
     names
 }
 
-/// Copies the case's `source/` and creates its test-time files and
-/// directories in a scratch directory of its own per test, then returns
-/// the root.
-fn prepare(name: &str, test: &str) -> PathBuf {
+/// Copies the case's `source/` and creates its test-time files,
+/// directories, and links in a scratch directory of its own per test, then
+/// returns the root, or `None` when the host cannot create a link (Windows
+/// without the privilege).
+fn prepare(name: &str, test: &str) -> Option<PathBuf> {
     let case = fixtures().join(name);
     let root = scratch(&format!("{test}-{name}"));
     copy_tree(&case.join("source"), &root);
@@ -101,7 +104,7 @@ fn prepare(name: &str, test: &str) -> PathBuf {
         panic!("{name}: fixture.json is not an object");
     };
     let Some(created) = fields.get("createdAtTestTime") else {
-        return root;
+        return Some(root);
     };
     let Some(JsonValue::Array(items)) = document.value(created) else {
         panic!("{name}: createdAtTestTime is not an array");
@@ -114,10 +117,34 @@ fn prepare(name: &str, test: &str) -> PathBuf {
                 fs::create_dir_all(path.parent().unwrap()).unwrap();
                 fs::write(path, text(&document, item, "content").unwrap()).unwrap();
             }
+            Some("symlink") => {
+                fs::create_dir_all(path.parent().unwrap()).unwrap();
+                if let Err(error) = symlink(&path, text(&document, item, "target").unwrap()) {
+                    if !cfg!(windows) {
+                        panic!("{name}: {error}");
+                    }
+                    eprintln!("skipping {name}: {error}");
+                    return None;
+                }
+            }
             other => panic!("{name}: unexpected input kind {other:?}"),
         }
     }
-    root
+    Some(root)
+}
+
+#[cfg(unix)]
+fn symlink(link: &Path, target: &str) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn symlink(link: &Path, target: &str) -> std::io::Result<()> {
+    if link.parent().unwrap().join(target).is_dir() {
+        std::os::windows::fs::symlink_dir(target, link)
+    } else {
+        std::os::windows::fs::symlink_file(target, link)
+    }
 }
 
 fn expected(name: &str, file: &str) -> Vec<u8> {
@@ -139,7 +166,9 @@ fn inspect(root: &Path, extra: &[&str]) -> Output {
 #[test]
 fn inspect_fixtures_match_text_and_json_goldens() {
     for name in cases() {
-        let root = prepare(&name, "goldens");
+        let Some(root) = prepare(&name, "goldens") else {
+            continue;
+        };
         let output = inspect(&root, &[]);
         assert_eq!(output.status.code(), Some(0), "{name}");
         assert!(output.stderr.is_empty(), "{name}");
@@ -154,7 +183,7 @@ fn inspect_fixtures_match_text_and_json_goldens() {
 
 #[test]
 fn package_selection_and_current_directory() {
-    let root = prepare("inspect-next-workspace", "selection");
+    let root = prepare("inspect-next-workspace", "selection").unwrap();
     let output = inspect(&root, &["--package", "apps/site"]);
     assert_eq!(output.status.code(), Some(0));
     let text = String::from_utf8(output.stdout).unwrap();
@@ -184,7 +213,7 @@ fn package_selection_and_current_directory() {
 fn input_failures_exit_with_three_and_an_error_document() {
     let base = scratch("failures");
     fs::write(base.join("file.txt"), "").unwrap();
-    let root = prepare("inspect-next-workspace", "failures");
+    let root = prepare("inspect-next-workspace", "failures").unwrap();
     let cases: Vec<(PathBuf, &[&str])> = vec![
         (base.join("missing"), &[]),
         (base.join("file.txt"), &[]),
@@ -255,7 +284,9 @@ fn a_non_unicode_source_is_a_native_path() {
 fn update_inspect_text_goldens() {
     let version = frameshift_engine::version::info().engine_version;
     for name in cases() {
-        let root = prepare(&name, "update");
+        let Some(root) = prepare(&name, "update") else {
+            continue;
+        };
         let output = inspect(&root, &[]);
         assert_eq!(output.status.code(), Some(0), "{name}");
         let first = format!("Frameshift {version}  inspect\n");

@@ -1,0 +1,31 @@
+Frameshift @ENGINE_VERSION@  inspect
+
+Files          14 admitted (1680 bytes), 11 directories, 0 ignored, 0 other
+Package mgr    npm 11.11.0 (packageManager field)
+Lockfile       package-lock.json (format 3); ignored: yarn.lock (other package manager)
+Workspace      2 members, evaluated as npm-11
+
+Package        . (fictional-conflict)
+  Framework    Next.js 15.1.3 (locked)
+  Config       next.config.js
+  Router       App Router in app (1 route file); Pages Router in src/pages (1 route file)
+
+Package        packages/copy (fictional-ui)
+  Framework    no supported framework detected
+
+Package        packages/ui (fictional-ui)
+  Framework    Next.js 15.1.3 (locked)
+  Config       next.config.js
+  Router       Pages Router in packages/ui/pages (1 route file)
+
+Migration      no migration path ships in this build
+Findings       9 (5 review, 4 info)
+  review  FS1044  app  Next.js router directory not fully known
+  review  FS1033  package.json  Workspace members depend on case sensitivity
+  review  FS1021  package.json:7:5  Duplicate key in a package file
+  review  FS1035  packages/ui  Package manager rejects the workspace
+  review  FS1023  yarn.lock  Lockfile of another package manager ignored
+  info    FS1045  next.config.mjs  Next.js ignores this file or directory
+  info    FS1045  next.config.ts  Next.js ignores this file or directory
+  info    FS1045  packages/ui/next.config.js  Next.js ignores this file or directory
+  info    FS1045  src/app  Next.js ignores this file or directory

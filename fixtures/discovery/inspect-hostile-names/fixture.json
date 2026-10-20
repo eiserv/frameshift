@@ -1,0 +1,32 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "inspect",
+  "description": "An npm workspace whose package names and member directories carry terminal escape sequences, a C1 control sequence introducer, a fake output line, a line separator, a backslash, and bidirectional formatting characters (U+202E, U+061C). Text output must escape every one of them and JSON output must spell them as escapes (SECURITY.md section 7.8, D-075, D-076). Hostile names and manifests naming the real next package are created at test time (Q-014).",
+  "createdAtTestTime": [
+    {
+      "kind": "file",
+      "path": "package.json",
+      "content": "{\n  \"name\": \"fictional-\\u001b[31mred\\u001b[0m\\nPackage        apps/fake (fictional-fake)\",\n  \"private\": true,\n  \"packageManager\": \"npm@11.11.0\",\n  \"workspaces\": [\n    \"apps/*\"\n  ]\n}\n"
+    },
+    {
+      "kind": "file",
+      "path": "apps/\u202eevil\u061c/package.json",
+      "content": "{\n  \"name\": \"fictional-\\u2028line\\u009b2J\\\\back\\u202etxt.exe\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"next\": \"^15.0.0\"\n  }\n}\n"
+    },
+    {
+      "kind": "file",
+      "path": "apps/\u202eevil\u061c/next.config.mjs",
+      "content": "export default {};\n"
+    },
+    {
+      "kind": "file",
+      "path": "apps/\u202eevil\u061c/app/page.tsx",
+      "content": "export default function Page() {\n  return <main>Fictional page</main>;\n}\n"
+    },
+    {
+      "kind": "file",
+      "path": "apps/del\u007f\u009b2J/package.json",
+      "content": "{\n  \"name\": \"fictional-del\",\n  \"version\": \"1.0.0\",\n  \"devDependencies\": {\n    \"next\": \"^15.0.0\"\n  }\n}\n"
+    }
+  ]
+}

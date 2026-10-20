@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "inspect",
+  "description": "An npm workspace whose member manifest and root lockfile nest arrays 300 levels deep, beyond json.max-depth (256), and whose ignored pnpm-workspace.yaml nests flow sequences beyond the YAML depth limit. Each file is reported and not analyzed, inspection still completes, and the Next.js member falls back to its declared range (D-068, D-071, D-075, D-076). The member manifest naming next is created at test time (Q-014).",
+  "createdAtTestTime": [
+    {
+      "kind": "file",
+      "path": "apps/site/package.json",
+      "content": "{\n  \"name\": \"fictional-site\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"next\": \"^16.0.0\"\n  }\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+Frameshift @ENGINE_VERSION@  inspect
+
+Files          7 admitted (2238 bytes), 4 directories, 0 ignored, 0 other
+Package mgr    npm 11.11.0 (packageManager field)
+Lockfile       package-lock.json (not parsed)
+Workspace      1 member, evaluated as npm-11; 1 directory undetermined; incomplete
+
+Package        . (fictional-deep-root)
+  Framework    no supported framework detected
+
+Package        apps/site (fictional-site)
+  Framework    Next.js 16.0.0 or later (lowest version of the declared range)
+  Config       apps/site/next.config.mjs
+  Router       App Router in apps/site/app (1 route file)
+
+Migration      no migration path ships in this build
+Findings       6 (3 unknown, 3 review)
+  unknown FS2001  apps/deep/package.json:4:268  Syntax error, file not analyzed
+  unknown FS2001  package-lock.json:10:272  Syntax error, file not analyzed
+  unknown FS2001  pnpm-workspace.yaml:4:145  Syntax error, file not analyzed
+  review  FS1035  apps/deep  Package manager rejects the workspace
+  review  FS1042  apps/site/package.json  Next.js version imprecise
+  review  FS1034  pnpm-workspace.yaml  Workspace declaration of another package manager ignored

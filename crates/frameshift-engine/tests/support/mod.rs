@@ -25,6 +25,26 @@ pub fn temporary() -> PathBuf {
     }
 }
 
+/// Creates a symbolic link at `link` to the relative `target`; on Windows a
+/// directory link when the target is an existing directory, which needs the
+/// symbolic link privilege.
+#[cfg(unix)]
+pub fn symlink(link: &Path, target: &str) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+/// Creates a symbolic link at `link` to the relative `target`; on Windows a
+/// directory link when the target is an existing directory, which needs the
+/// symbolic link privilege.
+#[cfg(windows)]
+pub fn symlink(link: &Path, target: &str) -> std::io::Result<()> {
+    if link.parent().unwrap().join(target).is_dir() {
+        std::os::windows::fs::symlink_dir(target, link)
+    } else {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+}
+
 /// A JSON value with nonnegative integer numbers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Json {
