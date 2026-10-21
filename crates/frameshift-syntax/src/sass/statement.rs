@@ -3,6 +3,7 @@
 use super::{
     Parser, SassAtRule as At, SassError, SassErrorKind as Error, SassNodeId as Id,
     SassNodeKind as Kind, SassSyntax, canonical_name, css_space, decode_name, newline,
+    selector::{SelectorContext, plain_identifier, unvendor},
 };
 
 #[derive(Clone, Copy)]
@@ -14,6 +15,7 @@ pub(super) struct Context {
     content: bool,
     control: bool,
     declaration: bool,
+    selectors: SelectorContext,
 }
 
 impl Default for Context {
@@ -26,6 +28,7 @@ impl Default for Context {
             content: false,
             control: false,
             declaration: false,
+            selectors: SelectorContext::Normal,
         }
     }
 }
@@ -340,10 +343,13 @@ impl Parser<'_> {
                 }
                 child_context.function = kind == At::Function;
                 child_context.mixin = kind == At::Mixin;
+                // An include site decides whether selectors are keyframes.
+                child_context.selectors = SelectorContext::Unknown;
                 block = true;
             }
             At::Include => {
                 child_context.content = true;
+                child_context.selectors = SelectorContext::Unknown;
                 children.push(self.identifier()?);
                 if self.eat(".")? {
                     let member = self.identifier()?;
@@ -419,8 +425,25 @@ impl Parser<'_> {
                 block = true;
             }
             At::AtRoot => {
-                if !self.at("{") && !self.peek().is_none_or(newline) {
+                if self.at("(") {
                     children.push(self.raw_header(false)?.0);
+                    // A query can leave the enclosing keyframes rule.
+                    if context.selectors == SelectorContext::Keyframes {
+                        child_context.selectors = SelectorContext::Unknown;
+                    }
+                } else if !self.at("{") && !self.peek().is_none_or(newline) {
+                    // An inline selector is one style rule with its own body.
+                    let rule_start = self.pos;
+                    let nodes = self.nodes.len();
+                    let comments = self.comments.len();
+                    let header = self.raw_header(false)?.0;
+                    if self.start(header) == self.end(header) {
+                        return Err(self.error(Error::ExpectedSyntax));
+                    }
+                    children.push(
+                        self.style_rule(rule_start, header, nodes, comments, indent, context)?,
+                    );
+                    return self.node(start, Kind::AtRule(kind), children);
                 }
                 block = true;
             }
@@ -439,9 +462,21 @@ impl Parser<'_> {
                 children.push(header);
             }
             At::Css => {
+                let name = children[0];
                 children.push(self.raw_header(false)?.0);
                 optional_block = true;
                 child_context.style = true;
+                // Evaluation parses keyframe selectors when the evaluated name
+                // without a vendor prefix is exactly `keyframes`.
+                child_context.selectors = if self.nodes[name.0].kind != Kind::Identifier {
+                    SelectorContext::Unknown
+                } else if context.selectors != SelectorContext::Unknown
+                    && unvendor(&plain_identifier(self.spelling(name))) == "keyframes"
+                {
+                    SelectorContext::Keyframes
+                } else {
+                    context.selectors
+                };
             }
         }
         self.skip(self.syntax == SassSyntax::Scss)?;
@@ -662,16 +697,7 @@ impl Parser<'_> {
             if self.start(header) == self.end(header) {
                 return Err(self.error(Error::ExpectedSyntax));
             }
-            let mut children = vec![header];
-            children.extend(self.body(
-                indent,
-                Context {
-                    style: true,
-                    ..context
-                },
-                true,
-            )?);
-            return self.node(start, Kind::StyleRule, children);
+            return self.style_rule(start, header, nodes, comments, indent, context);
         }
         self.nodes.truncate(nodes);
         self.comments.truncate(comments);
@@ -717,23 +743,60 @@ impl Parser<'_> {
         self.node(start, Kind::Declaration, children)
     }
 
-    fn raw_header(&mut self, curly_values: bool) -> Result<(Id, Option<usize>), SassError> {
+    /// Completes a style rule from its raw selector `header`, whose syntax
+    /// starts at arena length `nodes` and comment count `comments`.
+    fn style_rule(
+        &mut self,
+        start: usize,
+        header: Id,
+        nodes: usize,
+        comments: usize,
+        indent: usize,
+        context: Context,
+    ) -> Result<Id, SassError> {
+        let selector = self.style_selector(header, nodes, comments, context.selectors)?;
+        let mut children = vec![selector];
+        children.extend(self.body(
+            indent,
+            Context {
+                style: true,
+                // Evaluation rejects style rules inside keyframe blocks and
+                // cannot know the grammar of those from an include site.
+                selectors: if context.selectors == SelectorContext::Normal {
+                    SelectorContext::Normal
+                } else {
+                    SelectorContext::Unknown
+                },
+                ..context
+            },
+            true,
+        )?);
+        self.node(start, Kind::StyleRule, children)
+    }
+
+    pub(super) fn raw_header(
+        &mut self,
+        curly_values: bool,
+    ) -> Result<(Id, Option<usize>), SassError> {
         let start = self.pos;
         let mut parts = Vec::new();
         let mut colon = None;
+        // Indented Sass continues after a trailing comma; comments between
+        // the comma and the line end do not count, as Dart Sass omits them.
+        let mut comma = false;
         while let Some(c) = self.peek() {
             self.visit()?;
             if matches!(c, ';' | '}') || (c == '{' && !curly_values) {
                 break;
             }
-            if self.syntax == SassSyntax::Indented
-                && newline(c)
-                && !self.text[start..self.pos].trim_end().ends_with(',')
-            {
+            if self.syntax == SassSyntax::Indented && newline(c) && !comma {
                 break;
             }
             if c == ':' && colon.is_none() {
                 colon = Some(self.pos);
+            }
+            if !css_space(c) && !self.at("/*") && !(self.at("//") && !curly_values) {
+                comma = c == ',';
             }
             if self.at("#{") {
                 parts.push(self.interpolation()?);

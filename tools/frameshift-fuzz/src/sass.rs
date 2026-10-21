@@ -2,7 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use frameshift_engine::syntax::{SassLimits, SassSyntax, parse_sass};
+use frameshift_engine::syntax::{
+    SassLimits, SassNodeKind, SassSyntax, SassUncheckedKind, parse_sass,
+};
 
 use crate::targets;
 
@@ -53,6 +55,40 @@ pub fn run(input: &[u8]) -> Result<(), String> {
         }
         if seen.len() != doc.nodes().len() {
             return Err("unreachable Sass syntax node".to_owned());
+        }
+        let unchecked: Vec<_> = doc.unchecked_syntax().collect();
+        for entry in &unchecked {
+            source
+                .slice(entry.span)
+                .map_err(|e| format!("Sass unchecked span: {e}"))?;
+        }
+        for rule in doc
+            .nodes()
+            .iter()
+            .filter(|node| node.kind == SassNodeKind::StyleRule)
+        {
+            let selector = rule
+                .children
+                .first()
+                .and_then(|&id| doc.node(id))
+                .ok_or("Sass style rule without selector")?;
+            let raw = selector.kind == SassNodeKind::InterpolatedText;
+            if !raw
+                && !matches!(
+                    selector.kind,
+                    SassNodeKind::SelectorList | SassNodeKind::KeyframeSelectorList
+                )
+            {
+                return Err(format!("unexpected Sass selector: {selector:?}"));
+            }
+            // A selector retained as raw text never validates the file.
+            if raw
+                && !unchecked.iter().any(|entry| {
+                    entry.kind == SassUncheckedKind::Selector && entry.span == selector.span
+                })
+            {
+                return Err("raw Sass selector without unchecked evidence".to_owned());
+            }
         }
         if !doc
             .comments()
