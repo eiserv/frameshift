@@ -13,7 +13,9 @@ use frameshift_core::{
 use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
 use frameshift_package::{LoadLimits, PackageLimits, WorkspaceLimits};
-use frameshift_syntax::{JsonLimits, LexicalLimits, ParseLimits, YamlLimits, YarnLimits};
+use frameshift_syntax::{
+    CssLimits, JsonLimits, LexicalLimits, ParseLimits, YamlLimits, YarnLimits,
+};
 use frameshift_transform::EditLimits;
 
 // Entry values widen `usize` limits without loss.
@@ -43,6 +45,8 @@ pub struct Limits {
     pub hash: HashLimits,
     /// One parse, including its lexical scans.
     pub parse: ParseLimits,
+    /// One CSS tokenization.
+    pub css: CssLimits,
     /// One JSON or JSONC parse.
     pub json: JsonLimits,
     /// One YAML stream, with aliases retained as references.
@@ -177,7 +181,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 39] {
+    pub fn entries(&self) -> [LimitEntry; 40] {
         let Self {
             run,
             ignore,
@@ -187,6 +191,7 @@ impl Limits {
             finding,
             hash,
             parse,
+            css,
             json,
             yaml,
             yarn,
@@ -227,6 +232,9 @@ impl Limits {
             max_tokens,
             max_nesting_depth,
         } = parse;
+        let CssLimits {
+            max_tokens: css_tokens,
+        } = css;
         let JsonLimits {
             max_depth: json_depth,
             max_nodes: json_nodes,
@@ -266,6 +274,7 @@ impl Limits {
         let entry = |name, value| LimitEntry { name, value };
         let wide = |value: usize| value as u64;
         [
+            entry("css.max-tokens", wide(css_tokens)),
             entry("edit.max-edits", wide(max_edits)),
             entry("edit.max-output-bytes", wide(edit_output_bytes)),
             entry("emit.max-depth", wide(max_depth)),
