@@ -4,6 +4,8 @@
 //! share the same arenas; indentation never rewrites the source text.
 
 mod expression;
+mod module;
+mod module_url;
 mod selector;
 mod statement;
 
@@ -209,6 +211,19 @@ pub enum SassNodeKind {
     /// `=` and `+` shorthand omit the directive-name child; their original
     /// marker remains in the node span before the callable name.
     AtRule(SassAtRule),
+    /// An explicit `@use` namespace clause. A global `as *` has no child;
+    /// otherwise the child is the source-spelled namespace identifier.
+    ModuleNamespace {
+        /// Whether this is `as *`.
+        global: bool,
+    },
+    /// A forwarding `as prefix*` clause with its identifier child.
+    ForwardPrefix,
+    /// A forwarding member filter with variable and identifier children.
+    ForwardVisibility {
+        /// Whether this is `hide` rather than `show`.
+        hidden: bool,
+    },
     /// A source-spelled identifier, including escapes.
     Identifier,
     /// A property or selector fragment with interpolation children.
@@ -348,8 +363,6 @@ pub enum SassUncheckedKind {
     CssDirective,
     /// Import URLs, modifiers, and media/supports conditions.
     ImportPrelude,
-    /// Module URL syntax and the namespace derived from its URL.
-    ModuleUrl,
     /// The query of `@at-root`.
     AtRootPrelude,
     /// Raw contents of a special CSS function.
@@ -488,11 +501,6 @@ impl<'source> SassDocument<'source> {
                     SassUncheckedKind::Selector
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::Css) {
                     SassUncheckedKind::CssDirective
-                } else if matches!(
-                    node.kind,
-                    SassNodeKind::AtRule(SassAtRule::Use | SassAtRule::Forward)
-                ) {
-                    SassUncheckedKind::ModuleUrl
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::Import) {
                     SassUncheckedKind::ImportPrelude
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::Extend) {

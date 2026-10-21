@@ -66,6 +66,22 @@ impl Parser<'_> {
             if self.syntax == SassSyntax::Scss && self.eat(";")? {
                 continue;
             }
+            // Sass discards root charset rules before ordinary statement
+            // dispatch. Retain their source, without closing the module prefix.
+            // Dart Sass 1.105.2 matches this literal prefix, even before name
+            // characters; a boundary check would change reference acceptance.
+            if context.root && self.at("@charset") {
+                let start = self.pos;
+                self.expect("@")?;
+                let name_start = self.pos;
+                self.expect("charset")?;
+                let name = self.node(name_start, Kind::Identifier, Vec::new())?;
+                self.skip(false)?;
+                let (value, _) = self.module_string()?;
+                self.separator()?;
+                items.push(self.node(start, Kind::AtRule(At::Css), vec![name, value])?);
+                continue;
+            }
             let forced_selector =
                 self.syntax == SassSyntax::Indented && !context.declaration && self.at("\\");
             let statement =
@@ -500,91 +516,6 @@ impl Parser<'_> {
             self.separator()?;
         }
         self.node(start, Kind::AtRule(kind), children)
-    }
-
-    fn module_header(&mut self, kind: At, children: &mut Vec<Id>) -> Result<(), SassError> {
-        if !self.peek().is_some_and(|c| matches!(c, '\'' | '"')) {
-            return Err(self.error(Error::ExpectedSyntax));
-        }
-        let url = self.quoted()?;
-        if !self.nodes[url.0].children.is_empty() {
-            return Err(self.error(Error::ExpectedSyntax));
-        }
-        children.push(url);
-        self.skip(self.syntax == SassSyntax::Scss)?;
-        if self.keyword("as")? {
-            self.skip(true)?;
-            if kind == At::Use && self.eat("*")? {
-            } else {
-                children.push(self.identifier()?);
-                if kind == At::Forward {
-                    self.expect("*")?;
-                }
-            }
-            self.skip(self.syntax == SassSyntax::Scss)?;
-        }
-        if kind == At::Forward && (self.keyword("show")? || self.keyword("hide")?) {
-            loop {
-                self.skip(true)?;
-                children.push(if self.at("$") {
-                    self.variable()?
-                } else {
-                    self.identifier()?
-                });
-                self.skip(self.syntax == SassSyntax::Scss)?;
-                if !self.eat(",")? {
-                    break;
-                }
-            }
-        }
-        if self.keyword("with")? {
-            self.skip(true)?;
-            children.push(self.configuration(kind == At::Forward)?);
-        }
-        Ok(())
-    }
-
-    fn configuration(&mut self, guarded: bool) -> Result<Id, SassError> {
-        let start = self.pos;
-        self.expect("(")?;
-        self.skip(true)?;
-        let before = self.expression_newlines;
-        self.expression_newlines = true;
-        let mut children = Vec::new();
-        let mut names = std::collections::BTreeSet::new();
-        while !self.at(")") {
-            let start = self.pos;
-            let variable = self.variable()?;
-            if !names.insert(canonical_name(self.spelling(variable)).into_owned()) {
-                return Err(self.error(Error::DuplicateName));
-            }
-            self.skip(true)?;
-            self.expect(":")?;
-            self.skip(true)?;
-            let value = self.expression(false)?;
-            let mut parts = vec![variable, value];
-            self.skip(true)?;
-            if guarded && self.at("!") {
-                let flag = self.pos;
-                self.expect("!")?;
-                if !self.keyword("default")? {
-                    return Err(self.error(Error::ExpectedSyntax));
-                }
-                parts.push(self.node(flag, Kind::Flag, Vec::new())?);
-                self.skip(true)?;
-            }
-            children.push(self.node(start, Kind::Argument, parts)?);
-            if !self.eat(",")? {
-                break;
-            }
-            self.skip(true)?;
-        }
-        if children.is_empty() {
-            return Err(self.error(Error::ExpectedSyntax));
-        }
-        self.expect(")")?;
-        self.expression_newlines = before;
-        self.node(start, Kind::Arguments, children)
     }
 
     fn for_bound(&mut self) -> Result<Id, SassError> {

@@ -697,6 +697,434 @@ fn modules_are_syntax_only_and_never_loaded() {
     );
 }
 
+const MODULE_CASES: &[(&str, bool)] = &[
+    ("@use 'sass:color';", true),
+    ("@use '../_palette.scss?theme#fragment';", true),
+    ("@use 'https://example.invalid/_palette.scss';", true),
+    ("@use 'theme%2Eextra.scss';", true),
+    ("@use '%70alette';", true),
+    ("@use '123' as palette;", true),
+    ("@use '' as *;", true),
+    ("@use '#{literal}' as *;", true),
+    ("@forward '#{literal}';", true),
+    ("@use 'a\\\nb';", true),
+    ("@use 'a\\\r\nb';", false),
+    ("@use '123';", false),
+    ("@use '_';", false),
+    ("@use '';", false),
+    ("@use 'palette/';", false),
+    ("@use 'palette/..';", false),
+    ("@use 'a%2Fb';", false),
+    ("@use '%ff';", false),
+    ("@use '%ff' as x;", true),
+    ("@use 'http://[::1]/palette';", true),
+    ("@use 'http://[broken]/palette' as x;", false),
+    ("@forward 'https://example.invalid:wrong/a';", false),
+    ("@forward ':palette';", false),
+    ("@forward 'data:wrong';", false),
+    ("@forward 'data:,palette';", true),
+    ("@forward 'data:;base64,YQ==';", true),
+    ("@forward 'data:;base64,?';", false),
+    ("@use 'a' AS p;", true),
+    ("@use 'a' \\61s p;", true),
+    ("@use 'a' as\\20 p;", false),
+    ("@use 'a' as p WITH($tone: red);", true),
+    ("@forward 'a' as theme_* SHOW $tone, paint;", true),
+    (
+        "@forward 'a' HIDE $tone, paint WITH($tone: red !default);",
+        true,
+    ),
+    ("@forward 'a' show paint, paint;", true),
+    ("@forward 'a' as *;", false),
+    ("@forward 'a' as theme- *;", false),
+    ("@forward 'a' show;", false),
+    ("@forward 'a' show paint,;", false),
+    ("@forward 'a' show paint hide other;", false),
+    ("@forward 'a' with($x: 1) as p-*;", false),
+    ("@use 'a' with();", false),
+    ("@use 'a' with($x: 1 !default);", false),
+    ("@forward 'a' with($x: 1 !DEFAULT);", false),
+    ("@forward 'a' with($x: 1 !de\\66 ault,);", true),
+    ("@use 'a' with($_tone: 1, $-tone: 2);", false),
+    ("@use 'a' with($tone: 1, $t\\6f ne: 2);", false),
+    ("@use 'a' with($_private: 1,);", true),
+];
+
+fn module_cases() -> Vec<(String, SassSyntax)> {
+    MODULE_CASES
+        .iter()
+        .flat_map(|(text, _)| {
+            [
+                (text.to_string(), SassSyntax::Scss),
+                (
+                    format!("{}\n", text.strip_suffix(';').unwrap()),
+                    SassSyntax::Indented,
+                ),
+            ]
+        })
+        .collect()
+}
+
+#[test]
+fn module_urls_namespaces_and_clauses_follow_the_pinned_grammar() {
+    for ((text, syntax), (_, accepted)) in module_cases()
+        .iter()
+        .zip(MODULE_CASES.iter().flat_map(|c| [c, c]))
+    {
+        let source = source(text);
+        let result = parse_sass(&source, *syntax, SassLimits::default());
+        assert_eq!(
+            result.is_ok(),
+            *accepted,
+            "{syntax:?}: {text:?}: {result:?}"
+        );
+        if let Ok(doc) = result {
+            check(&doc);
+            assert!(doc.unchecked_syntax().next().is_none(), "{text}");
+        }
+    }
+}
+
+#[test]
+fn module_clause_nodes_preserve_spelling_and_boundaries() {
+    let text = "\u{feff}@use '123' as *;\r\n@forward 'palette' as theme_* hide $tone, paint with($tone: red !default);";
+    let input = source(text);
+    let doc = parse_sass(&input, SassSyntax::Scss, SassLimits::default()).unwrap();
+    check(&doc);
+    let clauses: Vec<_> = doc
+        .nodes()
+        .iter()
+        .filter(|node| {
+            matches!(
+                node.kind,
+                SassNodeKind::ModuleNamespace { .. }
+                    | SassNodeKind::ForwardPrefix
+                    | SassNodeKind::ForwardVisibility { .. }
+            )
+        })
+        .map(|node| {
+            (
+                node.kind.clone(),
+                input.slice(node.span).unwrap(),
+                node.children.len(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        clauses,
+        [
+            (SassNodeKind::ModuleNamespace { global: true }, "as *", 0),
+            (SassNodeKind::ForwardPrefix, "as theme_*", 1),
+            (
+                SassNodeKind::ForwardVisibility { hidden: true },
+                "hide $tone, paint",
+                2
+            ),
+        ]
+    );
+    let input = source("@use 'palette' as p; @forward 'palette' show $tone;");
+    let doc = parse_sass(&input, SassSyntax::Scss, SassLimits::default()).unwrap();
+    check(&doc);
+    assert!(
+        doc.nodes()
+            .iter()
+            .any(|n| n.kind == SassNodeKind::ModuleNamespace { global: false })
+    );
+    assert!(
+        doc.nodes()
+            .iter()
+            .any(|n| n.kind == SassNodeKind::ForwardVisibility { hidden: false })
+    );
+}
+
+fn generated_module_cases() -> Vec<(String, SassSyntax)> {
+    let mut urls = vec!["".to_owned()];
+    for c in (0u8..=127).map(char::from).chain(['色', '😀', '\u{80}']) {
+        if matches!(c, '\'' | '\\' | '\r' | '\n' | '\u{c}') {
+            continue;
+        }
+        for url in [
+            format!("{c}"),
+            format!("a{c}b"),
+            format!("{c}:palette"),
+            format!("http://a{c}b/palette"),
+            format!("http://a:{c}/palette"),
+        ] {
+            urls.push(url);
+        }
+    }
+    for url in [
+        "a/.",
+        "a/..",
+        "a/../palette",
+        "a/%2e",
+        "a/%2E%2e",
+        "a/%2e%2e/palette",
+        "%41",
+        "%00",
+        "%2e",
+        "%5c31%20palette",
+        "%F0%9F%98%80",
+        "%ff",
+        "%",
+        "%1",
+        "%zz",
+        "http://[::]/palette",
+        "http://[v1.a]/palette",
+        "http://[::ffff:192.000.2.1]/palette",
+        "http://[::1%25eth0]/palette",
+        "http://x:0x10/palette",
+        "http://x:-1/palette",
+        "http://x:+1/palette",
+        "http://x:999999999999999999999/palette",
+        "data:text/plain,palette",
+        "data:;base64,YQ",
+        "data:;base64,YQ=",
+        "data:;base64,YQ===",
+        "data:;base64,Y%51==",
+        "data:;x=y,palette",
+        "DATA:,palette",
+        "data:,a/b?x",
+        "data:,a/b#x",
+        "data:,a/b%23x",
+        "data:,a/b%3fx",
+        "data:,a\\\\31 ",
+        "data:;base64,abc_abcd",
+        "data:;base64,abc%2Fabcd",
+        "data:;base64,abc-abcd",
+    ] {
+        urls.push(url.to_string());
+    }
+    for host in [
+        "[",
+        "]",
+        "[::]x",
+        "[::1]",
+        "[::1]:",
+        "[::1]:0x10",
+        "[::1]:-0x10",
+        "[::1]:+",
+        "[::1]: 1",
+        "[::1%]",
+        "[::1%25]",
+        "[::1%25eth%zz]",
+        "[::1%25eth%41]",
+        "[v1.a]",
+        "[V1.a]",
+        "[v.ab]",
+        "[v1.]",
+        "[v1.a%20]",
+        "[v1.a色]",
+        "[::ffff:192.0.2.1]",
+        "[::ffff:192.00.2.1]",
+        "[1:2:3:4:5:6:7:8]",
+        "[1:2:3:4:5:6:7:8::]",
+        "::1",
+        "::1:",
+        "user@[::1]",
+        "user@@host",
+        "user[bad]@host",
+        "host:0Xff",
+        "host:-0x1",
+        "host:1e2",
+        "host:1.0",
+        "host:0b10",
+        "host:99999999999999999999999999999999999999999",
+    ] {
+        urls.push(format!("http://{host}/palette"));
+    }
+    for c in [
+        '\u{85}', '\u{a0}', '\u{feff}', '\u{200b}', '\u{2028}', '\u{202f}',
+    ] {
+        urls.push(format!("http://x:{c}1{c}/palette"));
+    }
+    for mime in ["", "text/plain", "text", "/", "a/b/c", "a /b", "色/字"] {
+        for param in [
+            "",
+            ";charset=UTF-8",
+            ";base64",
+            ";BASE64",
+            ";x=y;base64",
+            ";base64;x=y",
+            ";x",
+            ";=",
+            ";x=y=z",
+        ] {
+            for payload in [
+                "", "a", "YQ", "YQ=", "YQ==", "YQ===", "YQ====", "YWJj", "YWJj=", "Y%51==", "%zz",
+                "?", "#", "palette", "a/b", "é",
+            ] {
+                urls.push(format!("data:{mime}{param},{payload}"));
+            }
+        }
+    }
+    let mut cases = Vec::new();
+    for url in urls {
+        for (directive, clause) in [("use", ""), ("use", " as *"), ("forward", "")] {
+            for (syntax, end) in [(SassSyntax::Scss, ";"), (SassSyntax::Indented, "\n")] {
+                cases.push((format!("@{directive} '{url}'{clause}{end}"), syntax));
+            }
+        }
+    }
+    for directive in ["use", "forward"] {
+        for name in [
+            "p", "_p", "--", "-1", "\\31 p", "\\0", "\\d800", "\\110000", "a\\20 b", "色", "😀",
+        ] {
+            for clause in [
+                format!("as {name}{}", if directive == "forward" { "*" } else { "" }),
+                format!("with(${name}: 1)"),
+                format!("show ${name}"),
+            ] {
+                for (syntax, end) in [(SassSyntax::Scss, ";"), (SassSyntax::Indented, "\n")] {
+                    cases.push((format!("@{directive} 'palette' {clause}{end}"), syntax));
+                }
+            }
+        }
+        for gap in [" ", "\n", "\r\n", "/* x */", "// x\n"] {
+            for clause in [
+                "as p",
+                "AS p",
+                "\\61s p",
+                "as\\20 p",
+                "with($x: 1)",
+                "WITH($x: 1)",
+                "w\\69th($x: 1)",
+                "as p-*",
+                "SHOW $tone, paint",
+                "h\\69 de $tone",
+                "with($x: 1 !default)",
+            ] {
+                for (syntax, end) in [(SassSyntax::Scss, ";"), (SassSyntax::Indented, "\n")] {
+                    // After an indented module's newline, the same text is a
+                    // separate style rule, whose grammar is a different test.
+                    let after_url = if syntax == SassSyntax::Indented {
+                        " "
+                    } else {
+                        gap
+                    };
+                    cases.push((
+                        format!("@{directive}{gap}'palette'{after_url}{clause}{end}"),
+                        syntax,
+                    ));
+                }
+            }
+        }
+    }
+    cases
+}
+
+#[test]
+fn generated_module_rules_preserve_tree_and_error_contracts() {
+    for (text, syntax) in generated_module_cases() {
+        let input = source(&text);
+        match parse_sass(&input, syntax, SassLimits::default()) {
+            Ok(doc) => check(&doc),
+            Err(error) => {
+                input.validate_offset(error.offset).unwrap();
+                assert_eq!(
+                    parse_sass(&input, syntax, SassLimits::default()).unwrap_err(),
+                    error
+                );
+            }
+        }
+    }
+}
+
+const MODULE_CONTEXT_CASES: &[(&str, SassSyntax, bool)] = &[
+    ("@charsetfoo 'utf-8';", SassSyntax::Scss, false),
+    ("@charset-foo 'utf-8';", SassSyntax::Scss, false),
+    ("@charset色 'utf-8';", SassSyntax::Scss, false),
+    ("@charset\\66 oo 'utf-8';", SassSyntax::Scss, false),
+    (".a { @charsetfoo 'utf-8'; }", SassSyntax::Scss, true),
+    ("@charsetfoo 'utf-8'\n", SassSyntax::Indented, false),
+    ("@charset-foo 'utf-8'\n", SassSyntax::Indented, false),
+    ("@charset色 'utf-8'\n", SassSyntax::Indented, false),
+    ("@charset\\66 oo 'utf-8'\n", SassSyntax::Indented, false),
+    (".a\n  @charsetfoo 'utf-8'\n", SassSyntax::Indented, true),
+    ("@charset 'utf-8'; @use 'palette';", SassSyntax::Scss, true),
+    (
+        "$tone: red; @use 'palette' with($tone: $tone); @forward 'other';",
+        SassSyntax::Scss,
+        true,
+    ),
+    ("@use 'palette'; @use 'palette';", SassSyntax::Scss, true),
+    (".a {} @use 'palette';", SassSyntax::Scss, false),
+    (".a { @forward 'palette'; }", SassSyntax::Scss, false),
+    ("@if true { @use 'palette'; }", SassSyntax::Scss, false),
+    (
+        "@charset 'utf-8'\n@use 'palette'\n",
+        SassSyntax::Indented,
+        true,
+    ),
+    (
+        "@use 'palette' as p\n.a\n  color: p.$tone\n",
+        SassSyntax::Indented,
+        true,
+    ),
+    (".a\n  @use 'palette'\n", SassSyntax::Indented, false),
+];
+
+#[test]
+fn module_rules_obey_root_ordering_and_resource_limits() {
+    for &(text, syntax, accepted) in MODULE_CONTEXT_CASES {
+        let input = source(text);
+        let result = parse_sass(&input, syntax, SassLimits::default());
+        assert_eq!(result.is_ok(), accepted, "{text:?}: {result:?}");
+        if let Ok(doc) = result {
+            check(&doc);
+        }
+    }
+    for syntax in [SassSyntax::Scss, SassSyntax::Indented] {
+        let text = format!(
+            "@forward 'https://example.invalid/palette' as p-* hide $tone with($tone: (a: (b: 1))){}",
+            if syntax == SassSyntax::Scss {
+                ";"
+            } else {
+                "\n"
+            }
+        );
+        let input = source(&text);
+        let doc = parse_sass(&input, syntax, SassLimits::default()).unwrap();
+        let entries = doc.nodes().len() + doc.comments().len();
+        for (limits, error) in [
+            (
+                SassLimits {
+                    max_nodes: entries - 1,
+                    ..SassLimits::default()
+                },
+                SassErrorKind::NodeLimit,
+            ),
+            (
+                SassLimits {
+                    max_depth: 2,
+                    ..SassLimits::default()
+                },
+                SassErrorKind::DepthLimit,
+            ),
+            (
+                SassLimits {
+                    max_work: 100,
+                    ..SassLimits::default()
+                },
+                SassErrorKind::WorkLimit,
+            ),
+        ] {
+            assert_eq!(parse_sass(&input, syntax, limits).unwrap_err().kind, error);
+        }
+        assert!(
+            parse_sass(
+                &input,
+                syntax,
+                SassLimits {
+                    max_nodes: entries,
+                    ..SassLimits::default()
+                }
+            )
+            .is_ok()
+        );
+    }
+}
+
 #[test]
 fn unchecked_grammars_are_explicit_and_do_not_validate_the_file() {
     let source = source("@import 'fictional'; @media x { .a { color: red; } .#{$b} { x: y; } }");
@@ -1135,6 +1563,13 @@ while (at < data.length) {
             .iter()
             .map(|(text, _)| (text.to_string(), SassSyntax::Indented)),
     );
+    cases.extend(
+        MODULE_CONTEXT_CASES
+            .iter()
+            .map(|(text, syntax, _)| (text.to_string(), *syntax)),
+    );
+    cases.extend(module_cases());
+    cases.extend(generated_module_cases());
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)
@@ -1165,14 +1600,27 @@ while (at < data.length) {
     let verdicts: Vec<_> = verdicts.lines().collect();
     assert_eq!(verdicts.len(), cases.len());
     eprintln!("Sass parse-only oracle: {} fictional cases", cases.len());
+    let mut differences = Vec::new();
     for ((text, syntax), oracle) in cases.iter().zip(verdicts) {
         let source = source(text);
-        assert_eq!(
-            parse_sass(&source, *syntax, SassLimits::default()).is_ok(),
-            oracle == "1",
-            "{syntax:?}: {text}"
-        );
+        let accepted = parse_sass(&source, *syntax, SassLimits::default()).is_ok();
+        if accepted != (oracle == "1") {
+            differences.push(format!(
+                "{syntax:?}: {text:?}: ours={accepted}, oracle={oracle}"
+            ));
+        }
     }
+    assert!(
+        differences.is_empty(),
+        "{} disagreements:\n{}",
+        differences.len(),
+        differences
+            .iter()
+            .take(60)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 }
 
 const SELECTOR_PIECES: &[&str] = &[
