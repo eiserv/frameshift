@@ -171,7 +171,11 @@ impl Parser<'_> {
         self.node(start, Kind::Arguments, children)
     }
 
-    fn module_keyword(&mut self, word: &str, sensitive: bool) -> Result<bool, SassError> {
+    pub(super) fn module_keyword(
+        &mut self,
+        word: &str,
+        sensitive: bool,
+    ) -> Result<bool, SassError> {
         let start = self.pos;
         for expected in word.chars() {
             let actual = if self.at("\\") {

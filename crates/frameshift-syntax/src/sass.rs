@@ -4,6 +4,7 @@
 //! share the same arenas; indentation never rewrites the source text.
 
 mod expression;
+mod import;
 mod module;
 mod module_url;
 mod selector;
@@ -224,6 +225,15 @@ pub enum SassNodeKind {
         /// Whether this is `hide` rather than `show`.
         hidden: bool,
     },
+    /// One import URL followed by optional `ImportModifiers`. CSS imports
+    /// remain CSS; Sass imports would load a stylesheet during evaluation.
+    Import {
+        /// Whether the reference parser treats this as a plain CSS import.
+        css: bool,
+    },
+    /// An import's media, supports, layer, and other modifier text. Its
+    /// context-specific grammar remains explicitly unchecked.
+    ImportModifiers,
     /// A source-spelled identifier, including escapes.
     Identifier,
     /// A property or selector fragment with interpolation children.
@@ -361,7 +371,8 @@ pub enum SassUncheckedKind {
     Selector,
     /// A CSS or unknown at-rule's context-specific grammar.
     CssDirective,
-    /// Import URLs, modifiers, and media/supports conditions.
+    /// Import modifiers and media/supports conditions. Import URL syntax and
+    /// CSS-versus-Sass classification are checked independently.
     ImportPrelude,
     /// The query of `@at-root`.
     AtRootPrelude,
@@ -501,7 +512,7 @@ impl<'source> SassDocument<'source> {
                     SassUncheckedKind::Selector
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::Css) {
                     SassUncheckedKind::CssDirective
-                } else if node.kind == SassNodeKind::AtRule(SassAtRule::Import) {
+                } else if node.kind == SassNodeKind::ImportModifiers {
                     SassUncheckedKind::ImportPrelude
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::Extend) {
                     SassUncheckedKind::Selector

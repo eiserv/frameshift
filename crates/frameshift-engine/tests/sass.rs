@@ -1,5 +1,8 @@
 //! Sass syntax contracts and a parse-only external oracle (`D-079`).
 
+#[path = "sass/import.rs"]
+mod import_cases;
+
 use std::collections::BTreeSet;
 
 use frameshift_engine::foundation::{SourceText, TextLimits};
@@ -1127,7 +1130,8 @@ fn module_rules_obey_root_ordering_and_resource_limits() {
 
 #[test]
 fn unchecked_grammars_are_explicit_and_do_not_validate_the_file() {
-    let source = source("@import 'fictional'; @media x { .a { color: red; } .#{$b} { x: y; } }");
+    let source =
+        source("@import 'fictional' screen; @media x { .a { color: red; } .#{$b} { x: y; } }");
     let doc = parse_sass(&source, SassSyntax::Scss, SassLimits::default()).unwrap();
     let unchecked: Vec<_> = doc.unchecked_syntax().collect();
     let selectors: Vec<_> = unchecked
@@ -1570,6 +1574,11 @@ while (at < data.length) {
     );
     cases.extend(module_cases());
     cases.extend(generated_module_cases());
+    cases.extend(
+        import_cases::cases()
+            .into_iter()
+            .map(|case| (case.text, case.syntax)),
+    );
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)
