@@ -205,6 +205,207 @@ const INDENTED_COMMENT_CASES: &[(&str, bool)] = &[
     ("$x: (1 +\n  /* closed */\n  2)\n", true),
 ];
 
+const SHORTHAND_CASES: &[(&str, bool)] = &[
+    ("+ card\n", true),
+    ("+#{card}\n", true),
+    ("\\+card\n  color: red\n", true),
+    (".a\n  \\:hover\n    color: red\n", true),
+    (
+        "=card($size: 1px, $rest...)\n  width: $size\n  @content($size)\n.a\n  +card(2px, $tone: red)\n",
+        true,
+    ),
+    (
+        "=card\n  @if true\n    @extend %base\n+card\n  color: red\n",
+        true,
+    ),
+    (
+        "+palette.card($args..., $named...) using ($tone)\n  color: $tone\n",
+        true,
+    ),
+    ("+host\n  +nested\n    color: red\n=after\n", true),
+    ("= card($n: 1)\n  width: $n\n", true),
+    ("=\n  card\n    width: 1px\n", true),
+    ("=/* name */card\n  width: 1px\n", true),
+    ("=色($幅: 1px)\n\twidth: $幅\n.a\n\t+色(2px)\n", true),
+    ("=\\63 ard($n: 1)\n  width: $n\n+\\63 ard(2)\n", true),
+    (
+        "+host(\n  1,\n  $tone: red\n) using ($value)\n  color: $value\n",
+        true,
+    ),
+    ("=outer\n  =inner\n", false),
+    ("+host\n  =inner\n", false),
+    ("@if true\n  =inner\n", false),
+    ("@function f()\n  +card\n", false),
+    ("@function f()\n  =card\n", false),
+    (".a\n  font:\n    +card\n", false),
+    (".a\n  font:\n    =card\n", false),
+    ("+palette._private\n", false),
+    ("=card($font_size, $font-size)\n", false),
+    ("+card($font_size: 1, $font-size: 2)\n", false),
+    ("+card(opacity=20)\n", false),
+    ("=\n", false),
+    ("=card(\n", false),
+    ("+card using ($x, $x)\n", false),
+    ("=card\n@use 'fictional'\n", false),
+    ("+card\n@use 'fictional'\n", false),
+    ("+card trailing\n", false),
+];
+
+#[test]
+fn legacy_mixins_share_directive_grammar_and_context_checks() {
+    for &(text, valid) in SHORTHAND_CASES {
+        if valid {
+            accepts(text, SassSyntax::Indented);
+        } else {
+            assert!(
+                parse_sass(&source(text), SassSyntax::Indented, SassLimits::default()).is_err(),
+                "{text}"
+            );
+        }
+    }
+}
+
+#[test]
+fn legacy_mixin_nodes_preserve_markers_names_and_body_boundaries() {
+    let input = source(
+        "\u{feff}=card($n: 1)\r\n  width: $n\r\n+palette.card(2) using ($x)\r\n  color: $x\r\n+empty\r\n.next\r\n  height: 3px\r\n",
+    );
+    let doc = parse_sass(&input, SassSyntax::Indented, SassLimits::default()).unwrap();
+    check(&doc);
+    let kinds: Vec<_> = doc
+        .statements()
+        .iter()
+        .map(|&id| doc.node(id).unwrap().kind.clone())
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            SassNodeKind::AtRule(SassAtRule::Mixin),
+            SassNodeKind::AtRule(SassAtRule::Include),
+            SassNodeKind::AtRule(SassAtRule::Include),
+            SassNodeKind::StyleRule,
+        ]
+    );
+    let mixin = doc.node(doc.statements()[0]).unwrap();
+    assert_eq!(
+        input.slice(mixin.span).unwrap(),
+        "=card($n: 1)\r\n  width: $n\r\n"
+    );
+    assert_eq!(
+        input
+            .slice(doc.node(mixin.children[0]).unwrap().span)
+            .unwrap(),
+        "card"
+    );
+    assert_eq!(
+        doc.node(mixin.children[1]).unwrap().kind,
+        SassNodeKind::Parameters
+    );
+    assert_eq!(
+        doc.node(mixin.children[2]).unwrap().kind,
+        SassNodeKind::Declaration
+    );
+    let include = doc.node(doc.statements()[1]).unwrap();
+    let spellings: Vec<_> = include
+        .children
+        .iter()
+        .map(|&id| input.slice(doc.node(id).unwrap().span).unwrap())
+        .collect();
+    assert_eq!(
+        spellings,
+        ["palette", "card", "(2)", "($x)", "color: $x\r\n"]
+    );
+    assert_eq!(
+        input
+            .slice(doc.node(doc.statements()[2]).unwrap().span)
+            .unwrap(),
+        "+empty"
+    );
+}
+
+#[test]
+fn shorthand_is_indented_only_and_selector_prefixes_remain_distinct() {
+    for (text, selector) in [
+        ("+ card\n", "+ card"),
+        ("+#{card}\n", "+#{card}"),
+        ("\\+card\n", "+card"),
+        ("\\:hover\n", ":hover"),
+    ] {
+        let input = source(text);
+        let doc = parse_sass(&input, SassSyntax::Indented, SassLimits::default()).unwrap();
+        check(&doc);
+        let rule = doc.node(doc.statements()[0]).unwrap();
+        assert_eq!(rule.kind, SassNodeKind::StyleRule, "{text}");
+        assert_eq!(
+            input
+                .slice(doc.node(rule.children[0]).unwrap().span)
+                .unwrap()
+                .trim_end(),
+            selector
+        );
+        assert_eq!(rule.span.start(), 0);
+    }
+    for text in ["+card {}", "=card {}"] {
+        let input = source(text);
+        let doc = parse_sass(&input, SassSyntax::Scss, SassLimits::default()).unwrap();
+        check(&doc);
+        assert_eq!(
+            doc.node(doc.statements()[0]).unwrap().kind,
+            SassNodeKind::StyleRule
+        );
+    }
+}
+
+#[test]
+fn shorthand_charges_the_shared_parser_limits() {
+    let input = source("=card($x: 1)\n+card(2)\n");
+    let defaults = SassLimits::default();
+    let doc = parse_sass(&input, SassSyntax::Indented, defaults).unwrap();
+    let count = doc.nodes().len();
+    assert_eq!(
+        parse_sass(
+            &input,
+            SassSyntax::Indented,
+            SassLimits {
+                max_nodes: count,
+                ..defaults
+            }
+        )
+        .unwrap(),
+        doc
+    );
+    for (limits, error) in [
+        (
+            SassLimits {
+                max_nodes: count - 1,
+                ..defaults
+            },
+            SassErrorKind::NodeLimit,
+        ),
+        (
+            SassLimits {
+                max_depth: 1,
+                ..defaults
+            },
+            SassErrorKind::DepthLimit,
+        ),
+        (
+            SassLimits {
+                max_work: 1,
+                ..defaults
+            },
+            SassErrorKind::WorkLimit,
+        ),
+    ] {
+        assert_eq!(
+            parse_sass(&input, SassSyntax::Indented, limits)
+                .unwrap_err()
+                .kind,
+            error
+        );
+    }
+}
+
 #[test]
 fn inline_indented_comments_require_a_closer() {
     for &(text, valid) in INDENTED_COMMENT_CASES {
@@ -605,6 +806,11 @@ while (at < data.length) {
     );
     cases.extend(
         INDENTED_COMMENT_CASES
+            .iter()
+            .map(|(text, _)| (text.to_string(), SassSyntax::Indented)),
+    );
+    cases.extend(
+        SHORTHAND_CASES
             .iter()
             .map(|(text, _)| (text.to_string(), SassSyntax::Indented)),
     );

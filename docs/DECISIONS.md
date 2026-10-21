@@ -915,6 +915,16 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Implementation:** The syntax facade exposes `parse_sass` and the shared flat arena for explicitly selected SCSS and indented Sass. Statements, expressions, comments, and exact spans are implemented directly; there is no standalone public scanner. Coverage and remaining gaps are recorded in IMPLEMENTATION.md section 35.
 - **Dependencies:** No new runtime dependency is authorized. Development reference packages are pinned and kept outside the repository; their code and data are not shipped or committed.
 
+### D-080: Continue Sass with legacy indented mixin shorthand
+
+- **Status:** Accepted (2026-10-21). Through the Codex App question interface, the owner selected closing Sass grammar gaps next, starting with legacy indented shorthand, and authorized squash integration after green required checks and resolved reviews.
+- **Decision:** Extend `D-079`'s pinned Dart Sass grammar with indented `=name` mixin definitions and `+name` includes. Reuse the long-form callable, argument, content-block, and context rules. Preserve original markers, names, spans, and indentation without rewriting the source. SCSS does not interpret these markers as Sass directives.
+- **Reference clarification:** Dart Sass 1.105.2 no longer supports legacy `:property value` as a property declaration. It retains the leading backslash that forces a selector in indented syntax. Such selectors keep the whole rule span, including that prefix, while their selector child begins after it. Selector validity remains unchecked under `D-079`; the reference's removal of old property syntax is not a remaining implementation gap.
+- **Representation (agent default):** Shorthand uses existing `AtRule(Mixin)` and `AtRule(Include)` kinds. It has no directive-name child because no directive name occurs in the source; callable/header children and body statements remain in source order. Ordinary `@` directives keep their existing children. A plus is an include marker only when immediately followed by an identifier start; otherwise it remains selector syntax.
+- **Rationale and evolution (`D-033`):** Sharing the existing grammar keeps both forms' context restrictions and limits consistent, and supplies the same callable facts for later semantic analysis without inventing source text. This completes a bounded syntax increment while the remaining full-conformance work stays explicit.
+- **Bounds and dependencies:** Existing `sass.*` limits and the pinned parse-only oracle apply unchanged. No new dependency, evaluation, or import loading is introduced. Full Sass conformance and transformation eligibility remain outside this increment.
+- **Validation:** IMPLEMENTATION.md section 35 records the facade, oracle, and fuzzing evidence.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
