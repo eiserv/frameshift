@@ -904,6 +904,15 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale and evolution (`D-033`):** Framework-independent syntax provides exact references for later stylesheet dependency analysis and span edits. Separating generic structure from CSS grammar validation avoids a property catalog in the syntax layer and preserves unknown extensions for later analysis. Flat arenas avoid recursive destruction; bounded visits prevent speculative declaration parsing from unbounded repeated work.
 - **Validation:** Public facade tests and the existing `css` fuzz target cover structure, spans, recovery, deterministic repetition, and inclusive limits. External conformance data stays outside the repository.
 
+### D-079: Begin the complete SCSS parser and include indented Sass
+
+- **Status:** Accepted (2026-10-21). Through the Codex App question interface, the owner selected SCSS as the next M3 increment, explicitly chose to begin the complete SCSS parser with SassScript rather than deliver a standalone scanner first, and included the indented `.sass` syntax in the overall scope.
+- **Decision:** Extend the purpose-built syntax layer with Sass stylesheet and expression parsing. Preserve the original UTF-8 text, exact spans, comments, and ordered, flat syntax arenas. Select SCSS or indented Sass explicitly; never infer a dialect from content. No evaluation, module loading, filesystem access, or execution is part of parsing. The complete grammar, including interpolation, expressions, maps, callable declarations, module directives, control flow, and indentation, remains the target required by `D-077`; implemented coverage and remaining gaps must be stated accurately.
+- **Reference (agent default):** Dart Sass 1.105.2, commit `00a0d79` (the full immutable identity is recorded with implementation evidence), and the Sass specification at revision `57c81dd74eb5c301d7d81cd77cd019cc4d9bac1e`. Reference source and test oracles stay outside the repository. A parse-only development oracle may use `sass-parser` 0.4.58 with `sass` 1.105.2, without evaluating or resolving the input.
+- **Bounds and errors (agent default):** Explicit node, nesting, and work limits. A syntax or resource error returns no document. An accepted syntax tree does not establish evaluation success, valid CSS, or migration support. JavaScript recovery remains separate M3 work.
+- **Rationale and evolution (`D-033`):** One framework-independent Sass tree can serve later dependency analysis and source-preserving edits for both surface syntaxes. Keeping grammar separate from evaluation prevents parsing untrusted input from executing code or loading imports. Separate syntax modes preserve indentation semantics without rewriting source offsets.
+- **Dependencies:** No new runtime dependency is authorized. Development reference packages are pinned and kept outside the repository; their code and data are not shipped or committed.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
