@@ -448,6 +448,12 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
             "npm:^1.0.0",
             "::locator=fictional%40workspace%3A.",
         ],
+        Target::Css => &[
+            "/*", "*/", "url(", "URL(", "u\\72l(", "(", ")", "{", "}", "[", "]", ":", ";", ",",
+            "'", "\"", "\\", "\\\n", "\\31 ", "\\0", "\\D800", "#", "@", "-->", "<!--", "--",
+            "+.5e-3", "1e+", "%", "px", "U+", "u+4??", "-0", "\r\n", "\u{c}", "\r", "\u{0}",
+            "\u{e9}", "\u{80}", "\u{feff}",
+        ],
         Target::Workspace => &[
             "\n\n",
             "\n",
@@ -682,6 +688,20 @@ bun@1.4.0",
         .map(|text| (*text).to_owned())
         .collect(),
         Target::Yaml => ["", "{\"fictional\": \"\\uD83D\\uDE00\"}", "fictional: [one, two, {three: four}]\n", "? &key [fictional, complex]\n: *key\n", "&a [*a, {self: *a}]", "%YAML 1.2\n---\n{? [a, b]: !!str 9}\n...\n---\nnull\n", "a: >-\n  fictional\n\n  lines\n", "- &key \"hello\\nworld\"\n- *key\n", "{\"a\": [true, false, null, 1.25, -0, \"\\u0041\"]}", "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      fictional:\n        specifier: ^1\n        version: 1.0.0\npackages:\n  fictional@1.0.0:\n    resolution: {integrity: sha512-fake}\nsnapshots:\n  fictional@1.0.0: {}\n"].iter().map(|text| (*text).to_owned()).collect(),
+        Target::Css => [
+            "",
+            ".card > a:hover { color: #fff; margin: -1.5em 0 }",
+            "@import url(theme.css) layer(base);\n@media (width >= 40rem) { .a { b: c } }",
+            "/* c */ a{background:url( 'x.png' ) no-repeat;font:12px/1.5 sans-serif}",
+            "@font-face { unicode-range: U+0-7F, u+4??; src: url(a.woff2) }",
+            "a\r\nb\u{c}c\u{0}d \\41\r\nB '\\'x' \"y\\\r\nz\"",
+            "url(a b) url(a\"b) url(\\) \"open\\",
+            "\u{feff}#-a #1 @--x <!-- --> 10% +.5e-3em 1--x",
+            ".a { &:hover { color: red } .b & { color: blue } }",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .collect(),
         Target::Workspace => [
             "",
             "packages/*\n\n+packages/a\n+packages/b\npackages/c",

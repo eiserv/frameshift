@@ -15,7 +15,7 @@ use frameshift_engine::{
 };
 
 use crate::{
-    astro, collections, edits, gitignore, hashes, identifiers, json, lexical, package, paths,
+    astro, collections, css, edits, gitignore, hashes, identifiers, json, lexical, package, paths,
     seeds, semver, workspace, yaml, yarn,
 };
 
@@ -59,6 +59,8 @@ pub enum Target {
     Yarn,
     /// Workspace patterns of every modeled release over directory listings.
     Workspace,
+    /// CSS tokenization in both scan contexts.
+    Css,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -75,7 +77,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -94,6 +96,7 @@ impl Target {
         Self::Yaml,
         Self::Yarn,
         Self::Workspace,
+        Self::Css,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -117,6 +120,7 @@ impl Target {
             Self::Yaml => "yaml",
             Self::Yarn => "yarn",
             Self::Workspace => "workspace",
+            Self::Css => "css",
         }
     }
 
@@ -182,6 +186,9 @@ impl Target {
             Self::Workspace => {
                 "workspace patterns of every release over listings: determinism, order independence, listed members, required fields, rejections, and work bounds"
             }
+            Self::Css => {
+                "CSS tokenization: exact coverage, repetition, step-wise agreement in both contexts, values, parse error offsets, and the token limit"
+            }
         }
     }
 
@@ -198,7 +205,7 @@ impl Target {
             | Self::Hashes
             | Self::Collections
             | Self::Package => 4_096,
-            Self::Yaml | Self::Yarn | Self::Workspace => 1_024,
+            Self::Yaml | Self::Yarn | Self::Workspace | Self::Css => 1_024,
             Self::RegExp | Self::References | Self::Gitignore | Self::Json | Self::Semver => 1_024,
             Self::Lexical => 512,
         }
@@ -236,6 +243,7 @@ impl Target {
             Self::Yaml => yaml::run(input),
             Self::Yarn => yarn::run(input),
             Self::Workspace => workspace::run(input),
+            Self::Css => css::run(input),
         }
     }
 }

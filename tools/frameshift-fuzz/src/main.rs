@@ -13,6 +13,7 @@
 mod astro;
 mod collections;
 mod coverage;
+mod css;
 mod edits;
 mod gitignore;
 mod hashes;
