@@ -4,6 +4,7 @@
 //! share the same arenas; indentation never rewrites the source text.
 
 mod expression;
+mod selector;
 mod statement;
 
 use std::{borrow::Cow, fmt};
@@ -144,15 +145,61 @@ pub enum SassAtRule {
     Css,
 }
 
+/// An explicit selector combinator. Adjacent compound selectors without one
+/// are separated by whitespace or comments, the descendant combinator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SassCombinator {
+    /// `+`.
+    NextSibling,
+    /// `>`.
+    Child,
+    /// `~`.
+    FollowingSibling,
+}
+
+/// The namespace prefix of a type, universal, or attribute selector.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SassNamespace {
+    /// No `|` prefix.
+    Unspecified,
+    /// `|name`, the empty namespace.
+    Empty,
+    /// `*|name`, any namespace.
+    Any,
+    /// `prefix|name`; the prefix is the first child.
+    Named,
+}
+
+/// An attribute selector's matcher.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SassAttributeOperator {
+    /// `=`.
+    Equal,
+    /// `~=`.
+    Include,
+    /// `|=`.
+    Dash,
+    /// `^=`.
+    Prefix,
+    /// `$=`.
+    Suffix,
+    /// `*=`.
+    Substring,
+}
+
 /// Syntax kinds. Child indices always follow source order.
 ///
 /// Statements put their header children before body statements. A binary
 /// operation has its left and right operands, a map has entry children,
 /// and a call has its name followed by its arguments. Interpolated text
 /// retains only its interpolation children; the other bytes stay in source.
+/// Selector names are `Identifier` nodes, or `InterpolatedText` with
+/// interpolation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SassNodeKind {
-    /// A selector followed by statements. The selector is the first child.
+    /// A selector followed by statements. The first child is a
+    /// `SelectorList`, a `KeyframeSelectorList`, or, when the selector
+    /// grammar could not be established, the raw `InterpolatedText`.
     StyleRule,
     /// A property name, optional value, and optional nested declarations.
     Declaration,
@@ -218,6 +265,54 @@ pub enum SassNodeKind {
     Parameter,
     /// A source-spelled `!default`, `!global`, or `!optional` flag.
     Flag,
+    /// Comma-separated `ComplexSelector` children. The span ends after the
+    /// last selector or comma, without trailing whitespace or comments.
+    SelectorList,
+    /// `CompoundSelector` and `Combinator` children in source order.
+    ComplexSelector,
+    /// An explicit combinator.
+    Combinator(SassCombinator),
+    /// Simple selectors written without whitespace between them.
+    CompoundSelector,
+    /// `.` followed by its name child.
+    ClassSelector,
+    /// `#` followed by its name child.
+    IdSelector,
+    /// `%` followed by its name child.
+    PlaceholderSelector,
+    /// The parent selector `&` in a selector, optionally followed by an
+    /// `InterpolatedText` suffix child.
+    NestingSelector,
+    /// An element name, after the namespace child when `Named`.
+    TypeSelector {
+        /// The namespace prefix.
+        namespace: SassNamespace,
+    },
+    /// `*`, after the namespace child when `Named`.
+    UniversalSelector {
+        /// The namespace prefix.
+        namespace: SassNamespace,
+    },
+    /// `[...]`: the namespace child when `Named`, the attribute name, and
+    /// with an operator its value (`Identifier`, `InterpolatedText`, or
+    /// quoted `String`) followed by an optional modifier.
+    AttributeSelector {
+        /// The namespace prefix.
+        namespace: SassNamespace,
+        /// The matcher, absent for a presence test.
+        operator: Option<SassAttributeOperator>,
+    },
+    /// `:name` or `::name`. A parenthesized form adds a raw
+    /// `InterpolatedText` argument, a `SelectorList`, or both in source
+    /// order for `nth-child` and `nth-last-child`.
+    PseudoSelector {
+        /// Whether the source uses the `::` pseudo-element syntax.
+        element: bool,
+    },
+    /// Comma-separated `KeyframeSelector` children of a `@keyframes` block.
+    KeyframeSelectorList,
+    /// `from`, `to`, or a percentage, as spelled.
+    KeyframeSelector,
 }
 
 /// One flat syntax entry with exact original UTF-8 byte coordinates.
@@ -245,7 +340,9 @@ pub struct SassComment {
 /// A retained grammar not yet fully validated by Sass parsing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SassUncheckedKind {
-    /// Selector grammar, including selector-specific early errors.
+    /// A selector whose grammar depends on evaluation: it contains
+    /// interpolation, its keyframes context depends on the include site, it
+    /// is an `@extend` target, or it was retained as raw text.
     Selector,
     /// A CSS or unknown at-rule's context-specific grammar.
     CssDirective,
@@ -253,7 +350,7 @@ pub enum SassUncheckedKind {
     ImportPrelude,
     /// Module URL syntax and the namespace derived from its URL.
     ModuleUrl,
-    /// The query or inline selector of `@at-root`.
+    /// The query of `@at-root`.
     AtRootPrelude,
     /// Raw contents of a special CSS function.
     SpecialFunction,
@@ -333,6 +430,7 @@ pub struct SassDocument<'source> {
     nodes: Vec<SassNode>,
     statements: Vec<SassNodeId>,
     comments: Vec<SassComment>,
+    selector_evidence: Vec<SassNodeId>,
 }
 
 impl PartialEq for SassDocument<'_> {
@@ -342,6 +440,7 @@ impl PartialEq for SassDocument<'_> {
             && self.nodes == other.nodes
             && self.statements == other.statements
             && self.comments == other.comments
+            && self.selector_evidence == other.selector_evidence
     }
 }
 impl Eq for SassDocument<'_> {}
@@ -379,32 +478,42 @@ impl<'source> SassDocument<'source> {
     /// support. Full conformance remains M3 work; no result of this in-progress
     /// parser authorizes transformation.
     pub fn unchecked_syntax(&self) -> impl Iterator<Item = SassUnchecked> + '_ {
-        self.nodes.iter().filter_map(|node| {
-            let kind = if node.kind == SassNodeKind::StyleRule {
-                SassUncheckedKind::Selector
-            } else if node.kind == SassNodeKind::AtRule(SassAtRule::Css) {
-                SassUncheckedKind::CssDirective
-            } else if matches!(
-                node.kind,
-                SassNodeKind::AtRule(SassAtRule::Use | SassAtRule::Forward)
-            ) {
-                SassUncheckedKind::ModuleUrl
-            } else if node.kind == SassNodeKind::AtRule(SassAtRule::Import) {
-                SassUncheckedKind::ImportPrelude
-            } else if node.kind == SassNodeKind::AtRule(SassAtRule::Extend) {
-                SassUncheckedKind::Selector
-            } else if node.kind == SassNodeKind::AtRule(SassAtRule::AtRoot) {
-                SassUncheckedKind::AtRootPrelude
-            } else if node.kind == SassNodeKind::SpecialFunction {
-                SassUncheckedKind::SpecialFunction
-            } else {
-                return None;
-            };
-            Some(SassUnchecked {
-                kind,
-                span: node.span,
+        // Selector evidence is recorded in ascending node order while parsing.
+        let mut selectors = self.selector_evidence.iter().peekable();
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter_map(move |(index, node)| {
+                let kind = if selectors.next_if(|id| id.0 == index).is_some() {
+                    SassUncheckedKind::Selector
+                } else if node.kind == SassNodeKind::AtRule(SassAtRule::Css) {
+                    SassUncheckedKind::CssDirective
+                } else if matches!(
+                    node.kind,
+                    SassNodeKind::AtRule(SassAtRule::Use | SassAtRule::Forward)
+                ) {
+                    SassUncheckedKind::ModuleUrl
+                } else if node.kind == SassNodeKind::AtRule(SassAtRule::Import) {
+                    SassUncheckedKind::ImportPrelude
+                } else if node.kind == SassNodeKind::AtRule(SassAtRule::Extend) {
+                    SassUncheckedKind::Selector
+                } else if node.kind == SassNodeKind::AtRule(SassAtRule::AtRoot)
+                    && node
+                        .children
+                        .get(1)
+                        .is_some_and(|id| self.nodes[id.0].kind == SassNodeKind::InterpolatedText)
+                {
+                    SassUncheckedKind::AtRootPrelude
+                } else if node.kind == SassNodeKind::SpecialFunction {
+                    SassUncheckedKind::SpecialFunction
+                } else {
+                    return None;
+                };
+                Some(SassUnchecked {
+                    kind,
+                    span: node.span,
+                })
             })
-        })
     }
 }
 
@@ -433,6 +542,8 @@ pub fn parse_sass(
         single_equals: false,
         stop_words: &[],
         stop_depth: 0,
+        interpolated_selector: false,
+        selector_evidence: Vec::new(),
     };
     if parser.text.starts_with('\u{feff}') {
         parser.bump()?;
@@ -443,12 +554,14 @@ pub fn parse_sass(
         return Err(parser.error(SassErrorKind::ExpectedSyntax));
     }
     parser.comments.sort_by_key(|comment| comment.span.start());
+    debug_assert!(parser.selector_evidence.is_sorted());
     Ok(SassDocument {
         source,
         syntax,
         nodes: parser.nodes,
         statements,
         comments: parser.comments,
+        selector_evidence: parser.selector_evidence,
     })
 }
 
@@ -466,6 +579,9 @@ struct Parser<'source> {
     single_equals: bool,
     stop_words: &'static [&'static str],
     stop_depth: usize,
+    /// Selects the parse-time grammar for selectors with interpolation.
+    interpolated_selector: bool,
+    selector_evidence: Vec<SassNodeId>,
 }
 
 impl Parser<'_> {
@@ -536,10 +652,19 @@ impl Parser<'_> {
         kind: SassNodeKind,
         children: Vec<SassNodeId>,
     ) -> Result<SassNodeId, SassError> {
+        self.node_between(start, self.pos, kind, children)
+    }
+    fn node_between(
+        &mut self,
+        start: usize,
+        end: usize,
+        kind: SassNodeKind,
+        children: Vec<SassNodeId>,
+    ) -> Result<SassNodeId, SassError> {
         self.capacity()?;
         let id = SassNodeId(self.nodes.len());
         self.nodes.push(SassNode {
-            span: self.span(start),
+            span: Span::new(start, end).unwrap(),
             kind,
             children,
         });

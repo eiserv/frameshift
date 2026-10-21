@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 
 use frameshift_engine::foundation::{SourceText, TextLimits};
 use frameshift_engine::syntax::{
-    SassAtRule, SassBinaryOperator, SassDocument, SassErrorKind, SassLimits, SassNodeId,
-    SassNodeKind, SassSyntax, parse_sass,
+    SassAtRule, SassBinaryOperator, SassDocument, SassErrorKind, SassLimits, SassNamespace,
+    SassNodeId, SassNodeKind, SassSyntax, SassUncheckedKind, parse_sass,
 };
 
 fn source(text: &str) -> SourceText {
@@ -699,10 +699,15 @@ fn modules_are_syntax_only_and_never_loaded() {
 
 #[test]
 fn unchecked_grammars_are_explicit_and_do_not_validate_the_file() {
-    use frameshift_engine::syntax::SassUncheckedKind;
-    let source = source("@import 'fictional'; @media x { .a { color: red; } }");
+    let source = source("@import 'fictional'; @media x { .a { color: red; } .#{$b} { x: y; } }");
     let doc = parse_sass(&source, SassSyntax::Scss, SassLimits::default()).unwrap();
     let unchecked: Vec<_> = doc.unchecked_syntax().collect();
+    let selectors: Vec<_> = unchecked
+        .iter()
+        .filter(|entry| entry.kind == SassUncheckedKind::Selector)
+        .map(|entry| source.slice(entry.span).unwrap())
+        .collect();
+    assert_eq!(selectors, [".#{$b}"]);
     assert!(
         unchecked
             .iter()
@@ -721,6 +726,322 @@ fn unchecked_grammars_are_explicit_and_do_not_validate_the_file() {
     for entry in unchecked {
         source.slice(entry.span).unwrap();
     }
+}
+
+/// Renders selector structure compactly; other nodes render as spelled.
+fn selector_text(doc: &SassDocument<'_>, id: SassNodeId) -> String {
+    let node = doc.node(id).unwrap();
+    let parts: Vec<_> = node
+        .children
+        .iter()
+        .map(|&child| selector_text(doc, child))
+        .collect();
+    let qualified = |namespace: SassNamespace, parts: &[String], name: &str| {
+        let (prefix, rest) = match namespace {
+            SassNamespace::Unspecified => (String::new(), parts),
+            SassNamespace::Empty => ("|".to_owned(), parts),
+            SassNamespace::Any => ("*|".to_owned(), parts),
+            SassNamespace::Named => (format!("{}|", parts[0]), &parts[1..]),
+        };
+        let mut rest = rest.to_vec();
+        if !name.is_empty() {
+            rest.insert(0, name.to_owned());
+        }
+        format!("{prefix}{}", rest.join(" "))
+    };
+    let kind = &node.kind;
+    if *kind == SassNodeKind::SelectorList {
+        format!("[{}]", parts.join(", "))
+    } else if *kind == SassNodeKind::KeyframeSelectorList {
+        format!("keyframes[{}]", parts.join(", "))
+    } else if *kind == SassNodeKind::ComplexSelector {
+        parts.join(" ")
+    } else if *kind == SassNodeKind::CompoundSelector {
+        parts.concat()
+    } else if *kind == SassNodeKind::ClassSelector {
+        format!("class({})", parts[0])
+    } else if *kind == SassNodeKind::IdSelector {
+        format!("id({})", parts[0])
+    } else if *kind == SassNodeKind::PlaceholderSelector {
+        format!("placeholder({})", parts[0])
+    } else if *kind == SassNodeKind::NestingSelector {
+        format!("&({})", parts.concat())
+    } else if let SassNodeKind::TypeSelector { namespace } = kind {
+        format!("type({})", qualified(*namespace, &parts, ""))
+    } else if let SassNodeKind::UniversalSelector { namespace } = kind {
+        format!("universal({})", qualified(*namespace, &parts, "*"))
+    } else if let SassNodeKind::AttributeSelector {
+        namespace,
+        operator,
+    } = kind
+    {
+        let mut parts = parts.clone();
+        let name = usize::from(*namespace == SassNamespace::Named);
+        if let Some(operator) = operator {
+            parts.insert(name + 1, format!("{operator:?}"));
+        }
+        format!("attribute({})", qualified(*namespace, &parts, ""))
+    } else if let SassNodeKind::PseudoSelector { element } = kind {
+        let colons = if *element { "::" } else { ":" };
+        format!("{colons}({})", parts.join(" "))
+    } else {
+        doc.source().slice(node.span).unwrap().to_owned()
+    }
+}
+
+/// Each selector of a style rule, rendered with whether it is unchecked.
+fn rule_selectors(text: &str, syntax: SassSyntax) -> Vec<(String, bool)> {
+    let input = source(text);
+    let doc = parse_sass(&input, syntax, SassLimits::default())
+        .unwrap_or_else(|error| panic!("{syntax:?}: {text:?}: {error}"));
+    check(&doc);
+    let unchecked: Vec<_> = doc
+        .unchecked_syntax()
+        .filter(|entry| entry.kind == SassUncheckedKind::Selector)
+        .map(|entry| entry.span)
+        .collect();
+    let mut rules: Vec<_> = doc
+        .nodes()
+        .iter()
+        .filter(|node| node.kind == SassNodeKind::StyleRule)
+        .collect();
+    rules.sort_by_key(|rule| rule.span.start());
+    rules
+        .into_iter()
+        .map(|rule| {
+            let selector = doc.node(rule.children[0]).unwrap();
+            (
+                selector_text(&doc, rule.children[0]),
+                unchecked.contains(&selector.span),
+            )
+        })
+        .collect()
+}
+
+const SELECTOR_STRUCTURES: &[(&str, &str)] = &[
+    ("a", "[type(a)]"),
+    ("a.b#c%d", "[type(a)class(b)id(c)placeholder(d)]"),
+    (
+        "a > b + c ~ d e",
+        "[type(a) > type(b) + type(c) ~ type(d) type(e)]",
+    ),
+    ("> a", "[> type(a)]"),
+    ("a >", "[type(a) >]"),
+    ("a > + b", "[type(a) > + type(b)]"),
+    ("a,b , c,,d,", "[type(a), type(b), type(c), type(d)]"),
+    ("&", "[&()]"),
+    ("&-suffix.b", "[&(-suffix)class(b)]"),
+    ("&__1:hover", "[&(__1):(hover)]"),
+    (
+        "*, *|*, |*, ns|*",
+        "[universal(*), universal(*|*), universal(|*), universal(ns|*)]",
+    ),
+    ("ns|a, *|a, |a", "[type(ns|a), type(*|a), type(|a)]"),
+    ("[f]", "[attribute(f)]"),
+    ("[ f = g ]", "[attribute(f Equal g)]"),
+    ("[f~=\"g\"]", "[attribute(f Include \"g\")]"),
+    ("[ns|f|=g i]", "[attribute(ns|f Dash g i)]"),
+    (
+        "[*|f^=g][|f$=g][f*='g' S]",
+        "[attribute(*|f Prefix g)attribute(|f Suffix g)attribute(f Substring 'g' S)]",
+    ),
+    ("a:hover::before", "[type(a):(hover)::(before)]"),
+    (":not(.a, b > c)", "[:(not [class(a), type(b) > type(c)])]"),
+    (":-webkit-any(a)", "[:(-webkit-any [type(a)])]"),
+    ("::slotted(a)", "[::(slotted [type(a)])]"),
+    (
+        ":is(:where(:has(> a)))",
+        "[:(is [:(where [:(has [> type(a)])])])]",
+    ),
+    (":nth-child(2n + 1)", "[:(nth-child 2n + 1)]"),
+    (
+        ":nth-child( -n+3 of .a , b )",
+        "[:(nth-child -n+3 of [class(a), type(b)])]",
+    ),
+    (":nth-last-child(odd)", "[:(nth-last-child odd)]"),
+    (":NOT(a)", "[:(NOT a)]"),
+    (
+        ":lang(en, \"de\") ::part(x y)",
+        "[:(lang en, \"de\") ::(part x y)]",
+    ),
+    (":foo(url(//x) [c])", "[:(foo url(//x) [c])]"),
+    (".\\31 x.a\\:b", "[class(\\31 x)class(a\\:b)]"),
+    (".--, .-a, ._", "[class(--), class(-a), class(_)]"),
+    (".a/* comment */.b", "[class(a) class(b)]"),
+    ("a // comment\n, b", "[type(a), type(b)]"),
+    ("色.類", "[type(色)class(類)]"),
+];
+
+#[test]
+fn selectors_have_the_evaluation_grammar_structure() {
+    for &(selector, expected) in SELECTOR_STRUCTURES {
+        let text = format!(".p {{ {selector} {{ x: y; }} }}");
+        let selectors = rule_selectors(&text, SassSyntax::Scss);
+        assert_eq!(selectors[1], (expected.to_owned(), false), "{selector}");
+    }
+    let selectors = rule_selectors(
+        ".p\n  a,\n  b > c\n    x: y\n  d, // comment\n    e\n    x: y\n",
+        SassSyntax::Indented,
+    );
+    assert_eq!(
+        selectors,
+        [
+            ("[class(p)]".to_owned(), false),
+            ("[type(a), type(b) > type(c)]".to_owned(), false),
+            ("[type(d), type(e)]".to_owned(), false),
+        ]
+    );
+}
+
+#[test]
+fn keyframe_selectors_use_their_own_grammar() {
+    let selectors = rule_selectors(
+        "@keyframes k { from, TO { x: y; } 50%, +.5e1% { x: y; } fr\\6fm { x: y; } } \
+         @-webkit-keyframes k { 0% { x: y; } } @media x { from { x: y; } }",
+        SassSyntax::Scss,
+    );
+    assert_eq!(
+        selectors,
+        [
+            ("keyframes[from, TO]".to_owned(), false),
+            ("keyframes[50%, +.5e1%]".to_owned(), false),
+            ("keyframes[fr\\6fm]".to_owned(), false),
+            ("keyframes[0%]".to_owned(), false),
+            ("[type(from)]".to_owned(), false),
+        ]
+    );
+    let selectors = rule_selectors("@keyframes k\n  50%\n    x: y\n", SassSyntax::Indented);
+    assert_eq!(selectors, [("keyframes[50%]".to_owned(), false)]);
+}
+
+#[test]
+fn evaluation_dependent_selectors_keep_unchecked_evidence() {
+    let cases: &[(&str, &[(&str, bool)])] = &[
+        (
+            "@mixin m { from { x: y; } } @include m { a { x: y; } }",
+            &[("[type(from)]", true), ("[type(a)]", true)],
+        ),
+        (
+            "@#{$k} k { 50% { x: y; } } @keyframes k { #{$p}% { x: y; } }",
+            &[("50% ", true), ("#{$p}% ", true)],
+        ),
+        (
+            "@keyframes k { from { a { x: y; } } }",
+            &[("keyframes[from]", false), ("[type(a)]", true)],
+        ),
+        (
+            "@keyframes k { @at-root (without: all) { b { x: y; } } }",
+            &[("[type(b)]", true)],
+        ),
+        // Evaluation rejects these, but the compiler's parse step keeps them.
+        (
+            ".p { a:nth-child(foo) { x: y; } b[c=d foo] { x: y; } e[f=g i ] { x: y; } }",
+            &[
+                ("[class(p)]", false),
+                ("a:nth-child(foo) ", true),
+                ("b[c=d foo] ", true),
+                ("e[f=g i ] ", true),
+            ],
+        ),
+        (
+            "@keyframes k { a { x: y; } } .p { :foo(!) { x: y; } }",
+            &[("a ", true), ("[class(p)]", false), (":foo(!) ", true)],
+        ),
+    ];
+    for &(text, expected) in cases {
+        let actual = rule_selectors(text, SassSyntax::Scss);
+        let expected: Vec<_> = expected
+            .iter()
+            .map(|&(selector, unchecked)| (selector.to_owned(), unchecked))
+            .collect();
+        assert_eq!(actual, expected, "{text}");
+    }
+    let interpolated = rule_selectors(".a#{$b} > c { x: y; }", SassSyntax::Scss);
+    assert_eq!(
+        interpolated,
+        [("[class(a#{$b}) > type(c)]".to_owned(), true)]
+    );
+    // Indented Sass removes comments first, which would join these names.
+    assert_eq!(
+        rule_selectors(".p\n  a/**/b\n    x: y\n", SassSyntax::Indented)[1],
+        ("a/**/b".to_owned(), true)
+    );
+}
+
+#[test]
+fn at_root_selectors_are_style_rules() {
+    let input =
+        source(".p { @at-root .a > b { x: y; } @at-root (without: media) { c { x: y; } } }");
+    let doc = parse_sass(&input, SassSyntax::Scss, SassLimits::default()).unwrap();
+    check(&doc);
+    let at_root: Vec<_> = doc
+        .nodes()
+        .iter()
+        .filter(|node| node.kind == SassNodeKind::AtRule(SassAtRule::AtRoot))
+        .collect();
+    let inline = doc.node(at_root[0].children[1]).unwrap();
+    assert_eq!(inline.kind, SassNodeKind::StyleRule);
+    assert_eq!(
+        selector_text(&doc, inline.children[0]),
+        "[class(a) > type(b)]"
+    );
+    let unchecked: Vec<_> = doc.unchecked_syntax().collect();
+    assert_eq!(unchecked.len(), 1);
+    assert_eq!(unchecked[0].kind, SassUncheckedKind::AtRootPrelude);
+    assert_eq!(unchecked[0].span, at_root[1].span);
+    accepts("@at-root a\n  x: y\n", SassSyntax::Indented);
+    assert!(
+        parse_sass(
+            &source("@at-root ;"),
+            SassSyntax::Scss,
+            SassLimits::default()
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn selector_parsing_shares_the_parser_limits() {
+    let deep = format!(
+        ".p {{ {}a{} {{ x: y; }} }}",
+        ":not(".repeat(200),
+        ")".repeat(200)
+    );
+    assert_eq!(
+        parse_sass(&source(&deep), SassSyntax::Scss, SassLimits::default())
+            .unwrap_err()
+            .kind,
+        SassErrorKind::DepthLimit
+    );
+    let input = source(".p { a > b:not(.c) { x: y; } }");
+    let defaults = SassLimits::default();
+    let doc = parse_sass(&input, SassSyntax::Scss, defaults).unwrap();
+    let count = doc.nodes().len() + doc.comments().len();
+    assert_eq!(
+        parse_sass(
+            &input,
+            SassSyntax::Scss,
+            SassLimits {
+                max_nodes: count,
+                ..defaults
+            }
+        )
+        .unwrap(),
+        doc
+    );
+    assert_eq!(
+        parse_sass(
+            &input,
+            SassSyntax::Scss,
+            SassLimits {
+                max_nodes: count - 1,
+                ..defaults
+            }
+        )
+        .unwrap_err()
+        .kind,
+        SassErrorKind::NodeLimit
+    );
 }
 
 fn generated_cases() -> Vec<String> {
@@ -852,4 +1173,210 @@ while (at < data.length) {
             "{syntax:?}: {text}"
         );
     }
+}
+
+const SELECTOR_PIECES: &[&str] = &[
+    "a",
+    "*",
+    ".b",
+    "#c",
+    "%d",
+    "&",
+    "&-e",
+    "&1",
+    "[f]",
+    "[f=g]",
+    "[f~=\"h\"]",
+    "[ns|f|=g i]",
+    "[*|f]",
+    "[|f^='x' s]",
+    "[f=g foo]",
+    "[f=g i ]",
+    "[f=]",
+    "ns|a",
+    "*|*",
+    "|a",
+    ":hover",
+    "::before",
+    ":not(.b, c)",
+    ":not()",
+    ":is(a > b)",
+    ":nth-child(2n + 1)",
+    ":nth-child(2n+1 of .x)",
+    ":nth-last-child( odd )",
+    ":nth-child(foo)",
+    ":nth-child(-n- 2)",
+    ":lang(en)",
+    "::slotted(a)",
+    ":-webkit-any(a)",
+    ":foo(!)",
+    ":foo(a;b)",
+    ":foo({a})",
+    ":foo(url(//x{y}))",
+    ".\\31 x",
+    ".-",
+    ".--",
+    "a&",
+    ".a/**/.b",
+    "::part(x)",
+    "&__x:hover",
+    ".色",
+];
+
+const KEYFRAME_PIECES: &[&str] = &[
+    "from",
+    "to",
+    "FROM",
+    "To",
+    "50%",
+    "+5.5e2%",
+    ".5%",
+    "5.%",
+    "1e3%",
+    "1E-3%",
+    "5e%",
+    "-1%",
+    "50",
+    "from, 50%",
+    "from,",
+    "fr\\6fm",
+    "t\\6f",
+    "a",
+    "50% ,to",
+    "0%,100%",
+    "1e+2%",
+    "5 %",
+    "from to",
+    "%",
+];
+
+/// Frameshift's verdict: no document, an established selector grammar, or
+/// a parsed document whose innermost style rule selector stays unchecked.
+fn selector_verdict(text: &str, syntax: SassSyntax) -> Option<bool> {
+    let input = source(text);
+    let doc = parse_sass(&input, syntax, SassLimits::default()).ok()?;
+    let rule = doc
+        .nodes()
+        .iter()
+        .filter(|node| node.kind == SassNodeKind::StyleRule)
+        .max_by_key(|rule| rule.span.start())?;
+    let selector = doc.node(rule.children[0]).unwrap();
+    let unchecked = doc
+        .unchecked_syntax()
+        .any(|entry| entry.kind == SassUncheckedKind::Selector && entry.span == selector.span);
+    Some(
+        !unchecked
+            && matches!(
+                selector.kind,
+                SassNodeKind::SelectorList | SassNodeKind::KeyframeSelectorList
+            ),
+    )
+}
+
+#[test]
+#[ignore = "requires external pinned Sass 1.105.2"]
+fn external_sass_selector_oracle() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    // The cases are generated, fictional, and contain no module or import
+    // rule, so compiling them cannot read files.
+    let module = std::env::var("FRAMESHIFT_SASS_PARSER_MODULE")
+        .expect("path to external sass-parser package");
+    let script = r#"
+const fs = require('node:fs');
+const path = require('node:path');
+const main = require.resolve('sass', {paths: [process.argv[1]]});
+const s = JSON.parse(fs.readFileSync(path.join(path.dirname(main), 'package.json')));
+if (s.version !== '1.105.2') throw Error('unpinned Sass');
+const sass = require(main);
+const data = fs.readFileSync(0); let at = 0;
+while (at < data.length) {
+  let end = data.indexOf(10, at); const syntax = data.subarray(at, end).toString(); at = end + 1;
+  end = data.indexOf(10, at); const size = Number(data.subarray(at, end).toString()); at = end + 1;
+  const source = data.subarray(at, at + size).toString(); at += size;
+  try { sass.compileString(source, {syntax, logger: sass.Logger.silent}); process.stdout.write('1\n'); }
+  catch (e) { process.stdout.write('0\n'); }
+}
+"#;
+    let mut cases = Vec::new();
+    for left in SELECTOR_PIECES {
+        cases.push((format!(".p {{ {left} {{ x: y; }} }}"), SassSyntax::Scss));
+        if !left.contains("/*") {
+            cases.push((format!(".p\n  {left}\n    x: y\n"), SassSyntax::Indented));
+        }
+        for right in SELECTOR_PIECES {
+            for combinator in [" ", " > ", "+", " ~ ", ", ", " > + "] {
+                let selector = format!("{left}{combinator}{right}");
+                cases.push((format!(".p {{ {selector} {{ x: y; }} }}"), SassSyntax::Scss));
+            }
+            if !left.contains("/*") && !right.contains("/*") {
+                cases.push((
+                    format!(".p\n  {left},\n  {right}\n    x: y\n"),
+                    SassSyntax::Indented,
+                ));
+            }
+        }
+    }
+    // Without a parent rule, evaluation rejects parent selector suffixes.
+    for piece in KEYFRAME_PIECES
+        .iter()
+        .chain(SELECTOR_PIECES.iter().filter(|piece| !piece.contains('&')))
+    {
+        for rule in ["keyframes", "-webkit-keyframes", "KEYFRAMES"] {
+            cases.push((
+                format!("@{rule} k {{ {piece} {{ x: y; }} }}"),
+                SassSyntax::Scss,
+            ));
+        }
+        cases.push((
+            format!("@keyframes k\n  {piece}\n    x: y\n"),
+            SassSyntax::Indented,
+        ));
+    }
+    for (text, _) in &cases {
+        assert!(
+            !["@use", "@forward", "@import", "load-css"]
+                .iter()
+                .any(|rule| text.contains(rule))
+        );
+    }
+    let mut child = Command::new("node")
+        .arg("-e")
+        .arg(script)
+        .arg(module)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    for (text, syntax) in &cases {
+        let syntax = if *syntax == SassSyntax::Scss {
+            "scss"
+        } else {
+            "indented"
+        };
+        writeln!(input, "{syntax}\n{}", text.len()).unwrap();
+        input.write_all(text.as_bytes()).unwrap();
+    }
+    drop(input);
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success());
+    let verdicts = String::from_utf8(output.stdout).unwrap();
+    let verdicts: Vec<_> = verdicts.lines().collect();
+    assert_eq!(verdicts.len(), cases.len());
+    eprintln!(
+        "Sass selector compile oracle: {} fictional cases",
+        cases.len()
+    );
+    let mut mismatches = Vec::new();
+    for ((text, syntax), oracle) in cases.iter().zip(verdicts) {
+        let verdict = selector_verdict(text, *syntax);
+        // A compiled selector must be established; one that fails to
+        // compile must not be.
+        if (oracle == "1") != (verdict == Some(true)) {
+            mismatches.push(format!("{syntax:?} {oracle} {verdict:?}: {text:?}"));
+        }
+    }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }
