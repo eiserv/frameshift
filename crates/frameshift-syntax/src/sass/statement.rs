@@ -618,11 +618,14 @@ impl Parser<'_> {
                     if self.text[start..colon].trim().starts_with("--") {
                         return true;
                     }
-                    !has_body
+                    let selector_prefix = self.name_start_at(colon + 1)
+                        || after.starts_with("#{")
+                        || after.starts_with("-#{");
+                    // Indented Sass requires whitespace after a property
+                    // colon when the value starts like a selector name.
+                    (self.syntax == SassSyntax::Scss && !has_body)
                         || after.starts_with(css_space)
-                        || !after.starts_with(|c: char| {
-                            c.is_ascii_alphabetic() || c == '_' || c == '\\' || c >= '\u{80}'
-                        })
+                        || !selector_prefix
                 })
         } else {
             false

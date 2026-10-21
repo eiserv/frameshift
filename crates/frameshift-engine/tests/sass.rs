@@ -91,6 +91,7 @@ const SCSS_CASES: &[&str] = &[
     "$x: #123g; $y: 1$var; $z: 1#{a};",
     "$x: U+00A0-00FF; $y: u+4??; $z: \"\\110000\";",
     "@if true {} @elseif false {} @else {}",
+    ".a { a:-webkit-any-link { color: red; } }",
 ];
 
 const SASS_CASES: &[&str] = &[
@@ -118,6 +119,42 @@ const MIXIN_EXTENSION_CASES: &[(&str, SassSyntax)] = &[
         SassSyntax::Indented,
     ),
 ];
+
+const INDENTED_SELECTOR_CASES: &[&str] = &[
+    ".a\n  a:hover\n    color: red\n",
+    ".a\n  a:hover\n    @media screen\n      color: red\n",
+    ".a\n  a:#{hover}\n    color: red\n",
+    ".a\n  a:-webkit-any-link\n    color: red\n",
+    ".a\n  a:hover\n",
+];
+
+#[test]
+fn pseudo_classes_remain_style_rules_in_both_surface_syntaxes() {
+    for (text, syntax) in INDENTED_SELECTOR_CASES
+        .iter()
+        .map(|text| (*text, SassSyntax::Indented))
+        .chain(std::iter::once((
+            ".a { a:-webkit-any-link { color: red; } }",
+            SassSyntax::Scss,
+        )))
+    {
+        let source = source(text);
+        let doc = parse_sass(&source, syntax, SassLimits::default()).unwrap();
+        check(&doc);
+        assert_eq!(
+            doc.nodes()
+                .iter()
+                .filter(|node| node.kind == SassNodeKind::StyleRule)
+                .count(),
+            2,
+            "{text}"
+        );
+    }
+    accepts(
+        ".a\n  --tone:red\n  color: red\n  font:\n    size: 2px\n",
+        SassSyntax::Indented,
+    );
+}
 
 #[test]
 fn extensions_are_allowed_in_mixins_and_their_control_blocks() {
@@ -421,6 +458,11 @@ while (at < data.length) {
         MIXIN_EXTENSION_CASES
             .iter()
             .map(|(text, syntax)| (text.to_string(), *syntax)),
+    );
+    cases.extend(
+        INDENTED_SELECTOR_CASES
+            .iter()
+            .map(|text| (text.to_string(), SassSyntax::Indented)),
     );
     let mut child = Command::new("node")
         .arg("-e")

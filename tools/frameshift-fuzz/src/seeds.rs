@@ -728,7 +728,23 @@ bun@1.4.0",
         .map(|text| (*text).to_owned())
         .collect(),
         Target::Yaml => ["", "{\"fictional\": \"\\uD83D\\uDE00\"}", "fictional: [one, two, {three: four}]\n", "? &key [fictional, complex]\n: *key\n", "&a [*a, {self: *a}]", "%YAML 1.2\n---\n{? [a, b]: !!str 9}\n...\n---\nnull\n", "a: >-\n  fictional\n\n  lines\n", "- &key \"hello\\nworld\"\n- *key\n", "{\"a\": [true, false, null, 1.25, -0, \"\\u0041\"]}", "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      fictional:\n        specifier: ^1\n        version: 1.0.0\npackages:\n  fictional@1.0.0:\n    resolution: {integrity: sha512-fake}\nsnapshots:\n  fictional@1.0.0: {}\n"].iter().map(|text| (*text).to_owned()).collect(),
-        Target::Sass => ["", "$x: (a: 1, b: [2, 3]);", ".a { color: red; &:hover { color: blue; } }", "@mixin a($x...) { @content($x); }", "@function a($x) { @return $x * 2; }", "@for $i from 1 through 3 { .a-#{$i} { order: $i; } }", ".a\n  color: red\n  &:hover\n    color: blue", "/* #{1 + 2} */", "$x: \"a#{$x}b\";", "@use 'fictional' with ($n: 1);", ".a { --x: {foo: #{$x}}; }"].iter().map(|text| (*text).to_owned()).collect(),
+        Target::Sass => [
+            "",
+            "$x: (a: 1, b: [2, 3]);",
+            ".a { color: red; &:hover { color: blue; } }",
+            "@mixin a($x...) { @content($x); }",
+            "@function a($x) { @return $x * 2; }",
+            "@for $i from 1 through 3 { .a-#{$i} { order: $i; } }",
+            ".a\n  color: red\n  &:hover\n    color: blue",
+            ".a\n  a:hover\n    @media screen\n      color: red",
+            "/* #{1 + 2} */",
+            "$x: \"a#{$x}b\";",
+            "@use 'fictional' with ($n: 1);",
+            ".a { --x: {foo: #{$x}}; }",
+        ]
+        .iter()
+        .map(|text| (*text).to_owned())
+        .collect(),
         Target::Css => [
             "",
             ".card > a:hover { color: #fff; margin: -1.5em 0 }",

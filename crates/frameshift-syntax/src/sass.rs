@@ -554,10 +554,15 @@ impl Parser<'_> {
         &self.text[span.start()..span.end()]
     }
     fn name_start(&self) -> bool {
-        self.peek()
+        self.name_start_at(self.pos)
+    }
+    fn name_start_at(&self, offset: usize) -> bool {
+        let text = &self.text[offset..];
+        text.chars()
+            .next()
             .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '\\' || c >= '\u{80}')
-            || (self.at("-")
-                && self.text[self.pos + 1..].chars().next().is_some_and(|c| {
+            || (text.starts_with('-')
+                && text[1..].chars().next().is_some_and(|c| {
                     c == '-' || c == '_' || c == '\\' || c.is_ascii_alphabetic() || c >= '\u{80}'
                 }))
     }
