@@ -68,6 +68,8 @@ impl Parser<'_> {
             }
             // Sass discards root charset rules before ordinary statement
             // dispatch. Retain their source, without closing the module prefix.
+            // Dart Sass 1.105.2 matches this literal prefix, even before name
+            // characters; a boundary check would change reference acceptance.
             if context.root && self.at("@charset") {
                 let start = self.pos;
                 self.expect("@")?;

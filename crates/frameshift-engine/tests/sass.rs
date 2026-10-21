@@ -1031,6 +1031,16 @@ fn generated_module_rules_preserve_tree_and_error_contracts() {
 }
 
 const MODULE_CONTEXT_CASES: &[(&str, SassSyntax, bool)] = &[
+    ("@charsetfoo 'utf-8';", SassSyntax::Scss, false),
+    ("@charset-foo 'utf-8';", SassSyntax::Scss, false),
+    ("@charset色 'utf-8';", SassSyntax::Scss, false),
+    ("@charset\\66 oo 'utf-8';", SassSyntax::Scss, false),
+    (".a { @charsetfoo 'utf-8'; }", SassSyntax::Scss, true),
+    ("@charsetfoo 'utf-8'\n", SassSyntax::Indented, false),
+    ("@charset-foo 'utf-8'\n", SassSyntax::Indented, false),
+    ("@charset色 'utf-8'\n", SassSyntax::Indented, false),
+    ("@charset\\66 oo 'utf-8'\n", SassSyntax::Indented, false),
+    (".a\n  @charsetfoo 'utf-8'\n", SassSyntax::Indented, true),
     ("@charset 'utf-8'; @use 'palette';", SassSyntax::Scss, true),
     (
         "$tone: red; @use 'palette' with($tone: $tone); @forward 'other';",
