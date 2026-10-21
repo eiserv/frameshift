@@ -128,6 +128,98 @@ const INDENTED_SELECTOR_CASES: &[&str] = &[
     ".a\n  a:hover\n",
 ];
 
+const CONTENT_CASES: &[(&str, SassSyntax, bool)] = &[
+    (
+        "@mixin host { .a { @content; } } @include host { color: red; @extend %base; }",
+        SassSyntax::Scss,
+        true,
+    ),
+    (
+        "@include host using ($tone) { @if true { color: $tone; @extend %base; } }",
+        SassSyntax::Scss,
+        true,
+    ),
+    (
+        "@include host { @include other { color: red; } } @mixin after {}",
+        SassSyntax::Scss,
+        true,
+    ),
+    (
+        "@mixin host { @include other { @content; } }",
+        SassSyntax::Scss,
+        true,
+    ),
+    (
+        "@include host { @mixin nested {} }",
+        SassSyntax::Scss,
+        false,
+    ),
+    (
+        "@include host { @function nested() { @return 1; } }",
+        SassSyntax::Scss,
+        false,
+    ),
+    ("@include host { @content; }", SassSyntax::Scss, false),
+    (
+        "@include host { font: { @extend %base; } }",
+        SassSyntax::Scss,
+        false,
+    ),
+    (
+        "@include host\n  color: red\n  @extend %base\n",
+        SassSyntax::Indented,
+        true,
+    ),
+    (
+        "@include host using ($tone)\n  @if true\n    color: $tone\n    @extend %base\n",
+        SassSyntax::Indented,
+        true,
+    ),
+    (
+        "@include host\n  @include other\n    color: red\n@mixin after\n",
+        SassSyntax::Indented,
+        true,
+    ),
+    (
+        "@include host\n  @mixin nested\n",
+        SassSyntax::Indented,
+        false,
+    ),
+    (
+        "@include host\n  @function nested()\n    @return 1\n",
+        SassSyntax::Indented,
+        false,
+    ),
+    ("@include host\n  @content\n", SassSyntax::Indented, false),
+];
+
+#[test]
+fn include_content_has_its_own_lexical_context() {
+    for &(text, syntax, valid) in CONTENT_CASES {
+        if valid {
+            accepts(text, syntax);
+        } else {
+            assert_eq!(
+                parse_sass(&source(text), syntax, SassLimits::default())
+                    .unwrap_err()
+                    .kind,
+                SassErrorKind::InvalidContext,
+                "{text}"
+            );
+        }
+    }
+    let text = "@include host { color: red; --tone: blue; }";
+    let input = source(text);
+    let doc = parse_sass(&input, SassSyntax::Scss, SassLimits::default()).unwrap();
+    assert_eq!(
+        doc.nodes()
+            .iter()
+            .filter(|n| n.kind == SassNodeKind::Declaration)
+            .count(),
+        2
+    );
+}
+
 #[test]
 fn pseudo_classes_remain_style_rules_in_both_surface_syntaxes() {
     for (text, syntax) in INDENTED_SELECTOR_CASES
@@ -463,6 +555,11 @@ while (at < data.length) {
         INDENTED_SELECTOR_CASES
             .iter()
             .map(|text| (text.to_string(), SassSyntax::Indented)),
+    );
+    cases.extend(
+        CONTENT_CASES
+            .iter()
+            .map(|(text, syntax, _)| (text.to_string(), *syntax)),
     );
     let mut child = Command::new("node")
         .arg("-e")

@@ -11,6 +11,7 @@ pub(super) struct Context {
     style: bool,
     function: bool,
     mixin: bool,
+    content: bool,
     control: bool,
     declaration: bool,
 }
@@ -22,6 +23,7 @@ impl Default for Context {
             style: false,
             function: false,
             mixin: false,
+            content: false,
             control: false,
             declaration: false,
         }
@@ -259,7 +261,7 @@ impl Parser<'_> {
         if (matches!(kind, At::Use | At::Forward) && (!context.root || !use_allowed))
             || (kind == At::Return && !context.function)
             || (kind == At::Content && !context.mixin)
-            || (kind == At::Extend && !context.style && !context.mixin)
+            || (kind == At::Extend && !context.style && !context.mixin && !context.content)
             || (matches!(kind, At::Else | At::ElseIf) && !allow_else)
             || (context.declaration
                 && matches!(
@@ -274,7 +276,7 @@ impl Parser<'_> {
                         | At::Forward
                 ))
             || (matches!(kind, At::Function | At::Mixin)
-                && (context.function || context.mixin || context.control))
+                && (context.function || context.mixin || context.content || context.control))
             || (context.function
                 && matches!(
                     kind,
@@ -325,6 +327,7 @@ impl Parser<'_> {
                 block = true;
             }
             At::Include => {
+                child_context.content = true;
                 children.push(self.identifier()?);
                 if self.eat(".")? {
                     let member = self.identifier()?;
@@ -580,7 +583,9 @@ impl Parser<'_> {
         let has_body = self.at("{");
         let first_colon = colon;
         let mut candidate = false;
-        if first_colon.is_some() && (context.style || context.mixin || context.declaration) {
+        let allows_declarations =
+            context.style || context.mixin || context.content || context.declaration;
+        if first_colon.is_some() && allows_declarations {
             let raw_nodes = self.nodes.len();
             let raw_comments = self.comments.len();
             let depth = self.depth;
@@ -608,7 +613,7 @@ impl Parser<'_> {
             self.depth = depth;
             self.pos = header_end;
         }
-        let declaration = if context.style || context.mixin || context.declaration {
+        let declaration = if allows_declarations {
             candidate
                 && first_colon.is_some_and(|colon| {
                     let after = &self.text[colon + 1..header_end];
