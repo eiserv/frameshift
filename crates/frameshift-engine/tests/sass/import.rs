@@ -21,6 +21,7 @@ pub(super) fn cases() -> Vec<Case> {
             ("''", false, true),
             ("'#{$literal}'", false, true),
             ("'file.css'", true, true),
+            ("'theme-#{$name}.css'", true, true),
             ("'file.CSS'", false, true),
             ("'.css'", false, true),
             ("'file.css?q'", false, true),
@@ -132,6 +133,18 @@ pub(super) fn cases() -> Vec<Case> {
         syntax: SassSyntax::Scss,
         css: Some(vec![false, true]),
     });
+    for syntax in [SassSyntax::Scss, SassSyntax::Indented] {
+        cases.push(Case {
+            text: if syntax == SassSyntax::Scss {
+                "@import \\75rl(theme);"
+            } else {
+                "@import \\75rl(theme)\n"
+            }
+            .to_owned(),
+            syntax,
+            css: (syntax == SassSyntax::Indented).then(|| vec![false]),
+        });
+    }
     cases
 }
 
@@ -191,6 +204,44 @@ fn import_spans_comments_literal_paths_and_modifier_evidence() {
     assert_eq!(doc.comments().len(), 1);
     assert_eq!(doc.comments()[0].interpolations.len(), 1);
     assert_eq!(doc.statements().len(), 2);
+}
+
+#[test]
+fn quoted_css_paths_are_literal_and_url_dispatch_requires_a_literal_u() {
+    for syntax in [SassSyntax::Scss, SassSyntax::Indented] {
+        for header in ["\"theme-#{$name}.css\"", "\"#{$name}\" screen"] {
+            let text = format!(
+                "@import {header}{}",
+                if syntax == SassSyntax::Scss {
+                    ";"
+                } else {
+                    "\n"
+                }
+            );
+            let src = source(&text);
+            let doc = parse_sass(&src, syntax, SassLimits::default()).unwrap();
+            check(&doc);
+            assert_eq!(imports(&doc), [true]);
+            let url = doc
+                .nodes()
+                .iter()
+                .find(|node| matches!(node.kind, Kind::String { quoted: true }))
+                .unwrap();
+            assert!(url.children.is_empty());
+            assert!(
+                !doc.nodes()
+                    .iter()
+                    .any(|node| node.kind == Kind::Interpolation)
+            );
+        }
+    }
+    let escaped = source("@import \\75rl(theme);");
+    assert!(parse_sass(&escaped, SassSyntax::Scss, SassLimits::default()).is_err());
+    let internal_escape = source("@import u\\72l(theme);");
+    let doc = parse_sass(&internal_escape, SassSyntax::Scss, SassLimits::default()).unwrap();
+    check(&doc);
+    assert_eq!(imports(&doc), [true]);
+    assert!(doc.unchecked_syntax().next().is_none());
 }
 
 #[test]

@@ -14,6 +14,8 @@ impl Parser<'_> {
         loop {
             self.skip(self.syntax == SassSyntax::Scss)?;
             let start = self.pos;
+            // The pinned parser dispatches url() only from literal u/U. A
+            // leading escape is an unquoted path in Sass and invalid in SCSS.
             let (url, plain_css, decoded) = if self.syntax == SassSyntax::Indented
                 && !self.peek().is_some_and(|c| matches!(c, '\'' | '"'))
                 && !self.import_url_ahead()?
@@ -39,7 +41,7 @@ impl Parser<'_> {
             } else if self.peek().is_some_and(|c| matches!(c, 'u' | 'U')) {
                 (self.import_url()?, true, None)
             } else {
-                // Like module strings, quoted import paths never interpolate.
+                // Quoted paths never interpolate, even when classified as CSS.
                 let (url, decoded) = self.module_string()?;
                 (url, plain_import(&decoded), Some(decoded))
             };
