@@ -108,11 +108,11 @@ pub enum SassAtRule {
     Forward,
     /// `@import`.
     Import,
-    /// `@mixin`.
+    /// `@mixin`, or `=` in indented syntax.
     Mixin,
     /// `@function`.
     Function,
-    /// `@include`.
+    /// `@include`, or `+` in indented syntax.
     Include,
     /// `@content`.
     Content,
@@ -158,7 +158,9 @@ pub enum SassNodeKind {
     Declaration,
     /// A variable reference and value, followed by source-spelled flags.
     VariableDeclaration,
-    /// A directive name and header followed by body statements.
+    /// A directive name and header followed by body statements. Indented
+    /// `=` and `+` shorthand omit the directive-name child; their original
+    /// marker remains in the node span before the callable name.
     AtRule(SassAtRule),
     /// A source-spelled identifier, including escapes.
     Identifier,

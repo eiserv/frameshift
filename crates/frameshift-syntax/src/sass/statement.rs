@@ -63,16 +63,24 @@ impl Parser<'_> {
             if self.syntax == SassSyntax::Scss && self.eat(";")? {
                 continue;
             }
-            let statement = if self.at("$") || self.namespaced_variable_ahead()? {
-                self.variable_statement()?
-            } else if self.at("@") {
-                self.at_rule(indent, context, use_allowed, allow_else)?
-            } else {
-                if context.function {
-                    return Err(self.error(Error::InvalidContext));
-                }
-                self.style_or_declaration(indent, context)?
-            };
+            let forced_selector =
+                self.syntax == SassSyntax::Indented && !context.declaration && self.at("\\");
+            let statement =
+                if self.at("$") || (!forced_selector && self.namespaced_variable_ahead()?) {
+                    self.variable_statement()?
+                } else if self.at("@")
+                    || (self.syntax == SassSyntax::Indented
+                        && !context.function
+                        && !context.declaration
+                        && (self.at("=") || (self.at("+") && self.name_start_at(self.pos + 1))))
+                {
+                    self.at_rule(indent, context, use_allowed, allow_else)?
+                } else {
+                    if context.function {
+                        return Err(self.error(Error::InvalidContext));
+                    }
+                    self.style_or_declaration(indent, context)?
+                };
             allow_else = matches!(
                 self.nodes[statement.0].kind,
                 Kind::AtRule(At::If | At::ElseIf)
@@ -232,31 +240,40 @@ impl Parser<'_> {
         allow_else: bool,
     ) -> Result<Id, SassError> {
         let start = self.pos;
-        self.expect("@")?;
-        let name = self.interpolated_name()?;
-        let spelling = self.spelling(name);
-        let decoded = decode_name(spelling, false);
-        let mut kind = match decoded.as_ref() {
-            "use" => At::Use,
-            "forward" => At::Forward,
-            "import" => At::Import,
-            "mixin" => At::Mixin,
-            "function" => At::Function,
-            "include" => At::Include,
-            "content" => At::Content,
-            "return" => At::Return,
-            "if" => At::If,
-            "else" => At::Else,
-            "elseif" => At::ElseIf,
-            "each" => At::Each,
-            "for" => At::For,
-            "while" => At::While,
-            "extend" => At::Extend,
-            "at-root" => At::AtRoot,
-            "debug" => At::Debug,
-            "warn" => At::Warn,
-            "error" => At::Error,
-            _ => At::Css,
+        let mut children = Vec::new();
+        let mut kind = if self.eat("=")? {
+            self.skip(true)?;
+            At::Mixin
+        } else if self.eat("+")? {
+            At::Include
+        } else {
+            self.expect("@")?;
+            let name = self.interpolated_name()?;
+            let decoded = decode_name(self.spelling(name), false);
+            let kind = match decoded.as_ref() {
+                "use" => At::Use,
+                "forward" => At::Forward,
+                "import" => At::Import,
+                "mixin" => At::Mixin,
+                "function" => At::Function,
+                "include" => At::Include,
+                "content" => At::Content,
+                "return" => At::Return,
+                "if" => At::If,
+                "else" => At::Else,
+                "elseif" => At::ElseIf,
+                "each" => At::Each,
+                "for" => At::For,
+                "while" => At::While,
+                "extend" => At::Extend,
+                "at-root" => At::AtRoot,
+                "debug" => At::Debug,
+                "warn" => At::Warn,
+                "error" => At::Error,
+                _ => At::Css,
+            };
+            children.push(name);
+            kind
         };
         if (matches!(kind, At::Use | At::Forward) && (!context.root || !use_allowed))
             || (kind == At::Return && !context.function)
@@ -290,7 +307,6 @@ impl Parser<'_> {
             kind = At::ElseIf;
             self.skip(true)?;
         }
-        let mut children = vec![name];
         let mut block = false;
         let mut optional_block = false;
         let mut child_context = context;
@@ -574,6 +590,10 @@ impl Parser<'_> {
 
     fn style_or_declaration(&mut self, indent: usize, context: Context) -> Result<Id, SassError> {
         let start = self.pos;
+        // A leading backslash forces a selector in indented Sass. Its bytes
+        // belong to the rule, but not to the selector that follows it.
+        let force_style =
+            self.syntax == SassSyntax::Indented && !context.declaration && self.eat("\\")?;
         // Lookahead shares the real grammar and its work budget. It retains
         // no speculative nodes or comments and never guesses quote contexts.
         let nodes = self.nodes.len();
@@ -585,7 +605,7 @@ impl Parser<'_> {
         let mut candidate = false;
         let allows_declarations =
             context.style || context.mixin || context.content || context.declaration;
-        if first_colon.is_some() && allows_declarations {
+        if first_colon.is_some() && allows_declarations && !force_style {
             let raw_nodes = self.nodes.len();
             let raw_comments = self.comments.len();
             let depth = self.depth;
