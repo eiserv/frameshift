@@ -946,6 +946,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Tradeoffs and limitations:** acceptance stays a superset of the compiler's parse step, and `sass-parser` rejects some accepted, compiling selectors. Escaped `An+B` keywords fail in 1.105.2 although a newer sass-spec revision expects them. Comment joining in indented syntax is not modeled. No selector result authorizes transformation while full Sass conformance is outstanding (`D-079`).
 - **Revisit if:** Dart Sass changes either selector grammar, removes the deprecated adjacent compounds or bogus combinators, or later analysis needs `@extend` targets as structure.
 
+### D-082: Complete the Sass module-rule grammar
+
+- **Status:** Accepted (2026-10-21). Through the Codex App question interface, the owner selected completing `@use` and `@forward`, including URL and namespace validation, as the next M3 increment. The owner authorized squash integration after green checks and resolved reviews.
+- **Decision:** Continue the parser of `D-079` against its pinned Dart Sass 1.105.2 reference. Complete the module rules' quoted URL, namespace, forwarding, visibility, and configuration syntax in both surface syntaxes. Module resolution, evaluation, and namespace collisions between loaded modules remain semantic work; parsing never loads a URL.
+- **Representation and validation (agent defaults, planned in this increment):** Preserve original URL and clause spans, make explicit module clauses distinguishable in the arena, and validate default namespaces from decoded URI path segments. Extend the pinned parse-only oracle with generated fictional module rules, including malformed URLs, escaped names, configuration duplicates, and syntax boundaries. Charge URL and namespace work against the existing Sass budget. Remove module-URL unchecked evidence only when its syntax is established.
+- **Rationale and evolution (`D-033`):** Complete module syntax supplies reliable source locations for later stylesheet dependency analysis without introducing filesystem or framework knowledge into the syntax layer. Original spelling remains separate from decoded validation values. The remaining Sass grammars and full-conformance gate stay explicit in IMPLEMENTATION.md section 35.
+- **Dependencies and scope:** No runtime dependency or new limit is authorized. Other Sass grammar gaps and JavaScript recovery remain separate increments. A clean module rule does not establish a resolvable module or authorize transformation of the file.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
