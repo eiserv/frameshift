@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use frameshift_engine::syntax::{
-    SassLimits, SassNodeKind, SassSyntax, SassUncheckedKind, parse_sass,
+    SassAtRule, SassLimits, SassNodeKind, SassSyntax, SassUncheckedKind, parse_sass,
 };
 
 use crate::targets;
@@ -61,6 +61,44 @@ pub fn run(input: &[u8]) -> Result<(), String> {
             source
                 .slice(entry.span)
                 .map_err(|e| format!("Sass unchecked span: {e}"))?;
+        }
+        for node in doc.nodes() {
+            if matches!(
+                node.kind,
+                SassNodeKind::AtRule(SassAtRule::Use | SassAtRule::Forward)
+            ) {
+                let url = node
+                    .children
+                    .get(1)
+                    .and_then(|&id| doc.node(id))
+                    .ok_or("module without URL")?;
+                if url.kind != (SassNodeKind::String { quoted: true }) || !url.children.is_empty() {
+                    return Err("module URL must be a non-interpolating string".to_owned());
+                }
+                if unchecked.iter().any(|entry| entry.span == node.span) {
+                    return Err("module rule has unchecked grammar".to_owned());
+                }
+            }
+            let name_count = if matches!(node.kind, SassNodeKind::ModuleNamespace { global: true })
+            {
+                Some(0)
+            } else if matches!(
+                node.kind,
+                SassNodeKind::ModuleNamespace { global: false } | SassNodeKind::ForwardPrefix
+            ) {
+                Some(1)
+            } else {
+                None
+            };
+            if let Some(count) = name_count
+                && (node.children.len() != count
+                    || node.children.iter().any(|&id| {
+                        doc.node(id)
+                            .is_none_or(|n| n.kind != SassNodeKind::Identifier)
+                    }))
+            {
+                return Err("module clause has invalid children".to_owned());
+            }
         }
         for rule in doc
             .nodes()
