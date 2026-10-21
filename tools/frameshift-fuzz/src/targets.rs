@@ -16,7 +16,7 @@ use frameshift_engine::{
 
 use crate::{
     astro, collections, css, edits, gitignore, hashes, identifiers, json, lexical, package, paths,
-    seeds, semver, workspace, yaml, yarn,
+    sass, seeds, semver, workspace, yaml, yarn,
 };
 
 /// A fuzzed engine entry point with its contracts.
@@ -61,6 +61,8 @@ pub enum Target {
     Workspace,
     /// CSS tokenization in both scan contexts.
     Css,
+    /// Sass syntax in SCSS and indented modes.
+    Sass,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -77,7 +79,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -97,6 +99,7 @@ impl Target {
         Self::Yarn,
         Self::Workspace,
         Self::Css,
+        Self::Sass,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -121,6 +124,7 @@ impl Target {
             Self::Yarn => "yarn",
             Self::Workspace => "workspace",
             Self::Css => "css",
+            Self::Sass => "sass",
         }
     }
 
@@ -186,6 +190,9 @@ impl Target {
             Self::Workspace => {
                 "workspace patterns of every release over listings: determinism, order independence, listed members, required fields, rejections, and work bounds"
             }
+            Self::Sass => {
+                "SCSS and indented Sass: grammar, spans, arena reachability, deterministic errors and resource bounds"
+            }
             Self::Css => {
                 "CSS tokenization and generic parsing: coverage, repetition, scanning contexts, values, recovery diagnostics, tree spans, and inclusive limits"
             }
@@ -205,7 +212,7 @@ impl Target {
             | Self::Hashes
             | Self::Collections
             | Self::Package => 4_096,
-            Self::Yaml | Self::Yarn | Self::Workspace | Self::Css => 1_024,
+            Self::Yaml | Self::Yarn | Self::Workspace | Self::Css | Self::Sass => 1_024,
             Self::RegExp | Self::References | Self::Gitignore | Self::Json | Self::Semver => 1_024,
             Self::Lexical => 512,
         }
@@ -244,6 +251,7 @@ impl Target {
             Self::Yarn => yarn::run(input),
             Self::Workspace => workspace::run(input),
             Self::Css => css::run(input),
+            Self::Sass => sass::run(input),
         }
     }
 }

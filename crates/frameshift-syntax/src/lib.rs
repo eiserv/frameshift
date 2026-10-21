@@ -2,7 +2,8 @@
 //! the E1 parser experiment, the JSON and JSONC parser for manifests,
 //! lockfiles, and configuration (`D-068`), YAML 1.2 syntax (`D-071`), and
 //! the Yarn classic lockfile syntax (`D-072`), and CSS tokenization and
-//! generic structure (`D-077`, `D-078`). A parsed tree does not
+//! generic structure (`D-077`, `D-078`), and in-progress SCSS and indented
+//! Sass parsing (`D-079`). A parsed tree does not
 //! authorize transformations.
 
 mod ast;
@@ -20,6 +21,7 @@ mod reference;
 mod regexp;
 mod regexp_pattern;
 mod regexp_property;
+mod sass;
 mod template;
 mod typescript;
 mod unicode;
@@ -74,6 +76,11 @@ pub use regexp::{
     RegExpFlag, RegExpFlags, RegExpLiteral, RegExpToken, scan_js_regexp, validate_js_regexp,
 };
 pub use regexp_pattern::RegExpPatternError;
+pub use sass::{
+    SassAtRule, SassBinaryOperator, SassComment, SassDocument, SassError, SassErrorKind,
+    SassLimits, SassListSeparator, SassNode, SassNodeId, SassNodeKind, SassSyntax,
+    SassUnaryOperator, SassUnchecked, SassUncheckedKind, parse_sass,
+};
 pub use template::{
     TemplateContext, TemplateKind, TemplateMode, TemplatePosition, TemplateToken, scan_js_template,
 };

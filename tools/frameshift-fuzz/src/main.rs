@@ -25,6 +25,7 @@ mod package;
 mod paths;
 mod record;
 mod runtime;
+mod sass;
 mod seeds;
 mod semver;
 mod supervisor;
