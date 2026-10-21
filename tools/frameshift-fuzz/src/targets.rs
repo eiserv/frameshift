@@ -187,7 +187,7 @@ impl Target {
                 "workspace patterns of every release over listings: determinism, order independence, listed members, required fields, rejections, and work bounds"
             }
             Self::Css => {
-                "CSS tokenization: exact coverage, repetition, step-wise agreement in both contexts, values, parse error offsets, and the token limit"
+                "CSS tokenization and generic parsing: coverage, repetition, scanning contexts, values, recovery diagnostics, tree spans, and inclusive limits"
             }
         }
     }

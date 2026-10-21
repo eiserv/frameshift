@@ -698,6 +698,10 @@ bun@1.4.0",
             "url(a b) url(a\"b) url(\\) \"open\\",
             "\u{feff}#-a #1 @--x <!-- --> 10% +.5e-3em 1--x",
             ".a { &:hover { color: red } .b & { color: blue } }",
+            "x { a:hover {} foo: {} !important; --theme: before { a:b } after; }",
+            "x { broken; a: ]; --x: !bad; color: blue } tail",
+            "x { unicode-range: U+4?? !important; y: f([q",
+            "{unicode-range:U+4URL(>')[');",
         ]
         .iter()
         .map(|text| (*text).to_owned())

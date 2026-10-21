@@ -14,7 +14,7 @@ use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
 use frameshift_package::{LoadLimits, PackageLimits, WorkspaceLimits};
 use frameshift_syntax::{
-    CssLimits, JsonLimits, LexicalLimits, ParseLimits, YamlLimits, YarnLimits,
+    CssLimits, CssParserLimits, JsonLimits, LexicalLimits, ParseLimits, YamlLimits, YarnLimits,
 };
 use frameshift_transform::EditLimits;
 
@@ -47,6 +47,8 @@ pub struct Limits {
     pub parse: ParseLimits,
     /// One CSS tokenization.
     pub css: CssLimits,
+    /// Generic CSS structure and recovery.
+    pub css_parser: CssParserLimits,
     /// One JSON or JSONC parse.
     pub json: JsonLimits,
     /// One YAML stream, with aliases retained as references.
@@ -181,7 +183,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 40] {
+    pub fn entries(&self) -> [LimitEntry; 44] {
         let Self {
             run,
             ignore,
@@ -192,6 +194,7 @@ impl Limits {
             hash,
             parse,
             css,
+            css_parser,
             json,
             yaml,
             yarn,
@@ -235,6 +238,12 @@ impl Limits {
         let CssLimits {
             max_tokens: css_tokens,
         } = css;
+        let CssParserLimits {
+            max_nodes: css_nodes,
+            max_depth: css_depth,
+            max_diagnostics: css_diagnostics,
+            max_work: css_work,
+        } = css_parser;
         let JsonLimits {
             max_depth: json_depth,
             max_nodes: json_nodes,
@@ -275,6 +284,10 @@ impl Limits {
         let wide = |value: usize| value as u64;
         [
             entry("css.max-tokens", wide(css_tokens)),
+            entry("css.parser.max-depth", wide(css_depth)),
+            entry("css.parser.max-diagnostics", wide(css_diagnostics)),
+            entry("css.parser.max-nodes", wide(css_nodes)),
+            entry("css.parser.max-work", wide(css_work)),
             entry("edit.max-edits", wide(max_edits)),
             entry("edit.max-output-bytes", wide(edit_output_bytes)),
             entry("emit.max-depth", wide(max_depth)),

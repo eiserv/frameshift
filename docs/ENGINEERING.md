@@ -248,7 +248,7 @@ Proposals for a Rust implementation. Each runtime adoption still needs its own d
 | Component | Category | Proposal | Notes |
 | --- | --- | --- | --- |
 | JS, TS, JSX, TSX parser | Runtime | Build (E1 passed, `P-002` accepted) | Most critical component. Needs exact spans, comments, error policy, and resource limits. oxc may serve as a development-time test oracle. |
-| CSS tokenizer and structural parser | Runtime | Build (tokenizer implemented under `D-077`) | Specified by the CSS Syntax Level 3 Editor's Draft at a pinned revision. Bounded. css-parsing-tests and the cssparser tokenizer of Lightning CSS serve as test oracles outside the repository. SCSS follows with the full Sass grammar. |
+| CSS tokenizer and structural parser | Runtime | Build (tokenizer and generic parser implemented under `D-077`, `D-078`) | Specified by the CSS Syntax Level 3 Editor's Draft at a pinned revision. Bounded. css-parsing-tests and the cssparser tokenizer of Lightning CSS serve as test oracles outside the repository. SCSS follows with the full Sass grammar. |
 | JSON reading and deterministic writing | Runtime | Build (reading implemented under `D-068`; writing remains planned) | RFC 8259 is small and precisely specified. Frameshift needs control over key order, formatting, and error positions, and shares the code with JSONC. |
 | JSONC | Runtime | Build (implemented under `D-068`) | Extension of the JSON parser: comments and one trailing comma |
 | YAML 1.2 syntax | Runtime | Build (`D-071`, implemented) | Full syntax with flat graph references, preserved tags, explicit bounds, and an external conformance-suite runner. Package interpretation remains separate. |
@@ -416,5 +416,5 @@ Conventional Commit scopes follow the subsystems. Recommended scopes: `cli`, `co
 
 ## 10. Open questions
 
-- Concrete parser recovery synchronization points and default diagnostic/recovery budgets (M3, under accepted `D-034`).
+- JavaScript parser recovery synchronization points and default diagnostic/recovery budgets (M3, under accepted `D-034`). CSS recovery and budgets are implemented under `D-078`.
 - HTML parser for static output comparison: build or adopt (`Q-005`).
