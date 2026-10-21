@@ -14,7 +14,8 @@ use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
 use frameshift_package::{LoadLimits, PackageLimits, WorkspaceLimits};
 use frameshift_syntax::{
-    CssLimits, CssParserLimits, JsonLimits, LexicalLimits, ParseLimits, YamlLimits, YarnLimits,
+    CssLimits, CssParserLimits, JsonLimits, LexicalLimits, ParseLimits, SassLimits, YamlLimits,
+    YarnLimits,
 };
 use frameshift_transform::EditLimits;
 
@@ -49,6 +50,8 @@ pub struct Limits {
     pub css: CssLimits,
     /// Generic CSS structure and recovery.
     pub css_parser: CssParserLimits,
+    /// One Sass stylesheet, including SassScript.
+    pub sass: SassLimits,
     /// One JSON or JSONC parse.
     pub json: JsonLimits,
     /// One YAML stream, with aliases retained as references.
@@ -183,7 +186,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 44] {
+    pub fn entries(&self) -> [LimitEntry; 47] {
         let Self {
             run,
             ignore,
@@ -195,6 +198,7 @@ impl Limits {
             parse,
             css,
             css_parser,
+            sass,
             json,
             yaml,
             yarn,
@@ -244,6 +248,11 @@ impl Limits {
             max_diagnostics: css_diagnostics,
             max_work: css_work,
         } = css_parser;
+        let SassLimits {
+            max_nodes: sass_nodes,
+            max_depth: sass_depth,
+            max_work: sass_work,
+        } = sass;
         let JsonLimits {
             max_depth: json_depth,
             max_nodes: json_nodes,
@@ -321,6 +330,9 @@ impl Limits {
             entry("run.max-file-bytes", max_file_bytes),
             entry("run.max-files", wide(max_files)),
             entry("run.max-total-bytes", max_total_bytes),
+            entry("sass.max-depth", wide(sass_depth)),
+            entry("sass.max-nodes", wide(sass_nodes)),
+            entry("sass.max-work", wide(sass_work)),
             entry("text.max-source-bytes", wide(max_source_bytes)),
             entry("workspace.max-alternatives", wide(max_alternatives)),
             entry("workspace.max-match-work", workspace_match_work),
