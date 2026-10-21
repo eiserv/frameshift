@@ -106,6 +106,40 @@ const SASS_CASES: &[&str] = &[
     "/* comment #{1 + 2}\n  more comment\n.a\n  color: red\n",
 ];
 
+const MIXIN_EXTENSION_CASES: &[(&str, SassSyntax)] = &[
+    ("@mixin button { @extend %base; }", SassSyntax::Scss),
+    (
+        "@mixin button { @if true { @extend %base; } }",
+        SassSyntax::Scss,
+    ),
+    ("@mixin button\n  @extend %base\n", SassSyntax::Indented),
+    (
+        "@mixin button\n  @if true\n    @extend %base\n",
+        SassSyntax::Indented,
+    ),
+];
+
+#[test]
+fn extensions_are_allowed_in_mixins_and_their_control_blocks() {
+    for &(text, syntax) in MIXIN_EXTENSION_CASES {
+        accepts(text, syntax);
+    }
+    for text in [
+        "@extend %base;",
+        "@function button() { @extend %base; }",
+        ".a { font: { @extend %base; } }",
+    ] {
+        let source = source(text);
+        assert_eq!(
+            parse_sass(&source, SassSyntax::Scss, SassLimits::default())
+                .unwrap_err()
+                .kind,
+            SassErrorKind::InvalidContext,
+            "{text}"
+        );
+    }
+}
+
 #[test]
 fn scss_statements_and_sassscript() {
     for text in SCSS_CASES {
@@ -382,6 +416,11 @@ while (at < data.length) {
         generated_cases()
             .into_iter()
             .map(|text| (text, SassSyntax::Scss)),
+    );
+    cases.extend(
+        MIXIN_EXTENSION_CASES
+            .iter()
+            .map(|(text, syntax)| (text.to_string(), *syntax)),
     );
     let mut child = Command::new("node")
         .arg("-e")

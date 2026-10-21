@@ -259,7 +259,7 @@ impl Parser<'_> {
         if (matches!(kind, At::Use | At::Forward) && (!context.root || !use_allowed))
             || (kind == At::Return && !context.function)
             || (kind == At::Content && !context.mixin)
-            || (kind == At::Extend && !context.style)
+            || (kind == At::Extend && !context.style && !context.mixin)
             || (matches!(kind, At::Else | At::ElseIf) && !allow_else)
             || (context.declaration
                 && matches!(
@@ -314,7 +314,7 @@ impl Parser<'_> {
                     return Err(self.error(Error::InvalidContext));
                 }
                 children.push(callable);
-                self.skip(true)?;
+                self.skip(self.syntax == SassSyntax::Scss)?;
                 if self.at("(") {
                     children.push(self.arguments(true, false)?);
                 } else if kind == At::Function {
