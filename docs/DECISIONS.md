@@ -896,6 +896,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Revisit if:** the draft changes the tokenizer again, the parser increment needs another scanning context, or real style sheets depend on the older ident rule.
 - **Validation:** Section 33 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
+### D-078: Generic CSS structure with bounded recovery
+
+- **Status:** Accepted (2026-10-21). Through the Codex App question interface, the project owner selected generic CSS structure with nesting, declarations, functions, and at-rules, and bounded recovery at safe CSS boundaries. Selector, property-value, and individual at-rule grammars belong to later analysis. SCSS follows separately under `D-077`.
+- **Decision:** Build on the CSS Syntax draft pinned in `D-077`, including its generic declaration-versus-rule disambiguation. Preserve original tokens, comments, source spans, and source order in flat component and syntax arenas. Retain unknown at-rules without asserting their validity. A result with syntax diagnostics is ineligible for transformation as a whole (`D-034`); a diagnostic-free generic tree does not establish semantic validity or migration support.
+- **Agent defaults:** Separate `CssParserLimits` bound arena nodes (4,194,304), nesting (128, also the implementation ceiling), diagnostics (256), and structural work (16,777,216 component visits). Tokenization retains `CssLimits`. Exhaustion returns a typed error without a partial result. Recovery consumes whole component values to a semicolon, enclosing block boundary, or EOF, without inventing repairs. EOF-closed CSS blocks retain the missing closer as evidence, following the draft's automatic closure rather than inventing a parse error.
+- **Rationale and evolution (`D-033`):** Framework-independent syntax provides exact references for later stylesheet dependency analysis and span edits. Separating generic structure from CSS grammar validation avoids a property catalog in the syntax layer and preserves unknown extensions for later analysis. Flat arenas avoid recursive destruction; bounded visits prevent speculative declaration parsing from unbounded repeated work.
+- **Validation:** Public facade tests and the existing `css` fuzz target cover structure, spans, recovery, deterministic repetition, and inclusive limits. External conformance data stays outside the repository.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
@@ -1031,7 +1039,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | Q-008 | Monorepo scope in V1 | Resolved by D-022 | Resolved |
 | Q-009 | Placement of modules colocated in `app/` | Resolved by D-024 | Resolved |
 | Q-010 | Exhaustiveness checks for closed kinds | Resolved by D-018: compiler-enforced exhaustive matches without wildcard arms (section 2.5 of [ENGINEERING.md](ENGINEERING.md)) | Resolved |
-| Q-011 | Parser error recovery depth | Policy resolved by D-034: bounded recovery at safe grammar boundaries; erroneous files remain ineligible for transformation. Concrete synchronization points and default budgets remain M3 work. | Policy resolved; implementation in M3 |
+| Q-011 | Parser error recovery depth | Policy resolved by D-034: bounded recovery at safe grammar boundaries; erroneous files remain ineligible for transformation. CSS synchronization points and budgets are implemented under D-078. JavaScript recovery remains M3 work. | Policy resolved; CSS implemented, JavaScript in M3 |
 | Q-012 | Lowest supported Next.js version | Resolved by D-023 | Resolved |
 | Q-013 | E1 memory budget: per file or retained whole | Resolved by D-045: peak heap demand of the whole corpus with all source texts and trees retained; per-file peaks remain diagnostics | Resolved |
 | Q-014 | Committed fixtures that name real framework packages such as `next`, whose manifests the public repository's advisory scanning reads | Tests and `inspect` fixtures create such manifests at test time only, the fixtures from `createdAtTestTime` entries of `fixture.json` (`D-074`, `D-075`); decide whether feature fixtures do the same, or use another layout or a scanner exclusion, before the first feature fixture | Before the first `fixtures/features/` case |
