@@ -63,6 +63,32 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                 .map_err(|e| format!("Sass unchecked span: {e}"))?;
         }
         for node in doc.nodes() {
+            if let SassNodeKind::Import { css } = node.kind {
+                let url = node
+                    .children
+                    .first()
+                    .and_then(|&id| doc.node(id))
+                    .ok_or("import without URL")?;
+                if !matches!(url.kind, SassNodeKind::String { .. } | SassNodeKind::Call)
+                    || matches!(url.kind, SassNodeKind::String { .. }) && !url.children.is_empty()
+                    || !(1..=2).contains(&node.children.len())
+                {
+                    return Err("invalid import URL structure".to_owned());
+                }
+                if let Some(&modifiers) = node.children.get(1) {
+                    let modifiers = doc.node(modifiers).ok_or("missing import modifiers")?;
+                    if !css || modifiers.kind != SassNodeKind::ImportModifiers {
+                        return Err("modified import must be CSS".to_owned());
+                    }
+                }
+            }
+            if node.kind == SassNodeKind::ImportModifiers
+                && !unchecked.iter().any(|entry| {
+                    entry.kind == SassUncheckedKind::ImportPrelude && entry.span == node.span
+                })
+            {
+                return Err("import modifiers without unchecked evidence".to_owned());
+            }
             if matches!(
                 node.kind,
                 SassNodeKind::AtRule(SassAtRule::Use | SassAtRule::Forward)

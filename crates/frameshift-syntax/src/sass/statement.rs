@@ -471,11 +471,7 @@ impl Parser<'_> {
                 children.push(header);
             }
             At::Import => {
-                let header = self.raw_header(false)?.0;
-                if self.start(header) == self.end(header) {
-                    return Err(self.error(Error::ExpectedSyntax));
-                }
-                children.push(header);
+                self.import_header(&mut children, context.mixin || context.control)?;
             }
             At::Css => {
                 let name = children[0];
