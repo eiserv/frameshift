@@ -41,7 +41,7 @@ impl Parser<'_> {
         let mut use_allowed = true;
         let mut allow_else = false;
         loop {
-            self.skip(true)?;
+            self.skip_statements()?;
             if self.peek().is_none() {
                 break;
             }
@@ -140,7 +140,7 @@ impl Parser<'_> {
             if !self.peek().is_none_or(newline) {
                 return Err(self.error(Error::ExpectedSyntax));
             }
-            self.skip(true)?;
+            self.skip_statements()?;
             if self.peek().is_none() {
                 return Ok(Vec::new());
             }
@@ -724,9 +724,9 @@ impl Parser<'_> {
             } else if c == ')' || c == ']' {
                 return Err(self.error(Error::ExpectedSyntax));
             } else if self.at("/*") {
-                self.comment(false)?;
+                self.comment(false, false)?;
             } else if self.at("//") && !curly_values {
-                self.comment(true)?;
+                self.comment(true, false)?;
             } else if c == '\\' {
                 self.escape(false)?;
             } else {

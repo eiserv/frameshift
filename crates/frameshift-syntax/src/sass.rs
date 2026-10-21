@@ -436,7 +436,7 @@ pub fn parse_sass(
         parser.bump()?;
     }
     let statements = parser.statements(0, statement::Context::default())?;
-    parser.skip(true)?;
+    parser.skip_statements()?;
     if parser.pos != parser.text.len() {
         return Err(parser.error(SassErrorKind::ExpectedSyntax));
     }
@@ -632,6 +632,12 @@ impl Parser<'_> {
         self.eat(word)
     }
     fn skip(&mut self, lines: bool) -> Result<bool, SassError> {
+        self.skip_comments(lines, false)
+    }
+    fn skip_statements(&mut self) -> Result<bool, SassError> {
+        self.skip_comments(true, true)
+    }
+    fn skip_comments(&mut self, lines: bool, statement: bool) -> Result<bool, SassError> {
         let start = self.pos;
         loop {
             if self
@@ -640,16 +646,16 @@ impl Parser<'_> {
             {
                 self.bump()?;
             } else if self.at("//") {
-                self.comment(true)?;
+                self.comment(true, statement)?;
             } else if self.at("/*") {
-                self.comment(false)?;
+                self.comment(false, statement)?;
             } else {
                 break;
             }
         }
         Ok(start != self.pos)
     }
-    fn comment(&mut self, silent: bool) -> Result<(), SassError> {
+    fn comment(&mut self, silent: bool, statement: bool) -> Result<(), SassError> {
         let start = self.pos;
         let mut interpolations = Vec::new();
         let line = self.text[..start]
@@ -659,25 +665,31 @@ impl Parser<'_> {
             .chars()
             .take_while(|&c| c == ' ' || c == '\t')
             .count();
+        // Only statement comments use indentation as their closing boundary.
+        let indented = statement
+            && self.syntax == SassSyntax::Indented
+            && self.text[line..start]
+                .chars()
+                .all(|c| matches!(c, ' ' | '\t' | '\u{feff}'));
         self.expect(if silent { "//" } else { "/*" })?;
         if silent {
             loop {
                 while self.peek().is_some_and(|c| !newline(c)) {
                     self.bump()?;
                 }
-                if self.syntax != SassSyntax::Indented || !self.comment_continuation(indent)? {
+                if !indented || !self.comment_continuation(indent)? {
                     break;
                 }
             }
         } else {
             while !self.at("*/") {
                 if self.peek().is_none() {
-                    if self.syntax == SassSyntax::Indented {
+                    if indented {
                         break;
                     }
                     return Err(self.error(SassErrorKind::Unterminated));
                 }
-                if self.syntax == SassSyntax::Indented && self.peek().is_some_and(newline) {
+                if indented && self.peek().is_some_and(newline) {
                     if !self.comment_continuation(indent)? {
                         break;
                     }

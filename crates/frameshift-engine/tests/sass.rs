@@ -193,6 +193,48 @@ const CONTENT_CASES: &[(&str, SassSyntax, bool)] = &[
     ("@include host\n  @content\n", SassSyntax::Indented, false),
 ];
 
+const INDENTED_COMMENT_CASES: &[(&str, bool)] = &[
+    (".a\n  color: red /* unclosed", false),
+    (".a\n  color: red /* comment\n.b\n  width: 1px\n", false),
+    ("$x: (1 +\n  /* unclosed\n  2)\n", false),
+    (".a\n  color: red /* comment\n*/\n  width: 1px\n", true),
+    (".a\n  color: red /* comment */\n  width: 1px\n", true),
+    ("/* comment", true),
+    ("/* comment\n  more\n.a\n  color: red\n", true),
+    (".a\n  /* comment\n    more\n  color: red\n", true),
+    ("$x: (1 +\n  /* closed */\n  2)\n", true),
+];
+
+#[test]
+fn inline_indented_comments_require_a_closer() {
+    for &(text, valid) in INDENTED_COMMENT_CASES {
+        if valid {
+            accepts(text, SassSyntax::Indented);
+        } else {
+            assert_eq!(
+                parse_sass(&source(text), SassSyntax::Indented, SassLimits::default())
+                    .unwrap_err()
+                    .kind,
+                SassErrorKind::Unterminated,
+                "{text}"
+            );
+        }
+    }
+    let input = source(INDENTED_COMMENT_CASES[3].0);
+    let doc = parse_sass(&input, SassSyntax::Indented, SassLimits::default()).unwrap();
+    assert_eq!(
+        input.slice(doc.comments()[0].span).unwrap(),
+        "/* comment\n*/"
+    );
+    assert_eq!(
+        doc.nodes()
+            .iter()
+            .filter(|n| n.kind == SassNodeKind::Declaration)
+            .count(),
+        2
+    );
+}
+
 #[test]
 fn include_content_has_its_own_lexical_context() {
     for &(text, syntax, valid) in CONTENT_CASES {
@@ -560,6 +602,11 @@ while (at < data.length) {
         CONTENT_CASES
             .iter()
             .map(|(text, syntax, _)| (text.to_string(), *syntax)),
+    );
+    cases.extend(
+        INDENTED_COMMENT_CASES
+            .iter()
+            .map(|(text, _)| (text.to_string(), SassSyntax::Indented)),
     );
     let mut child = Command::new("node")
         .arg("-e")
