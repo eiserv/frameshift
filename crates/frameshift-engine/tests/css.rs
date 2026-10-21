@@ -569,3 +569,154 @@ fn external_css_parsing_tests() {
     );
     assert_eq!((draft_differences, failures), (1, 0));
 }
+
+fn parsed_components(
+    source: &SourceText,
+    doc: &frameshift_engine::syntax::CssDocument,
+    values: &[frameshift_engine::syntax::CssComponentId],
+) -> Vec<String> {
+    values
+        .iter()
+        .map(|&id| {
+            let component = doc.component(id).unwrap();
+            let kind = component.token.kind;
+            if matches!(
+                kind,
+                CssTokenKind::OpenCurly
+                    | CssTokenKind::OpenSquare
+                    | CssTokenKind::OpenParen
+                    | CssTokenKind::Function
+            ) {
+                let contents = parsed_components(source, doc, &component.values);
+                let head = if kind == CssTokenKind::OpenCurly {
+                    "{}".to_owned()
+                } else if kind == CssTokenKind::OpenSquare {
+                    "[]".to_owned()
+                } else if kind == CssTokenKind::OpenParen {
+                    "()".to_owned()
+                } else {
+                    format!(
+                        "function {:?}",
+                        css_token_value(source, &component.token).unwrap().unwrap()
+                    )
+                };
+                block(&head, contents)
+            } else {
+                let scan = scan_css_token(
+                    source,
+                    component.token.span.start(),
+                    CssTokenContext::default(),
+                )
+                .unwrap();
+                let marker = if scan
+                    .errors
+                    .iter()
+                    .any(|error| error.kind == CssParseErrorKind::UnterminatedString)
+                {
+                    Some("eof-in-string")
+                } else if scan
+                    .errors
+                    .iter()
+                    .any(|error| error.kind == CssParseErrorKind::UnterminatedUrl)
+                {
+                    Some("eof-in-url")
+                } else {
+                    None
+                };
+                component_values(source, &[(component.token, marker)], &mut 0, None).join(" ")
+            }
+        })
+        .collect()
+}
+
+/// The suite's stylesheet cases validate rule boundaries, preludes, and raw
+/// block components. Its older stylesheet model does not interpret bodies;
+/// modern declaration and nesting behavior is covered by css_parser.rs.
+#[test]
+#[ignore = "external conformance: set FRAMESHIFT_CSS_PARSING_TESTS to a css-parsing-tests checkout"]
+fn external_css_stylesheets() {
+    use frameshift_engine::syntax::{CssNodeKind, CssParserLimits, parse_css};
+    let directory =
+        std::env::var_os("FRAMESHIFT_CSS_PARSING_TESTS").expect("set FRAMESHIFT_CSS_PARSING_TESTS");
+    let suite = source(
+        &std::fs::read_to_string(std::path::Path::new(&directory).join("stylesheet.json")).unwrap(),
+    );
+    let document = parse_json(&suite, JsonDialect::Json, JsonLimits::default()).unwrap();
+    let JsonValue::Array(items) = document.value(document.root()).unwrap() else {
+        panic!("suite array")
+    };
+    let items: Vec<_> = items.iter().collect();
+    let (pairs, remainder) = items.as_chunks::<2>();
+    assert!(remainder.is_empty());
+    for pair in pairs {
+        let input = raw_string(&document, pair[0]);
+        let input_source = source(&input);
+        let doc = parse_css(
+            &input_source,
+            CssLimits::default(),
+            CssParserLimits::default(),
+        )
+        .unwrap();
+        let JsonValue::Array(rules) = document.value(pair[1]).unwrap() else {
+            panic!("rule array")
+        };
+        let mut index = 0;
+        for expected_rule in rules.iter() {
+            let JsonValue::Array(fields) = document.value(expected_rule).unwrap() else {
+                panic!("rule fields")
+            };
+            let fields: Vec<_> = fields.iter().collect();
+            let head = raw_string(&document, fields[0]);
+            if head == "error" {
+                assert!(doc.has_errors(), "{input:?}");
+                continue;
+            }
+            let CssNodeKind::Rule(rule) = &doc.node(doc.rules()[index]).unwrap().kind else {
+                panic!("rule kind")
+            };
+            index += 1;
+            let prelude_index = if head == "at-rule" {
+                assert_eq!(
+                    css_token_value(&input_source, &rule.name.unwrap())
+                        .unwrap()
+                        .unwrap(),
+                    raw_string(&document, fields[1]),
+                    "{input:?}"
+                );
+                2
+            } else {
+                assert!(rule.name.is_none(), "{input:?}");
+                1
+            };
+            let render_expected = |id| {
+                let JsonValue::Array(values) = document.value(id).unwrap() else {
+                    panic!("component array")
+                };
+                values
+                    .iter()
+                    .map(|id| expected(&document, id))
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(
+                parsed_components(&input_source, &doc, &rule.prelude),
+                render_expected(fields[prelude_index]),
+                "prelude of {input:?}"
+            );
+            if let Some(block) = rule.block {
+                assert_eq!(
+                    parsed_components(&input_source, &doc, &doc.component(block).unwrap().values),
+                    render_expected(fields[prelude_index + 1]),
+                    "body of {input:?}"
+                );
+            } else {
+                assert_eq!(
+                    document.value(fields[prelude_index + 1]),
+                    Some(JsonValue::Null),
+                    "{input:?}"
+                );
+            }
+        }
+        assert_eq!(index, doc.rules().len(), "{input:?}");
+    }
+    eprintln!("{} stylesheet cases passed", items.len() / 2);
+}

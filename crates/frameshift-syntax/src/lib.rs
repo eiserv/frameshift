@@ -1,12 +1,13 @@
 //! Framework-independent JavaScript and TypeScript scanners and parsers for
 //! the E1 parser experiment, the JSON and JSONC parser for manifests,
 //! lockfiles, and configuration (`D-068`), YAML 1.2 syntax (`D-071`), and
-//! the Yarn classic lockfile syntax (`D-072`), and CSS tokenization
-//! (`D-077`). A parsed tree does not
+//! the Yarn classic lockfile syntax (`D-072`), and CSS tokenization and
+//! generic structure (`D-077`, `D-078`). A parsed tree does not
 //! authorize transformations.
 
 mod ast;
 mod css;
+mod css_parser;
 mod identifier;
 mod json;
 mod jsx;
@@ -39,6 +40,10 @@ pub use css::{
     CssError, CssHashKind, CssLimits, CssNumber, CssNumberKind, CssParseError, CssParseErrorKind,
     CssScan, CssSign, CssToken, CssTokenContext, CssTokenKind, CssTokens, css_dimension_unit,
     css_token_value, scan_css_token, tokenize_css,
+};
+pub use css_parser::{
+    CssComponent, CssComponentId, CssDeclaration, CssDiagnostic, CssDiagnosticKind, CssDocument,
+    CssNode, CssNodeId, CssNodeKind, CssParserError, CssParserLimits, CssRule, parse_css,
 };
 pub use identifier::{
     IdentifierKind, IdentifierToken, ReservedWord, ReservedWordClass, scan_js_identifier,

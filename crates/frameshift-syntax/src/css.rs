@@ -294,10 +294,27 @@ pub fn scan_css_token(
     offset: usize,
     context: CssTokenContext,
 ) -> Result<CssScan, CssError> {
+    scan_css_token_until(source, offset, source.len(), context)
+}
+
+// The unicode-range descriptor is retokenized from a source segment. Its
+// tokenizer must see EOF at that segment's boundary, not the stylesheet's.
+pub(crate) fn scan_css_token_until(
+    source: &SourceText,
+    offset: usize,
+    end: usize,
+    context: CssTokenContext,
+) -> Result<CssScan, CssError> {
     source
         .validate_offset(offset)
         .map_err(CssError::InvalidOffset)?;
-    let mut scanner = Scanner::new(source.as_str(), offset);
+    source
+        .validate_offset(end)
+        .map_err(CssError::InvalidOffset)?;
+    if offset > end {
+        return Err(CssError::ForeignToken);
+    }
+    let mut scanner = Scanner::new(&source.as_str()[..end], offset);
     let mut comments = Vec::new();
     let mut errors = Vec::new();
     let token = scanner.token(context, &mut comments, &mut errors);
@@ -389,7 +406,13 @@ fn verify(source: &SourceText, token: &CssToken) -> Result<(), CssError> {
         .map_err(CssError::InvalidOffset)?;
     let mut scanner = Scanner::new(source.as_str(), start);
     let mut comments = Vec::new();
-    let scanned = scanner.token(CssTokenContext::default(), &mut comments, &mut Vec::new());
+    let scanned = scanner.token(
+        CssTokenContext {
+            unicode_ranges_allowed: matches!(token.kind, CssTokenKind::UnicodeRange { .. }),
+        },
+        &mut comments,
+        &mut Vec::new(),
+    );
     if comments.is_empty() && scanned.as_ref() == Some(token) {
         Ok(())
     } else {

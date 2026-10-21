@@ -9,8 +9,9 @@
 
 use frameshift_engine::foundation::Span;
 use frameshift_engine::syntax::{
-    CssError, CssLimits, CssTokenContext, CssTokenKind, CssTokens, css_dimension_unit,
-    css_token_value, scan_css_token, tokenize_css,
+    CssError, CssLimits, CssNodeKind, CssParserError, CssParserLimits, CssTokenContext,
+    CssTokenKind, CssTokens, css_dimension_unit, css_token_value, parse_css, scan_css_token,
+    tokenize_css,
 };
 
 use crate::targets;
@@ -36,6 +37,7 @@ pub fn run(input: &[u8]) -> Result<(), String> {
     check_values(&source, text, &tokens)?;
     check_errors(text, &tokens)?;
     check_unicode_ranges(&source, start)?;
+    check_parser(&source)?;
     let count = tokens.tokens().len() + tokens.comments().len();
     if tokenize_css(&source, CssLimits { max_tokens: count }).as_ref() != Ok(&tokens) {
         return Err("the token limit is not inclusive".to_owned());
@@ -49,6 +51,130 @@ pub fn run(input: &[u8]) -> Result<(), String> {
         ) != Err(CssError::TokenLimit)
     {
         return Err("a lower token limit was not enforced".to_owned());
+    }
+    Ok(())
+}
+
+fn check_parser(source: &frameshift_engine::foundation::SourceText) -> Result<(), String> {
+    let limits = CssParserLimits::default();
+    let parsed = parse_css(source, CssLimits::default(), limits);
+    if parse_css(source, CssLimits::default(), limits) != parsed {
+        return Err("CSS parsing is not repeatable".to_owned());
+    }
+    let doc = match parsed {
+        Ok(doc) => doc,
+        Err(CssParserError::DepthLimit | CssParserError::DiagnosticLimit) => return Ok(()),
+        Err(
+            error @ (CssParserError::NodeLimit
+            | CssParserError::WorkLimit
+            | CssParserError::Tokenization(_)),
+        ) => {
+            return Err(format!("unexpected CSS parse failure: {error}"));
+        }
+    };
+    for component in doc.components() {
+        if !doc.has_errors() {
+            css_token_value(source, &component.token)
+                .map_err(|error| format!("CSS parser component cannot be decoded: {error}"))?;
+        }
+        source
+            .slice(component.span)
+            .map_err(|error| format!("CSS component span: {error}"))?;
+        let mut end = component.token.span.end();
+        for &id in &component.values {
+            let child = doc.component(id).ok_or("missing CSS component")?;
+            if child.span.start() < end || child.span.end() > component.span.end() {
+                return Err(format!(
+                    "CSS child component spans are not ordered and contained: parent {:?}, child {:?}, previous end {end}",
+                    component.span, child.span
+                ));
+            }
+            end = child.span.end();
+        }
+        if let Some(closing) = component.closing
+            && (closing.span.start() < end || closing.span.end() != component.span.end())
+        {
+            return Err("CSS component closer is outside its span".to_owned());
+        }
+    }
+    for node in doc.nodes() {
+        source
+            .slice(node.span)
+            .map_err(|error| format!("CSS syntax span: {error}"))?;
+        if let CssNodeKind::Rule(rule) = &node.kind {
+            let mut end = node.span.start();
+            for &id in &rule.children {
+                let child = doc.node(id).ok_or("missing CSS syntax child")?;
+                if child.span.start() < end || child.span.end() > node.span.end() {
+                    return Err("CSS syntax children are not ordered and contained".to_owned());
+                }
+                end = child.span.end();
+            }
+        }
+    }
+    for error in doc.diagnostics() {
+        source
+            .validate_offset(error.offset)
+            .map_err(|error| format!("CSS diagnostic offset: {error}"))?;
+    }
+    if !doc
+        .diagnostics()
+        .windows(2)
+        .all(|pair| pair[0].offset <= pair[1].offset)
+    {
+        return Err("CSS diagnostics are out of source order".to_owned());
+    }
+    let count = doc.components().len() + doc.nodes().len();
+    if parse_css(
+        source,
+        CssLimits::default(),
+        CssParserLimits {
+            max_nodes: count,
+            ..limits
+        },
+    )
+    .as_ref()
+        != Ok(&doc)
+    {
+        return Err("CSS parser node limit is not inclusive".to_owned());
+    }
+    if count > 0
+        && parse_css(
+            source,
+            CssLimits::default(),
+            CssParserLimits {
+                max_nodes: count - 1,
+                ..limits
+            },
+        ) != Err(CssParserError::NodeLimit)
+    {
+        return Err("CSS parser did not enforce its node limit".to_owned());
+    }
+    let count = doc.diagnostics().len();
+    if parse_css(
+        source,
+        CssLimits::default(),
+        CssParserLimits {
+            max_diagnostics: count,
+            ..limits
+        },
+    )
+    .as_ref()
+        != Ok(&doc)
+    {
+        return Err("CSS parser diagnostic limit is not inclusive".to_owned());
+    }
+    if count > 0
+        && parse_css(
+            source,
+            CssLimits::default(),
+            CssParserLimits {
+                max_diagnostics: count - 1,
+                ..limits
+            },
+        ) != Err(CssParserError::DiagnosticLimit)
+    {
+        return Err("CSS parser did not enforce its diagnostic limit".to_owned());
     }
     Ok(())
 }
