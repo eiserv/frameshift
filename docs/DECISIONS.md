@@ -83,6 +83,12 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-073 | Workspace members as each package manager release reads them | Accepted |
 | D-074 | Next.js framework, version, configuration, and router detection | Accepted |
 | D-075 | `frameshift inspect` reports existing facts for every workspace package | Accepted |
+| D-076 | M2 closure with adversarial inspect fixtures, completed by its last merge | Accepted |
+| D-077 | CSS tokenizer first, from the pinned Editor's Draft, toward a full Sass grammar | Accepted |
+| D-078 | Generic CSS structure with bounded recovery | Accepted |
+| D-079 | Begin the complete SCSS parser and include indented Sass | Accepted |
+| D-080 | Continue Sass with legacy indented mixin shorthand | Accepted |
+| D-081 | Structured Sass selectors with the evaluation-time grammars | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -101,7 +107,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | P-016 | Finding codes and identifier schemes | Accepted |
 | P-017 | Minimal relocation policy for output layout | Superseded by D-024 |
 | DF-001 to DF-012 | Deferred decisions | Deferred or resolved (see table) |
-| Q-001 to Q-013 | Open questions | Open or resolved (see table) |
+| Q-001 to Q-014 | Open questions | Open or resolved (see table) |
 | E1 to E5 | Experiments | E1 and E2 passed; others planned |
 
 ## Accepted decisions
@@ -924,6 +930,21 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale and evolution (`D-033`):** Sharing the existing grammar keeps both forms' context restrictions and limits consistent, and supplies the same callable facts for later semantic analysis without inventing source text. This completes a bounded syntax increment while the remaining full-conformance work stays explicit.
 - **Bounds and dependencies:** Existing `sass.*` limits and the pinned parse-only oracle apply unchanged. No new dependency, evaluation, or import loading is introduced. Full Sass conformance and transformation eligibility remain outside this increment.
 - **Validation:** IMPLEMENTATION.md section 35 records the facade, oracle, and fuzzing evidence.
+
+### D-081: Structured Sass selectors with the evaluation-time grammars
+
+- **Status:** Accepted (2026-10-21). Through the Claude Code question interface, the owner selected the Sass selector grammar as the next M3 increment, chose structured selector nodes over validation alone, and authorized squash integration after a green required check and resolved reviews. The grammar sources, context rules, fallback, and oracle below are agent defaults within those choices, recorded here for review.
+- **Context:** `D-079` retained style rule selectors as raw interpolated text with unchecked evidence. Dart Sass 1.105.2 also keeps a selector as raw text while parsing and parses the evaluated text later: with its selector parser, or with its keyframe selector parser while evaluating inside `@keyframes`. Its parser API can instead parse selectors at parse time (`parseSelectors`, used by `sass-parser`); that grammar accepts interpolation but rejects input that compiles, such as keyframe percentages and consecutive combinators.
+- **Decision:**
+  - **Representation:** a style rule's first child is a `SelectorList` of `ComplexSelector` nodes, whose children are `CompoundSelector` and explicit `Combinator` nodes in source order; simple selectors are type, universal (with their namespace form), class, ID, placeholder, nesting (`&` with an optional suffix), attribute (namespace, operator, value, modifier), and pseudo selectors (`::` flag, raw argument and/or nested selector list). Keyframe blocks get a `KeyframeSelectorList`. Spans are original; names keep their spelling and escapes.
+  - **Grammar:** interpolation-free selectors use the evaluation-time grammars of Dart Sass 1.105.2 on their original source extent, including the `An+B` microsyntax and single-letter attribute modifiers. Selectors with interpolation use the parse-time interpolated grammar and always carry `Selector` evidence, because evaluation parses their text again; inside `@keyframes` they stay raw.
+  - **Context:** children of an at-rule whose plain name without vendor prefix is exactly `keyframes` use the keyframe grammar. Mixin bodies, include content blocks, at-rules with interpolated names, style rules inside keyframe blocks, and `@at-root` queries inside keyframes have an include-site or evaluation-dependent grammar: they are parsed with the selector grammar and carry `Selector` evidence.
+  - **Fallback:** a selector that its grammar rejects stays raw `InterpolatedText` with `Selector` evidence and is not a syntax error, because the compiler's parse step accepts it and evaluation may never reach it. Pseudo arguments containing `!`, `;`, `{`, `}`, or `//`, and indented loud comments between non-whitespace characters, also fall back.
+  - **Neighbors:** an inline `@at-root` selector becomes a style rule child; `AtRootPrelude` evidence covers only queries. `@extend` targets stay raw with `Selector` evidence. In indented syntax, comments between a trailing comma and the line end no longer stop a continued header, as Dart Sass omits them.
+- **Validation:** facade tests cover structure, keyframes, evidence, `@at-root`, and limits. A new opt-in oracle compiles generated fictional cases without module or import rules with pinned Sass 1.105.2 and requires that exactly the compiled selectors are structured without evidence; the existing parse-only oracle still agrees. The `sass` fuzz target checks selector kinds and evidence for raw selectors. IMPLEMENTATION.md section 35 records the evidence.
+- **Rationale and evolution (`D-033`):** the evaluation grammar decides what reaches CSS, so it, not the stricter parse-time grammar, defines established selector structure. Structured class, placeholder, and parent selectors serve later CSS Modules analysis and span edits; context and interpolation evidence keeps include-dependent results fail closed.
+- **Tradeoffs and limitations:** acceptance stays a superset of the compiler's parse step, and `sass-parser` rejects some accepted, compiling selectors. Escaped `An+B` keywords fail in 1.105.2 although a newer sass-spec revision expects them. Comment joining in indented syntax is not modeled. No selector result authorizes transformation while full Sass conformance is outstanding (`D-079`).
+- **Revisit if:** Dart Sass changes either selector grammar, removes the deprecated adjacent compounds or bogus combinators, or later analysis needs `@extend` targets as structure.
 
 ## Technique proposals and related accepted decisions
 
