@@ -78,9 +78,9 @@ pub use regexp::{
 pub use regexp_pattern::RegExpPatternError;
 pub use sass::{
     SassAtRule, SassAttributeOperator, SassBinaryOperator, SassCombinator, SassComment,
-    SassDocument, SassError, SassErrorKind, SassLimits, SassListSeparator, SassNamespace, SassNode,
-    SassNodeId, SassNodeKind, SassSyntax, SassUnaryOperator, SassUnchecked, SassUncheckedKind,
-    parse_sass,
+    SassConditionOperator, SassDocument, SassError, SassErrorKind, SassLimits, SassListSeparator,
+    SassMediaRelation, SassNamespace, SassNode, SassNodeId, SassNodeKind, SassSyntax,
+    SassUnaryOperator, SassUnchecked, SassUncheckedKind, parse_sass,
 };
 pub use template::{
     TemplateContext, TemplateKind, TemplateMode, TemplatePosition, TemplateToken, scan_js_template,

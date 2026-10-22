@@ -1,8 +1,8 @@
 //! Import items and URL classification, without loading a stylesheet.
 
 use super::{
-    Parser, SassError, SassErrorKind as Error, SassNodeId as Id, SassNodeKind as Kind, SassSyntax,
-    css_space, decode_name, module_url, newline,
+    Parser, SassConditionOperator as Operator, SassError, SassErrorKind as Error, SassNodeId as Id,
+    SassNodeKind as Kind, SassSyntax, condition::ValueOptions, css_space, module_url, newline,
 };
 
 impl Parser<'_> {
@@ -152,37 +152,42 @@ impl Parser<'_> {
     fn import_modifiers(&mut self) -> Result<Id, SassError> {
         let start = self.pos;
         let mut parts = Vec::new();
-        // Modifier grammar is a separate remaining increment. Preserve its
-        // comma ambiguity as Sass does: after a bare identifier, a comma
-        // starts a media-query list rather than another import item.
+        // As in Dart Sass, a comma after a bare name starts a media query
+        // list rather than another import item, while a comma after a
+        // modifier function can introduce another import item.
         loop {
             if self.at("#{") || self.name_start() || self.at("-#{") {
-                let name_start = self.pos;
-                if self.at("-#{") {
-                    self.bump()?;
-                }
-                let name = self.interpolated_name()?;
-                self.nodes[name.0].span = super::Span::new(name_start, self.end(name)).unwrap();
-                parts.push(name);
-                if self.at("(")
-                    && !decode_name(self.spelling(name), false).eq_ignore_ascii_case("and")
-                {
-                    parts.push(self.raw_group()?);
+                let name = self.condition_identifier()?;
+                let plain = self.plain_name(name).map(|name| name.to_lowercase());
+                if plain.as_deref() != Some("and") && self.eat("(")? {
+                    let argument = if plain.as_deref() == Some("supports") {
+                        self.import_supports()?
+                    } else {
+                        self.declaration_value(ValueOptions {
+                            allow_empty: true,
+                            allow_semicolon: true,
+                            allow_colon: true,
+                            lines: true,
+                        })?
+                    };
+                    self.expect(")")?;
+                    let function_start = self.start(name);
+                    parts.push(self.node(
+                        function_start,
+                        Kind::ImportFunction,
+                        vec![name, argument],
+                    )?);
                     self.skip(self.syntax == SassSyntax::Scss)?;
                 } else {
+                    parts.push(name);
                     self.skip(self.syntax == SassSyntax::Scss)?;
                     if self.eat(",")? {
-                        let (rest, _) = self.raw_header(false)?;
-                        if self.start(rest) == self.end(rest) {
-                            return Err(self.error(Error::ExpectedSyntax));
-                        }
-                        parts.push(rest);
+                        parts.push(self.media_query_list()?);
                         break;
                     }
                 }
             } else if self.at("(") {
-                let (rest, _) = self.raw_header(false)?;
-                parts.push(rest);
+                parts.push(self.media_query_list()?);
                 break;
             } else {
                 break;
@@ -190,6 +195,48 @@ impl Parser<'_> {
         }
         let end = self.end(*parts.last().unwrap());
         self.node_between(start, end, Kind::ImportModifiers, parts)
+    }
+
+    /// The condition inside `supports(...)`, which also admits a bare
+    /// declaration or function.
+    fn import_supports(&mut self) -> Result<Id, SassError> {
+        self.skip(true)?;
+        let start = self.pos;
+        if self.name_start() && self.module_keyword("not", false)? {
+            let not = self.node(start, Kind::ConditionOperator(Operator::Not), Vec::new())?;
+            self.skip(true)?;
+            let operand = self.supports_in_parens()?;
+            return self.node(start, Kind::SupportsNegation, vec![not, operand]);
+        }
+        if self.at("(") {
+            return self.supports_condition(true);
+        }
+        if self.at("#{") || self.name_start() || self.at("-#{") {
+            let nodes = self.nodes.len();
+            let comments = self.comments.len();
+            let name = self.condition_identifier()?;
+            if self.eat("(")? {
+                let arguments = self.declaration_value(ValueOptions {
+                    allow_empty: true,
+                    allow_semicolon: true,
+                    allow_colon: true,
+                    lines: true,
+                })?;
+                self.expect(")")?;
+                return self.node(start, Kind::SupportsFunction, vec![name, arguments]);
+            }
+            // Not a function: reparse the name as a declaration expression.
+            self.pos = start;
+            self.nodes.truncate(nodes);
+            self.comments.truncate(comments);
+        }
+        let before = self.expression_newlines;
+        self.expression_newlines = true;
+        let name = self.expression(true)?;
+        self.expression_newlines = before;
+        self.expect(":")?;
+        let value = self.supports_declaration_value(name)?;
+        self.node(start, Kind::SupportsDeclaration, vec![name, value])
     }
 }
 

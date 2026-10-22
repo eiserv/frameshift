@@ -101,6 +101,12 @@ impl Parser<'_> {
     }
 
     fn operator(&self) -> Option<(Binary, u8, &'static str)> {
+        // A media feature ends its operands at a top-level comparison.
+        if self.until_comparison
+            && (self.at("<") || self.at(">") || (self.at("=") && !self.at("==")))
+        {
+            return None;
+        }
         for (text, operator, precedence) in [
             ("or", Binary::Or, 1),
             ("and", Binary::And, 2),
@@ -475,6 +481,8 @@ impl Parser<'_> {
         self.expression_newlines = true;
         let equals = self.single_equals;
         self.single_equals = false;
+        let until = self.until_comparison;
+        self.until_comparison = false;
         let first = self.expression(false)?;
         self.skip(true)?;
         let mut items = vec![first];
@@ -506,6 +514,7 @@ impl Parser<'_> {
         self.expect(close)?;
         self.expression_newlines = before;
         self.single_equals = equals;
+        self.until_comparison = until;
         let kind = if is_map {
             Kind::Map
         } else if !bracketed && !comma {
@@ -534,8 +543,10 @@ impl Parser<'_> {
         self.skip(true)?;
         let before = self.expression_newlines;
         let equals = self.single_equals;
+        let until = self.until_comparison;
         self.expression_newlines = true;
         self.single_equals = !parameters && allow_single_equal;
+        self.until_comparison = false;
         let mut children = Vec::new();
         let mut names = BTreeSet::new();
         let mut named = false;
@@ -598,6 +609,7 @@ impl Parser<'_> {
         self.expect(")")?;
         self.expression_newlines = before;
         self.single_equals = equals;
+        self.until_comparison = until;
         let result = self.node(
             start,
             if parameters {
