@@ -106,7 +106,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 
 - Deterministic limits on maximum file size for parsing, total files, total bytes, directory depth, entries read, `.gitignore` bytes and matching work, syntax nesting depth, and token counts per file. Defaults are documented, and a limit that is reached produces a finding. The run-wide input limits, atomic budgets, and the checked set of all subsystem limits are implemented as values (`D-061`, section 21 of [IMPLEMENTATION.md](IMPLEMENTATION.md)), and discovery enforces the input limits; a cumulative limit stops discovery and marks the inventory incomplete (`D-064`). No environment variable or project file changes a limit.
 - Parsers either avoid recursion where input controls the depth, or enforce an explicit depth bound well below the stack limit.
-- Future parser recovery has explicit per-file diagnostic and recovery-work limits, guarantees forward progress, and stops if lexical context cannot be synchronized safely (`D-034`). Recovery never makes an erroneous file eligible for transformation.
+- CSS and optional JavaScript parser recovery have explicit per-file diagnostic and recovery-work limits, guarantee forward progress, and stop if lexical context cannot be synchronized safely (`D-034`, `D-078`, `D-085`). Recovery never makes an erroneous file eligible for transformation.
 - Limits are based on size and counts, not time, so results stay deterministic. External tools in verification have timeouts, because their behavior is outside Frameshift's control.
 
 ### 7.3 No execution of project code

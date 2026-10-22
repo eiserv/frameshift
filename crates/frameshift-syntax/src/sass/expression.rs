@@ -130,6 +130,9 @@ impl Parser<'_> {
             if !self.at(text) {
                 continue;
             }
+            if operator == Binary::Subtract && self.name_start() {
+                continue;
+            }
             if matches!(operator, Binary::Or | Binary::And)
                 && self.text[self.pos + text.len()..]
                     .chars()
@@ -377,8 +380,8 @@ impl Parser<'_> {
                 }
             }
         }
-        if !self.eat("%")? && self.name_start() {
-            self.name_body()?;
+        if !self.eat("%")? && self.name_start() && !self.at("--") {
+            self.name_body_with_unit(true)?;
         }
         self.node(start, Kind::Number, Vec::new())
     }

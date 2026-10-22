@@ -865,8 +865,21 @@ impl Parser<'_> {
         self.node(start, SassNodeKind::Identifier, Vec::new())
     }
     fn name_body(&mut self) -> Result<(), SassError> {
+        self.name_body_with_unit(false)
+    }
+    fn name_body_with_unit(&mut self, unit: bool) -> Result<(), SassError> {
         while let Some(c) = self.peek() {
-            if c == '\\' {
+            // A literal subtraction begins before a digit or decimal point;
+            // escaped hyphens and digits remain part of the unit identifier.
+            if unit
+                && c == '-'
+                && self.text[self.pos + 1..]
+                    .chars()
+                    .next()
+                    .is_some_and(|next| next == '.' || next.is_ascii_digit())
+            {
+                break;
+            } else if c == '\\' {
                 self.escape(true)?;
             } else if c.is_ascii_alphanumeric() || c == '_' || c == '-' || c >= '\u{80}' {
                 self.bump()?;

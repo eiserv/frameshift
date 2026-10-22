@@ -10,6 +10,8 @@ mod extend_cases;
 mod if_cases;
 #[path = "sass/import.rs"]
 mod import_cases;
+#[path = "sass/number.rs"]
+mod number_cases;
 #[path = "sass/special_function.rs"]
 mod special_function_cases;
 #[path = "sass/url.rs"]
@@ -1599,6 +1601,7 @@ while (at < data.length) {
     cases.extend(css_function_cases::cases());
     cases.extend(url_cases::cases());
     cases.extend(special_function_cases::cases());
+    cases.extend(number_cases::cases());
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)
