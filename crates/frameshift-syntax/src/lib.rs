@@ -61,8 +61,9 @@ pub use lexical::{
 };
 pub use numeric::{NumericBase, NumericKind, NumericLiteral, scan_js_number};
 pub use parser::{
-    JsDialect, ParseError, ParseErrorKind, ParseLimits, StrictModeError, parse_js_expression,
-    parse_js_program,
+    JsDialect, JsProgramParse, ParseError, ParseErrorKind, ParseLimits, RecoveryLimits,
+    RecoveryStop, RecoveryStopKind, StrictModeError, parse_js_expression, parse_js_program,
+    parse_js_program_with_recovery,
 };
 pub use punctuator::{
     GreaterThanMode, JsLexicalGoal, Punctuator, PunctuatorContext, PunctuatorToken,

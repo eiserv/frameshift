@@ -4,6 +4,8 @@
 mod condition_cases;
 #[path = "sass/extend.rs"]
 mod extend_cases;
+#[path = "sass/if_expression.rs"]
+mod if_cases;
 #[path = "sass/import.rs"]
 mod import_cases;
 
@@ -1587,6 +1589,7 @@ while (at < data.length) {
     );
     cases.extend(condition_cases::cases());
     cases.extend(extend_cases::cases());
+    cases.extend(if_cases::cases());
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)

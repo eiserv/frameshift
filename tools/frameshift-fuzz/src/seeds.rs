@@ -20,7 +20,7 @@ const GENERATED_PER_FAMILY: u64 = 8;
 /// one top-level item.
 const GENERATED_TARGET: usize = 256;
 
-const PROGRAMS: [&str; 12] = [
+const PROGRAMS: [&str; 17] = [
     "#!/usr/bin/env node\n'use strict';\nvar total = 0;\nfor (var i = 0; i < 3; i++) { total += i; }\nmodule.exports = total;\n",
     "<!-- legacy\nwith (scope) { value = 017 + 08 + '\\101'; }\nlabel: function legacy() {}\nif (flag) function inner() {}\n--> trailing\n",
     "import base, * as all from './base.js' with { type: 'json' };\nexport { base as default, all };\nexport * as more from './more.js';\nawait Promise.resolve(import.meta.url);\n",
@@ -33,6 +33,11 @@ const PROGRAMS: [&str; 12] = [
     "let a = /(?<year>\\d{4})-\\k<year>/dgu, b = `line\\u{1F600}${a}\\\nnext`, c = 0x1F_FF + 1e-3 + .5 + 10n;\nouter: for (;;) { break outer; }\nswitch (a) { case 1: default: }\n",
     "using res = getResource();\nlet x = a ? b : c, y = (d, e) => d ** e, z = !f, w = typeof g, v = void 0;\nx ||= y &&= z ??= w;\n",
     "\u{FEFF}// signature\n/* block */ var \u{E9} = '\\u00e9', \u{1D49C} = \"\\x41\";\n",
+    "const a = ; /* ; */ const b = ; valid(); const c = ;",
+    "'use strict'; const a = ; with (o) {} const b = ;",
+    "const a = [';', (1 + )]; const b = ;",
+    "const a = /;/ + ; const b = ;",
+    "const a = (1 +\n--> ; ignored\n); const b = ;",
 ];
 
 const EXPRESSIONS: [&str; 16] = [
@@ -530,6 +535,12 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
             "url(",
             "@media",
             "@supports",
+            "if(",
+            "IF(",
+            "sass(",
+            "style(",
+            "var(",
+            "; else:",
             "only",
             "screen",
             "<=",
@@ -836,6 +847,11 @@ bun@1.4.0",
             ".p { @extend .a /* #{ */ ; @extend ; }",
             ".p { @at-root (without: media supports) { .c { x: y; } } @at-root (with: $m) { .c { x: y; } } }",
             ".p\n  @at-root (WITH\n    : rule)\n    .c\n      x: y\n",
+            ".a { x: if(sass($x > 1) and (not style(--a: b)): red; else: blue); }",
+            ".a\n  x: IF(var(--a) style(--b:c): a; else: b)\n",
+            "$x: if(foo(/* #{ */ a), a, b);",
+            "$x: if(sass(true) var(--a): a);",
+            "@media (width: if(sass(true): 1px; else: 2px)) { .a { x: y; } }",
         ]
         .iter()
         .map(|text| (*text).to_owned())
