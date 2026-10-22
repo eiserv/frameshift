@@ -18,7 +18,7 @@ pub(super) struct ValueOptions {
 
 /// Parser state that a failed speculative parse must restore. Work charges
 /// are never restored.
-struct Checkpoint {
+pub(super) struct Checkpoint {
     pos: usize,
     nodes: usize,
     comments: usize,
@@ -33,7 +33,7 @@ struct Checkpoint {
 }
 
 impl Parser<'_> {
-    fn checkpoint(&self) -> Checkpoint {
+    pub(super) fn checkpoint(&self) -> Checkpoint {
         Checkpoint {
             pos: self.pos,
             nodes: self.nodes.len(),
@@ -49,7 +49,7 @@ impl Parser<'_> {
         }
     }
 
-    fn restore(&mut self, checkpoint: &Checkpoint) {
+    pub(super) fn restore(&mut self, checkpoint: &Checkpoint) {
         self.pos = checkpoint.pos;
         self.nodes.truncate(checkpoint.nodes);
         self.comments.truncate(checkpoint.comments);
@@ -350,6 +350,7 @@ impl Parser<'_> {
                     | Kind::Variable
                     | Kind::Call
                     | Kind::SpecialFunction
+                    | Kind::IfExpression
                     | Kind::String { quoted: true }
                     | Kind::ParentSelector
                     | Kind::Null
@@ -635,7 +636,7 @@ impl Parser<'_> {
     }
 
     /// A loud comment as raw text: interpolation is not parsed inside it.
-    fn raw_loud_comment(&mut self) -> Result<(), SassError> {
+    pub(super) fn raw_loud_comment(&mut self) -> Result<(), SassError> {
         let start = self.pos;
         self.expect("/*")?;
         while !self.eat("*/")? {

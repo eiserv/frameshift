@@ -424,6 +424,26 @@ impl Parser<'_> {
         if self.at("(") {
             let function_name = self.text[start..self.pos].to_ascii_lowercase();
             let name = self.node(start, Kind::Identifier, Vec::new())?;
+            // Only the exact decoded lower-case name tries the legacy grammar.
+            // A failed attempt retains its work charges, like supports lookahead.
+            if !self.text[start..self.pos].contains('.') && plain.eq_ignore_ascii_case("if") {
+                if plain == "if" {
+                    let checkpoint = self.checkpoint();
+                    match self.arguments(false, true) {
+                        Ok(args) => return self.node(start, Kind::Call, vec![name, args]),
+                        Err(error)
+                            if matches!(
+                                error.kind,
+                                Error::NodeLimit | Error::DepthLimit | Error::WorkLimit
+                            ) =>
+                        {
+                            return Err(error);
+                        }
+                        Err(_) => self.restore(&checkpoint),
+                    }
+                }
+                return self.if_expression(start, name);
+            }
             if matches!(
                 function_name.as_str(),
                 "url" | "-webkit-calc" | "-moz-calc" | "element" | "expression" | "progid"
@@ -640,7 +660,9 @@ impl Parser<'_> {
             if self.peek().is_none() {
                 return Err(self.error(Error::Unterminated));
             }
-            if self.at("#{") {
+            if self.at("/*") {
+                self.raw_loud_comment()?;
+            } else if self.at("#{") {
                 children.push(self.interpolation()?);
             } else if self.peek().is_some_and(|c| matches!(c, '\'' | '"')) {
                 children.push(self.quoted()?);

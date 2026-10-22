@@ -64,6 +64,18 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                 .map_err(|e| format!("Sass unchecked span: {e}"))?;
         }
         for node in doc.nodes() {
+            if node.kind == SassNodeKind::IfExpression
+                && (node.children.len() < 2
+                    || doc.node(node.children[0]).unwrap().kind != SassNodeKind::Identifier
+                    || node.children[1..].iter().any(|&id| {
+                        !matches!(doc.node(id).unwrap().kind, SassNodeKind::IfBranch { .. })
+                    }))
+            {
+                return Err("invalid modern if expression structure".to_owned());
+            }
+            if matches!(node.kind, SassNodeKind::IfBranch { .. }) && node.children.len() != 2 {
+                return Err("invalid modern if branch arity".to_owned());
+            }
             if let SassNodeKind::Import { css } = node.kind {
                 let url = node
                     .children

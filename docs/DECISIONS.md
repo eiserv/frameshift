@@ -89,6 +89,10 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-079 | Begin the complete SCSS parser and include indented Sass | Accepted |
 | D-080 | Continue Sass with legacy indented mixin shorthand | Accepted |
 | D-081 | Structured Sass selectors with the evaluation-time grammars | Accepted |
+| D-082 | Complete the Sass module-rule grammar | Accepted |
+| D-083 | Structured Sass media queries and supports conditions | Accepted |
+| D-084 | Structured Sass extension targets and `@at-root` queries | Accepted |
+| D-085 | Modern Sass `if()` and JavaScript recovery as the next M3 work | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -982,6 +986,15 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale and evolution (`D-033`):** extension targets relate placeholder, class, and type selectors across rules; structuring them with the evaluation grammar gives later stylesheet and CSS Modules analysis exact locations without evaluating anything. Literal queries state which enclosing rules a block leaves, which later analysis of the emitted CSS structure needs. Keeping evaluation-dependent forms raw with evidence keeps them fail closed.
 - **Tradeoffs and limitations:** the query rule is conservative: quoted strings, booleans, parenthesized rules, and trailing commas can compile but keep evidence. Interpolated targets stay raw, because the reference has no parse-time selector grammar for them. In indented syntax, a loud comment glued between selector characters keeps evidence. Whether an extension finds its target, and extension across media queries, are evaluation behavior and not modeled. No result authorizes transformation while full Sass conformance is outstanding (`D-079`).
 - **Revisit if:** Dart Sass changes the extension target reader or restrictions, such as allowing compound targets again, changes the query grammar, or later analysis needs evaluated query values.
+
+### D-085: Modern Sass `if()` and JavaScript recovery as the next M3 work
+
+- **Status:** Accepted (2026-10-22). Through the Codex App question interface, the owner selected both offered M3 increments: modern CSS-style Sass `if()` with structured conditions and bounded JavaScript parser recovery. The owner requested a pull request and monitoring of its checks; the latest integration policy in `D-084` leaves the pull request open for the owner to merge.
+- **Decision:** Continue `D-079` against pinned Dart Sass 1.105.2 with modern `if()` branches, parenthesized conditions, negation, homogeneous operations, `sass()` expressions, CSS condition functions, and arbitrary substitutions. Preserve source spelling, ordered flat arenas, comments, and explicit bounds. Retain the legacy lowercase `if()` argument grammar, tried first as in the reference, without refunding failed work. Parsing neither evaluates conditions nor loads modules.
+- **Representation and validation (agent defaults):** `IfExpression` contains its name and `IfBranch { otherwise }` children. A branch keeps its condition or `else` identifier and value. Dedicated `IfCondition*` nodes preserve the condition grammar; CSS function arguments remain interpolated text. Raw substitution sequences reject contained `sass()` conditions as the reference does. Existing Sass node, depth, and work limits apply; media queries containing an `IfExpression` retain value-dependent evidence. Inline loud trivia and raw groups retain uninterpreted comment contents, while standalone loud comments retain interpolation. The parse-only oracle includes generated modern and legacy forms in both syntax modes.
+- **JavaScript:** Implement `D-034` without inserting repairs or exposing erroneous files to transformations. Concrete synchronization points, API contracts, limits, and validation are documented with that implementation in section 36 of IMPLEMENTATION.md when it exists. This decision authorizes the increment, not a claim that it is already implemented.
+- **Rationale and evolution (`D-033`):** Structured conditions support later static analysis and source-preserving edits. Separating diagnostics from transformable syntax keeps the existing fail-closed engine contract. Full Sass conformance and M3 completion remain outstanding.
+- **Dependencies:** No new runtime dependency. External test oracles remain pinned and outside the repository.
 
 ## Technique proposals and related accepted decisions
 

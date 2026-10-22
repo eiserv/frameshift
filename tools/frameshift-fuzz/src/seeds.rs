@@ -530,6 +530,12 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
             "url(",
             "@media",
             "@supports",
+            "if(",
+            "IF(",
+            "sass(",
+            "style(",
+            "var(",
+            "; else:",
             "only",
             "screen",
             "<=",
@@ -836,6 +842,10 @@ bun@1.4.0",
             ".p { @extend .a /* #{ */ ; @extend ; }",
             ".p { @at-root (without: media supports) { .c { x: y; } } @at-root (with: $m) { .c { x: y; } } }",
             ".p\n  @at-root (WITH\n    : rule)\n    .c\n      x: y\n",
+            ".a { x: if(sass($x > 1) and (not style(--a: b)): red; else: blue); }",
+            ".a\n  x: IF(var(--a) style(--b:c): a; else: b)\n",
+            "$x: if(foo(/* #{ */ a), a, b);",
+            "$x: if(sass(true) var(--a): a);",
         ]
         .iter()
         .map(|text| (*text).to_owned())

@@ -208,7 +208,7 @@ fn import_spans_comments_literal_paths_and_modifier_structure() {
     );
     assert_eq!(doc.unchecked_syntax().count(), 0);
     assert_eq!(doc.comments().len(), 1);
-    assert_eq!(doc.comments()[0].interpolations.len(), 1);
+    assert!(doc.comments()[0].interpolations.is_empty());
     assert_eq!(doc.statements().len(), 2);
 }
 

@@ -7,6 +7,7 @@ mod at_root;
 mod condition;
 mod expression;
 mod extend;
+mod if_expression;
 mod import;
 mod module;
 mod module_url;
@@ -352,6 +353,26 @@ pub enum SassNodeKind {
     MapEntry,
     /// A function name followed by an argument list.
     Call,
+    /// A modern CSS `if()`: its source-spelled name followed by `IfBranch` nodes.
+    IfExpression,
+    /// A condition (or the source-spelled `else` identifier), then its value.
+    IfBranch {
+        /// Whether this branch starts with `else`.
+        otherwise: bool,
+    },
+    /// A `sass(...)` condition with one SassScript expression child.
+    IfConditionSass,
+    /// A CSS condition function: its name, then raw interpolated arguments.
+    IfConditionFunction,
+    /// Parentheses around one modern `if()` condition.
+    IfConditionParenthesized,
+    /// A `not` keyword followed by one condition group.
+    IfConditionNegation,
+    /// Condition groups separated by one repeated `and` or `or` keyword.
+    IfConditionOperation,
+    /// Condition groups and keywords whose grammar includes arbitrary CSS
+    /// substitution. Children preserve parsed groups in source order.
+    IfConditionRaw,
     /// CSS special-function contents with interpolation, not SassScript.
     SpecialFunction,
     /// An invocation's arguments, including their enclosing parentheses.
@@ -887,7 +908,13 @@ impl Parser<'_> {
             } else if self.at("//") {
                 self.comment(true, statement)?;
             } else if self.at("/*") {
-                self.comment(false, statement)?;
+                if statement {
+                    self.comment(false, true)?;
+                } else {
+                    // Inline trivia is discarded by Sass, so its interpolation
+                    // markers are text, unlike retained statement comments.
+                    self.raw_loud_comment()?;
+                }
             } else {
                 break;
             }

@@ -220,3 +220,5 @@ The implemented CI, Release, and Package workflows and their current limits are 
 - Normalization rules and thresholds for static output comparison, and the HTML parser to use (`Q-005`).
 - Browser tool and versioned interaction-check protocol for V1 runtime verification and fixture checks (decided in M10).
 - Concrete project list for the real-world corpus, proposed by agents and approved by the project owner in M5 (`D-030`).
+
+Modern Sass `if()` facade and parse-only oracle cases cover legacy disambiguation, source-preserved branches and conditions, CSS substitutions, inline comments, both surface syntaxes, deterministic arenas, and shared resource bounds (`D-085`, IMPLEMENTATION.md section 35).
