@@ -48,6 +48,8 @@ Pure functions and small components: path normalization, semver matching, gitign
 
 The measurement harness's `--check` mode checks the complete generated JavaScript, JSX, TypeScript, TSX, and declaration-file corpora without timing. It verifies source-spanning programs, unique node reachability, nested and source-ordered spans, node spans that neither start nor end with trivia, template segments, comment delimiters, identical repeated parses, and byte-exact empty edits with full provenance. The unit suite applies the same checks to 720 files across 40 seeds and covers empty sources, Unicode, CRLF, tagged invalid escapes, a failed parse, conflicting tool modes, and all-empty memory reports. See section 6 of [IMPLEMENTATION.md](IMPLEMENTATION.md) for the command and limits. Development-time oracle comparisons outside the repository complement these checks: acceptance with V8, `@babel/parser`, and the pinned TypeScript compiler, and node spans with `@babel/parser` for JSX and with the pinned TypeScript compiler for the TypeScript dialects (section 5 of [IMPLEMENTATION.md](IMPLEMENTATION.md)).
 
+Plain CSS function facade and parse-only oracle cases check raw result values, literal versus escaped or underscore name prefixes, nested contexts, comments, statement boundaries, both syntaxes, deterministic arenas, and shared resource limits (`D-086`, IMPLEMENTATION.md section 35). The Sass fuzz target requires `CssDirective` evidence on every retained CSS rule.
+
 Modern Sass `if()` facade and parse-only oracle cases cover legacy disambiguation, source-preserved branches and conditions, CSS substitutions, inline comments, both surface syntaxes, deterministic arenas, and shared resource bounds (`D-085`, IMPLEMENTATION.md section 35).
 
 ### 3.3 Fuzzing

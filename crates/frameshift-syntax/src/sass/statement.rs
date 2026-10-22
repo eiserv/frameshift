@@ -2,7 +2,9 @@
 
 use super::{
     Parser, SassAtRule as At, SassError, SassErrorKind as Error, SassNodeId as Id,
-    SassNodeKind as Kind, SassSyntax, canonical_name, css_space, decode_name, newline,
+    SassNodeKind as Kind, SassSyntax, canonical_name,
+    condition::ValueOptions,
+    css_space, decode_name, newline,
     selector::{SelectorContext, plain_identifier, unvendor},
 };
 
@@ -15,6 +17,7 @@ pub(super) struct Context {
     content: bool,
     control: bool,
     declaration: bool,
+    plain_css_function: bool,
     selectors: SelectorContext,
 }
 
@@ -28,6 +31,7 @@ impl Default for Context {
             content: false,
             control: false,
             declaration: false,
+            plain_css_function: false,
             selectors: SelectorContext::Normal,
         }
     }
@@ -296,6 +300,14 @@ impl Parser<'_> {
             children.push(name);
             kind
         };
+        if kind == At::Function {
+            // The reference dispatches on the literal prefix before decoding
+            // a Sass callable name or applying callable context restrictions.
+            self.skip(true)?;
+            if self.at("--") {
+                kind = At::Css;
+            }
+        }
         if (matches!(kind, At::Use | At::Forward) && (!context.root || !use_allowed))
             || (kind == At::Return && !context.function)
             || (kind == At::Content && !context.mixin)
@@ -345,9 +357,9 @@ impl Parser<'_> {
             }
             At::Mixin | At::Function => {
                 let callable = self.identifier()?;
-                let plain = canonical_name(self.spelling(callable));
-                if plain.starts_with("--") {
-                    return Err(self.error(Error::UnsupportedSyntax));
+                let plain = decode_name(self.spelling(callable), false);
+                if kind == At::Mixin && self.spelling(callable).starts_with("--") {
+                    return Err(self.error(Error::InvalidContext));
                 }
                 let unprefixed = plain
                     .strip_prefix('-')
@@ -361,7 +373,7 @@ impl Parser<'_> {
                     return Err(self.error(Error::InvalidContext));
                 }
                 children.push(callable);
-                self.skip(self.syntax == SassSyntax::Scss)?;
+                self.skip(kind == At::Function || self.syntax == SassSyntax::Scss)?;
                 if self.at("(") {
                     children.push(self.arguments(true, false)?);
                 } else if kind == At::Function {
@@ -494,7 +506,25 @@ impl Parser<'_> {
             }
             At::Css => {
                 let name = children[0];
-                children.push(self.raw_header(false)?.0);
+                let plain_function = self
+                    .plain_name(name)
+                    .is_some_and(|name| name.eq_ignore_ascii_case("function"));
+                if plain_function {
+                    if self.at("!") {
+                        return Err(self.error(Error::ExpectedSyntax));
+                    }
+                    children.push(self.declaration_value(ValueOptions {
+                        allow_empty: true,
+                        allow_semicolon: false,
+                        allow_colon: true,
+                        allow_open_brace: false,
+                        silent_comments: true,
+                        lines: false,
+                    })?);
+                    child_context.plain_css_function = true;
+                } else {
+                    children.push(self.raw_header(false)?.0);
+                }
                 optional_block = true;
                 child_context.style = true;
                 // Evaluation parses keyframe selectors when the evaluated name
@@ -575,6 +605,12 @@ impl Parser<'_> {
         // belong to the rule, but not to the selector that follows it.
         let force_style =
             self.syntax == SassSyntax::Indented && !context.declaration && self.eat("\\")?;
+        if context.plain_css_function
+            && !force_style
+            && let Some(result) = self.css_function_result(start)?
+        {
+            return Ok(result);
+        }
         // Lookahead shares the real grammar and its work budget. It retains
         // no speculative nodes or comments and never guesses quote contexts.
         let nodes = self.nodes.len();
@@ -687,6 +723,75 @@ impl Parser<'_> {
             return Err(self.error(Error::ExpectedExpression));
         }
         self.node(start, Kind::Declaration, children)
+    }
+
+    fn css_function_result(&mut self, start: usize) -> Result<Option<Id>, SassError> {
+        let checkpoint = self.checkpoint();
+        let name = match self.interpolated_name() {
+            Ok(name) => name,
+            Err(error)
+                if matches!(
+                    error.kind,
+                    Error::NodeLimit | Error::DepthLimit | Error::WorkLimit
+                ) =>
+            {
+                return Err(error);
+            }
+            Err(_) => {
+                self.restore(&checkpoint);
+                return Ok(None);
+            }
+        };
+        // A glued loud comment is part of the reference's property name.
+        if self.at("/*") {
+            self.restore(&checkpoint);
+            return Ok(None);
+        }
+        self.skip(false)?;
+        if !self
+            .plain_name(name)
+            .is_some_and(|name| name.eq_ignore_ascii_case("result"))
+            || !self.eat(":")?
+        {
+            self.restore(&checkpoint);
+            return Ok(None);
+        }
+        // Result declarations are raw CSS, even when their contents are not
+        // SassScript or look like a nested property block. Preserve // text.
+        let end = self.peek().is_none_or(|c| match self.syntax {
+            SassSyntax::Scss => matches!(c, ';' | '}' | '{'),
+            SassSyntax::Indented => newline(c),
+        });
+        let value = if end {
+            self.node(self.pos, Kind::InterpolatedText, Vec::new())?
+        } else {
+            let value = self.declaration_value(ValueOptions {
+                allow_empty: false,
+                allow_semicolon: false,
+                allow_colon: true,
+                allow_open_brace: true,
+                silent_comments: false,
+                lines: false,
+            })?;
+            if self.syntax == SassSyntax::Indented {
+                let text = self.text;
+                let mut whitespace_only = true;
+                for c in text[self.start(value)..self.end(value)].chars() {
+                    self.visit()?;
+                    if !css_space(c) {
+                        whitespace_only = false;
+                        break;
+                    }
+                }
+                if whitespace_only {
+                    return Err(self.error(Error::ExpectedSyntax));
+                }
+            }
+            value
+        };
+        self.separator()?;
+        self.node(start, Kind::Declaration, vec![name, value])
+            .map(Some)
     }
 
     /// Completes a style rule from its raw selector `header`, whose syntax

@@ -64,6 +64,13 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                 .map_err(|e| format!("Sass unchecked span: {e}"))?;
         }
         for node in doc.nodes() {
+            if node.kind == SassNodeKind::AtRule(SassAtRule::Css)
+                && !unchecked.iter().any(|entry| {
+                    entry.kind == SassUncheckedKind::CssDirective && entry.span == node.span
+                })
+            {
+                return Err("CSS directive without unchecked evidence".to_owned());
+            }
             if node.kind == SassNodeKind::IfExpression
                 && (node.children.len() < 2
                     || doc.node(node.children[0]).unwrap().kind != SassNodeKind::Identifier
