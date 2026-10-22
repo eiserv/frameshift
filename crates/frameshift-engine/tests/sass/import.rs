@@ -1,4 +1,4 @@
-//! Import items, classification, literal paths, and retained modifier evidence.
+//! Import items, classification, literal paths, and structured modifiers.
 
 use super::{SassNodeKind as Kind, *};
 
@@ -183,7 +183,7 @@ fn import_items_classify_without_loading_and_enforce_context() {
 }
 
 #[test]
-fn import_spans_comments_literal_paths_and_modifier_evidence() {
+fn import_spans_comments_literal_paths_and_modifier_structure() {
     let text = "\u{feff}@import '#{$literal}', /* #{1 + 2} */ url(#{$path}) layer(base);\r\n$x: 1;";
     let src = source(text);
     let doc = parse_sass(&src, SassSyntax::Scss, SassLimits::default()).unwrap();
@@ -197,10 +197,16 @@ fn import_spans_comments_literal_paths_and_modifier_evidence() {
     assert_eq!(src.slice(second.span).unwrap(), "url(#{$path}) layer(base)");
     let literal = doc.node(first.children[0]).unwrap();
     assert!(literal.children.is_empty());
-    let unchecked: Vec<_> = doc.unchecked_syntax().collect();
-    assert_eq!(unchecked.len(), 1);
-    assert_eq!(unchecked[0].kind, SassUncheckedKind::ImportPrelude);
-    assert_eq!(src.slice(unchecked[0].span).unwrap(), "layer(base)");
+    let modifiers = doc.node(second.children[1]).unwrap();
+    assert_eq!(modifiers.kind, Kind::ImportModifiers);
+    let function = doc.node(modifiers.children[0]).unwrap();
+    assert_eq!(function.kind, Kind::ImportFunction);
+    assert_eq!(src.slice(function.span).unwrap(), "layer(base)");
+    assert_eq!(
+        doc.node(function.children[1]).unwrap().kind,
+        Kind::InterpolatedText
+    );
+    assert_eq!(doc.unchecked_syntax().count(), 0);
     assert_eq!(doc.comments().len(), 1);
     assert_eq!(doc.comments()[0].interpolations.len(), 1);
     assert_eq!(doc.statements().len(), 2);

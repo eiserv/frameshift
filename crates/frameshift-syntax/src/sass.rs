@@ -3,6 +3,7 @@
 //! The reference is Dart Sass 1.105.2 (`D-079`). Both surface syntaxes
 //! share the same arenas; indentation never rewrites the source text.
 
+mod condition;
 mod expression;
 mod import;
 mod module;
@@ -103,6 +104,34 @@ pub enum SassBinaryOperator {
     SingleEqual,
 }
 
+/// A logical keyword of a media query or supports condition, as spelled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SassConditionOperator {
+    /// `and`.
+    And,
+    /// `or`.
+    Or,
+    /// `not`.
+    Not,
+}
+
+/// The relation between the expressions of a media feature.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SassMediaRelation {
+    /// `:`, between a feature name and its value.
+    Colon,
+    /// `=` in a range.
+    Equal,
+    /// `<`.
+    Less,
+    /// `<=`.
+    LessEqual,
+    /// `>`.
+    Greater,
+    /// `>=`.
+    GreaterEqual,
+}
+
 /// A Sass directive; unknown CSS at-rules retain an interpolated prelude.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SassAtRule {
@@ -144,6 +173,10 @@ pub enum SassAtRule {
     Warn,
     /// `@error`.
     Error,
+    /// `@media`, whose header is a `MediaQueryList`.
+    Media,
+    /// `@supports`, whose header is a supports condition.
+    Supports,
     /// A CSS or unknown directive, without grammar-specific validation.
     Css,
 }
@@ -231,9 +264,46 @@ pub enum SassNodeKind {
         /// Whether the reference parser treats this as a plain CSS import.
         css: bool,
     },
-    /// An import's media, supports, layer, and other modifier text. Its
-    /// context-specific grammar remains explicitly unchecked.
+    /// An import's modifiers in source order: bare names (`Identifier`,
+    /// `InterpolatedText`, or `Interpolation`), `ImportFunction` nodes, and
+    /// at most one final `MediaQueryList`. As in Dart Sass, a comma after a
+    /// bare name starts that list.
     ImportModifiers,
+    /// A `name(...)` import modifier: the name, then a supports condition
+    /// for `supports`, or the raw `InterpolatedText` arguments otherwise.
+    ImportFunction,
+    /// Comma-separated `MediaQuery` children. The span ends after the last
+    /// query, without trailing whitespace or comments.
+    MediaQueryList,
+    /// One media query. Its children in source order are modifier and type
+    /// names (`Identifier`, `InterpolatedText`, or `Interpolation`),
+    /// `ConditionOperator` keywords, and `MediaInParens` or `Interpolation`
+    /// conditions.
+    MediaQuery,
+    /// A parenthesized media condition: nested conditions separated by
+    /// `ConditionOperator` keywords, `not` and its operand, or a feature of
+    /// one expression optionally followed by one or two `MediaRelation` and
+    /// expression pairs.
+    MediaInParens,
+    /// A media feature relation, as spelled.
+    MediaRelation(SassMediaRelation),
+    /// `and`, `or`, or `not` in a condition, as spelled.
+    ConditionOperator(SassConditionOperator),
+    /// A `not` keyword and its operand. Supports conditions are these
+    /// nodes, the other `Supports*` kinds, or a sole `Interpolation`; a
+    /// parenthesized condition's span includes its parentheses.
+    SupportsNegation,
+    /// Operands separated by one repeated `and` or `or` keyword.
+    SupportsOperation,
+    /// A declaration test: the name expression, then the value expression,
+    /// or raw `InterpolatedText` for a custom property.
+    SupportsDeclaration,
+    /// A function condition such as `selector(...)`: the name, then the
+    /// raw `InterpolatedText` arguments.
+    SupportsFunction,
+    /// Parenthesized text that is no declaration or condition: its leading
+    /// name, then the raw `InterpolatedText` that follows.
+    SupportsAnything,
     /// A source-spelled identifier, including escapes.
     Identifier,
     /// A property or selector fragment with interpolation children.
@@ -371,9 +441,10 @@ pub enum SassUncheckedKind {
     Selector,
     /// A CSS or unknown at-rule's context-specific grammar.
     CssDirective,
-    /// Import modifiers and media/supports conditions. Import URL syntax and
-    /// CSS-versus-Sass classification are checked independently.
-    ImportPrelude,
+    /// A `@media` query list whose evaluated text depends on values, such as
+    /// interpolation, variables, calls, or quoted strings. Dart Sass parses
+    /// that text again with its stricter evaluation-time query grammar.
+    MediaQuery,
     /// The query of `@at-root`.
     AtRootPrelude,
     /// Raw contents of a special CSS function.
@@ -455,6 +526,7 @@ pub struct SassDocument<'source> {
     statements: Vec<SassNodeId>,
     comments: Vec<SassComment>,
     selector_evidence: Vec<SassNodeId>,
+    media_evidence: Vec<SassNodeId>,
 }
 
 impl PartialEq for SassDocument<'_> {
@@ -465,6 +537,7 @@ impl PartialEq for SassDocument<'_> {
             && self.statements == other.statements
             && self.comments == other.comments
             && self.selector_evidence == other.selector_evidence
+            && self.media_evidence == other.media_evidence
     }
 }
 impl Eq for SassDocument<'_> {}
@@ -502,18 +575,19 @@ impl<'source> SassDocument<'source> {
     /// support. Full conformance remains M3 work; no result of this in-progress
     /// parser authorizes transformation.
     pub fn unchecked_syntax(&self) -> impl Iterator<Item = SassUnchecked> + '_ {
-        // Selector evidence is recorded in ascending node order while parsing.
+        // Evidence is recorded in ascending node order while parsing.
         let mut selectors = self.selector_evidence.iter().peekable();
+        let mut media = self.media_evidence.iter().peekable();
         self.nodes
             .iter()
             .enumerate()
             .filter_map(move |(index, node)| {
                 let kind = if selectors.next_if(|id| id.0 == index).is_some() {
                     SassUncheckedKind::Selector
+                } else if media.next_if(|id| id.0 == index).is_some() {
+                    SassUncheckedKind::MediaQuery
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::Css) {
                     SassUncheckedKind::CssDirective
-                } else if node.kind == SassNodeKind::ImportModifiers {
-                    SassUncheckedKind::ImportPrelude
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::Extend) {
                     SassUncheckedKind::Selector
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::AtRoot)
@@ -559,10 +633,12 @@ pub fn parse_sass(
         indentation: None,
         expression_newlines: syntax == SassSyntax::Scss,
         single_equals: false,
+        until_comparison: false,
         stop_words: &[],
         stop_depth: 0,
         interpolated_selector: false,
         selector_evidence: Vec::new(),
+        media_evidence: Vec::new(),
     };
     if parser.text.starts_with('\u{feff}') {
         parser.bump()?;
@@ -574,6 +650,7 @@ pub fn parse_sass(
     }
     parser.comments.sort_by_key(|comment| comment.span.start());
     debug_assert!(parser.selector_evidence.is_sorted());
+    debug_assert!(parser.media_evidence.is_sorted());
     Ok(SassDocument {
         source,
         syntax,
@@ -581,6 +658,7 @@ pub fn parse_sass(
         statements,
         comments: parser.comments,
         selector_evidence: parser.selector_evidence,
+        media_evidence: parser.media_evidence,
     })
 }
 
@@ -596,11 +674,14 @@ struct Parser<'source> {
     indentation: Option<char>,
     expression_newlines: bool,
     single_equals: bool,
+    /// Ends the current expression level before `<`, `>`, or a single `=`.
+    until_comparison: bool,
     stop_words: &'static [&'static str],
     stop_depth: usize,
     /// Selects the parse-time grammar for selectors with interpolation.
     interpolated_selector: bool,
     selector_evidence: Vec<SassNodeId>,
+    media_evidence: Vec<SassNodeId>,
 }
 
 impl Parser<'_> {
@@ -891,7 +972,10 @@ impl Parser<'_> {
         self.expression_newlines = true;
         let equals = self.single_equals;
         self.single_equals = false;
+        let until = self.until_comparison;
+        self.until_comparison = false;
         let value = self.expression(true)?;
+        self.until_comparison = until;
         self.single_equals = equals;
         self.expression_newlines = before;
         self.skip(true)?;

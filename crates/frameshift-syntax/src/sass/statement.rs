@@ -289,6 +289,8 @@ impl Parser<'_> {
                 "debug" => At::Debug,
                 "warn" => At::Warn,
                 "error" => At::Error,
+                "media" => At::Media,
+                "supports" => At::Supports,
                 _ => At::Css,
             };
             children.push(name);
@@ -303,6 +305,8 @@ impl Parser<'_> {
                 && matches!(
                     kind,
                     At::Css
+                        | At::Media
+                        | At::Supports
                         | At::Import
                         | At::Extend
                         | At::AtRoot
@@ -316,7 +320,13 @@ impl Parser<'_> {
             || (context.function
                 && matches!(
                     kind,
-                    At::Css | At::Import | At::Include | At::Extend | At::AtRoot
+                    At::Css
+                        | At::Media
+                        | At::Supports
+                        | At::Import
+                        | At::Include
+                        | At::Extend
+                        | At::AtRoot
                 ))
         {
             return Err(self.error(Error::InvalidContext));
@@ -472,6 +482,19 @@ impl Parser<'_> {
             }
             At::Import => {
                 self.import_header(&mut children, context.mixin || context.control)?;
+            }
+            At::Media => {
+                let query = self.media_query_list()?;
+                // Evaluation parses value-dependent query text again.
+                if self.media_depends_on_values(query)? {
+                    self.media_evidence.push(query);
+                }
+                children.push(query);
+                block = true;
+            }
+            At::Supports => {
+                children.push(self.supports_condition(false)?);
+                block = true;
             }
             At::Css => {
                 let name = children[0];

@@ -1,5 +1,7 @@
 //! Sass syntax contracts and a parse-only external oracle (`D-079`).
 
+#[path = "sass/condition.rs"]
+mod condition_cases;
 #[path = "sass/import.rs"]
 mod import_cases;
 
@@ -1130,8 +1132,9 @@ fn module_rules_obey_root_ordering_and_resource_limits() {
 
 #[test]
 fn unchecked_grammars_are_explicit_and_do_not_validate_the_file() {
-    let source =
-        source("@import 'fictional' screen; @media x { .a { color: red; } .#{$b} { x: y; } }");
+    let source = source(
+        "@import 'fictional' screen; @media #{$q} { .a { color: red; } } @page x { .#{$b} { x: y; } }",
+    );
     let doc = parse_sass(&source, SassSyntax::Scss, SassLimits::default()).unwrap();
     let unchecked: Vec<_> = doc.unchecked_syntax().collect();
     let selectors: Vec<_> = unchecked
@@ -1143,7 +1146,7 @@ fn unchecked_grammars_are_explicit_and_do_not_validate_the_file() {
     assert!(
         unchecked
             .iter()
-            .any(|entry| entry.kind == SassUncheckedKind::ImportPrelude)
+            .any(|entry| entry.kind == SassUncheckedKind::MediaQuery)
     );
     assert!(
         unchecked
@@ -1579,6 +1582,7 @@ while (at < data.length) {
             .into_iter()
             .map(|case| (case.text, case.syntax)),
     );
+    cases.extend(condition_cases::cases());
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)
@@ -1730,14 +1734,20 @@ fn selector_verdict(text: &str, syntax: SassSyntax) -> Option<bool> {
     )
 }
 
-#[test]
-#[ignore = "requires external pinned Sass 1.105.2"]
-fn external_sass_selector_oracle() {
+/// Compiles generated fictional cases with pinned Sass 1.105.2 and returns
+/// whether each compiles. The cases must contain no module or import rule,
+/// so compiling them cannot read files.
+fn compile_with_oracle(cases: &[(String, SassSyntax)]) -> Vec<bool> {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
-    // The cases are generated, fictional, and contain no module or import
-    // rule, so compiling them cannot read files.
+    for (text, _) in cases {
+        assert!(
+            !["@use", "@forward", "@import", "load-css"]
+                .iter()
+                .any(|rule| text.contains(rule))
+        );
+    }
     let module = std::env::var("FRAMESHIFT_SASS_PARSER_MODULE")
         .expect("path to external sass-parser package");
     let script = r#"
@@ -1756,6 +1766,36 @@ while (at < data.length) {
   catch (e) { process.stdout.write('0\n'); }
 }
 "#;
+    let mut child = Command::new("node")
+        .arg("-e")
+        .arg(script)
+        .arg(module)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    for (text, syntax) in cases {
+        let syntax = if *syntax == SassSyntax::Scss {
+            "scss"
+        } else {
+            "indented"
+        };
+        writeln!(input, "{syntax}\n{}", text.len()).unwrap();
+        input.write_all(text.as_bytes()).unwrap();
+    }
+    drop(input);
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success());
+    let verdicts = String::from_utf8(output.stdout).unwrap();
+    let verdicts: Vec<_> = verdicts.lines().map(|line| line == "1").collect();
+    assert_eq!(verdicts.len(), cases.len());
+    verdicts
+}
+
+#[test]
+#[ignore = "requires external pinned Sass 1.105.2"]
+fn external_sass_selector_oracle() {
     let mut cases = Vec::new();
     for left in SELECTOR_PIECES {
         cases.push((format!(".p {{ {left} {{ x: y; }} }}"), SassSyntax::Scss));
@@ -1791,37 +1831,7 @@ while (at < data.length) {
             SassSyntax::Indented,
         ));
     }
-    for (text, _) in &cases {
-        assert!(
-            !["@use", "@forward", "@import", "load-css"]
-                .iter()
-                .any(|rule| text.contains(rule))
-        );
-    }
-    let mut child = Command::new("node")
-        .arg("-e")
-        .arg(script)
-        .arg(module)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let mut input = child.stdin.take().unwrap();
-    for (text, syntax) in &cases {
-        let syntax = if *syntax == SassSyntax::Scss {
-            "scss"
-        } else {
-            "indented"
-        };
-        writeln!(input, "{syntax}\n{}", text.len()).unwrap();
-        input.write_all(text.as_bytes()).unwrap();
-    }
-    drop(input);
-    let output = child.wait_with_output().unwrap();
-    assert!(output.status.success());
-    let verdicts = String::from_utf8(output.stdout).unwrap();
-    let verdicts: Vec<_> = verdicts.lines().collect();
-    assert_eq!(verdicts.len(), cases.len());
+    let verdicts = compile_with_oracle(&cases);
     eprintln!(
         "Sass selector compile oracle: {} fictional cases",
         cases.len()
@@ -1831,9 +1841,66 @@ while (at < data.length) {
         let verdict = selector_verdict(text, *syntax);
         // A compiled selector must be established; one that fails to
         // compile must not be.
-        if (oracle == "1") != (verdict == Some(true)) {
+        if oracle != (verdict == Some(true)) {
             mismatches.push(format!("{syntax:?} {oracle} {verdict:?}: {text:?}"));
         }
     }
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+#[test]
+#[ignore = "requires external pinned Sass 1.105.2"]
+fn external_sass_condition_oracle() {
+    let cases: Vec<_> = condition_cases::cases()
+        .into_iter()
+        .filter(|(text, _)| {
+            text.starts_with(".p") && (text.contains("@media") || text.contains("@supports"))
+        })
+        .collect();
+    // Defined variables keep evaluation errors out of the comparison; the
+    // definitions are not part of the parsed cases.
+    let compiled: Vec<_> = cases
+        .iter()
+        .map(|(text, syntax)| {
+            let separator = if *syntax == SassSyntax::Scss {
+                ";"
+            } else {
+                "\n"
+            };
+            let mut prefix = String::new();
+            for (name, value) in [
+                ("a", "a"),
+                ("b", "b"),
+                ("c", "\"(c: d)\""),
+                ("e", "e"),
+                ("q", "screen"),
+                ("t", "print"),
+                ("w", "1px"),
+                ("x", "x"),
+            ] {
+                prefix.push_str(&format!("${name}: {value}{separator}"));
+            }
+            if *syntax == SassSyntax::Scss {
+                prefix.push(' ');
+            }
+            (format!("{prefix}{text}"), *syntax)
+        })
+        .collect();
+    let verdicts = compile_with_oracle(&compiled);
+    let mut mismatches = Vec::new();
+    let mut established = 0;
+    for ((text, syntax), compiled) in cases.iter().zip(verdicts) {
+        // A case without evidence must compile, and every compiled case
+        // must be accepted.
+        let verdict = condition_cases::media_verdict(text, *syntax);
+        established += usize::from(verdict == Some(false));
+        if (verdict == Some(false) && !compiled) || (compiled && verdict.is_none()) {
+            mismatches.push(format!("{syntax:?} {compiled} {verdict:?}: {text:?}"));
+        }
+    }
+    eprintln!(
+        "Sass condition compile oracle: {} fictional cases, {established} without evidence",
+        cases.len()
+    );
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }
