@@ -82,12 +82,86 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                     }
                 }
             }
-            if node.kind == SassNodeKind::ImportModifiers
-                && !unchecked.iter().any(|entry| {
-                    entry.kind == SassUncheckedKind::ImportPrelude && entry.span == node.span
-                })
+            if node.kind == SassNodeKind::ImportModifiers {
+                let kinds: Vec<_> = node
+                    .children
+                    .iter()
+                    .map(|&id| doc.node(id).map(|child| &child.kind))
+                    .collect::<Option<_>>()
+                    .ok_or("missing import modifier")?;
+                let list = kinds
+                    .iter()
+                    .position(|kind| **kind == SassNodeKind::MediaQueryList);
+                if kinds.is_empty()
+                    || list.is_some_and(|index| index + 1 != kinds.len())
+                    || kinds.iter().any(|kind| {
+                        !matches!(
+                            kind,
+                            SassNodeKind::Identifier
+                                | SassNodeKind::InterpolatedText
+                                | SassNodeKind::Interpolation
+                                | SassNodeKind::ImportFunction
+                                | SassNodeKind::MediaQueryList
+                        )
+                    })
+                {
+                    return Err("invalid import modifier structure".to_owned());
+                }
+            }
+            if matches!(
+                node.kind,
+                SassNodeKind::ImportFunction
+                    | SassNodeKind::SupportsFunction
+                    | SassNodeKind::SupportsDeclaration
+                    | SassNodeKind::SupportsAnything
+                    | SassNodeKind::SupportsNegation
+            ) && node.children.len() != 2
             {
-                return Err("import modifiers without unchecked evidence".to_owned());
+                return Err(format!("invalid condition arity: {node:?}"));
+            }
+            if node.kind == SassNodeKind::MediaQueryList
+                && (node.children.is_empty()
+                    || node.children.iter().any(|&id| {
+                        doc.node(id)
+                            .is_none_or(|child| child.kind != SassNodeKind::MediaQuery)
+                    }))
+            {
+                return Err("invalid media query list".to_owned());
+            }
+            if node.kind == SassNodeKind::AtRule(SassAtRule::Media) {
+                let list = node
+                    .children
+                    .get(1)
+                    .filter(|&&id| {
+                        doc.node(id)
+                            .is_some_and(|child| child.kind == SassNodeKind::MediaQueryList)
+                    })
+                    .ok_or("media rule without query list")?;
+                // Only value-dependent query text is parsed again.
+                let mut stack = vec![*list];
+                let mut dependent = false;
+                while let Some(id) = stack.pop() {
+                    let child = doc.node(id).ok_or("missing media node")?;
+                    dependent |= matches!(
+                        child.kind,
+                        SassNodeKind::Interpolation
+                            | SassNodeKind::Variable
+                            | SassNodeKind::Call
+                            | SassNodeKind::SpecialFunction
+                            | SassNodeKind::String { quoted: true }
+                            | SassNodeKind::ParentSelector
+                            | SassNodeKind::Null
+                            | SassNodeKind::Map
+                    );
+                    stack.extend_from_slice(&child.children);
+                }
+                let span = doc.node(*list).ok_or("missing media query list")?.span;
+                let evidence = unchecked
+                    .iter()
+                    .any(|entry| entry.kind == SassUncheckedKind::MediaQuery && entry.span == span);
+                if dependent != evidence {
+                    return Err("media query evidence does not match its values".to_owned());
+                }
             }
             if matches!(
                 node.kind,

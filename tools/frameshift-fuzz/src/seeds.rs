@@ -525,6 +525,14 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
             "to",
             "@at-root",
             "url(",
+            "@media",
+            "@supports",
+            "only",
+            "screen",
+            "<=",
+            ">=",
+            "selector(",
+            "--",
         ],
         Target::Css => &[
             "/*", "*/", "url(", "URL(", "u\\72l(", "(", ")", "{", "}", "[", "]", ":", ";", ",",
@@ -814,6 +822,12 @@ bun@1.4.0",
             ".p { a:nth-child(foo), b[c=d foo], :foo(url(//x)) { x: y; } }",
             ".p { @at-root .a > b { x: y; } }",
             ".p\n  a,\n  // comment\n  b > c\n    x: y\n  d/**/e\n    x: y\n",
+            ".p { @media not screen and (1px < width <= $w), (a: b) or #{$q} { x: y; } }",
+            ".p\n  @media only screen and (min-width: 1px)\n    x: y\n",
+            ".p { @supports not ((a: b) and (--c: {d})) or selector(e > f) { x: y; } }",
+            ".p { @supports (#{$a} or (b: c)) and (foo bar) { x: y; } }",
+            "@import 'theme.css' supports(not (display: grid)) layer(base) screen, print;",
+            "@import 'theme.css' supports(--x: url(//y)) (min-width: 1px);",
         ]
         .iter()
         .map(|text| (*text).to_owned())
