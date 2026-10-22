@@ -115,6 +115,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | P-016 | Finding codes and identifier schemes | Accepted |
 | P-017 | Minimal relocation policy for output layout | Superseded by D-024 |
 | DF-001 to DF-012 | Deferred decisions | Deferred or resolved (see table) |
+| D-090 | Complete Sass conformance before other M3 work | Accepted |
 | Q-001 to Q-014 | Open questions | Open or resolved (see table) |
 | E1 to E5 | Experiments | E1 and E2 passed; others planned |
 
@@ -1030,6 +1031,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **JavaScript:** In Module goal, an initial `export default` prefix can reach the existing conservative explicit-semicolon synchronizer. Consume the whole keyword with its identifier boundary and charge every byte, including prefix trivia, to the shared recovery budget. Incomplete prefixes, function/class declarations, TypeScript declaration prefixes, regular expressions, templates, JSX, unmatched delimiters, and top-level colons still stop. Strict parsing, original first diagnostics, cumulative bounds, module strictness, and withholding the whole erroneous tree remain unchanged.
 - **Validation:** Facade regressions first reproduce both changes on `main` at `d056601`. Sass cases check exact numeric operand spans, escapes, Unicode/BOM/CRLF, both syntaxes, repeatability, and inclusive node/depth/work limits. An opt-in number-span oracle compares acceptance and exact numeric boundaries with pinned `sass-parser` 0.4.58 and Sass 1.105.2; generated cases also extend the existing parse-only oracle. JavaScript cases cover every dialect, conservative refusals, Script-goal isolation, original coordinates, strictness, repeated diagnostics, and every recovery-byte cutoff. Permanent fictional seeds cover both paths. Evidence is in IMPLEMENTATION.md sections 35 and 36.
 - **Rationale and evolution (`D-033`):** Accurate dimension boundaries prevent later stylesheet analysis from treating arithmetic as a unit name. Diagnostics after default-export expressions improve invalid-module analysis without making recovered syntax eligible for transformation. Full Sass conformance, nested-list recovery, evaluation, and migration support remain outstanding. No dependency, public node kind, or resource limit is added.
+
+### D-090: Complete Sass parsing before resuming other M3 work
+
+- **Status:** Accepted (2026-10-22), confirmed by the owner through the Codex App question interface.
+- **Decision:** Complete the SCSS and indented Sass parser scope of `D-079` before resuming the remaining M3 work. The owner explicitly requested finishing Sass as a whole rather than continuing isolated small Sass increments. The implementation must close the remaining syntax gaps and establish conformance against the pinned reference, retaining the parsing-only boundary, resource limits, exact spans, and explicit evidence for evaluation-dependent grammar.
+- **Acceptance:** Compare the complete external pinned Sass conformance corpus with the reference parser, explain representational or evaluation-only differences, add fictional regressions for discovered defects, retain reproducible conformance checks, and run the existing facade, differential, and fuzz checks. Passing a small generated subset alone does not establish completion. Never claim evaluation, import loading, CSS semantic validation, or migration support from syntax conformance.
+- **Integration:** Create and monitor a pull request. Leave it open for the owner to merge, following `D-084`.
+- **Current state:** This entry records the owner's priority and completion criterion, not completed implementation. Section 35 of IMPLEMENTATION.md remains the authoritative record of implemented syntax and validation evidence.
 
 ## Technique proposals and related accepted decisions
 
