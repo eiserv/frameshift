@@ -50,6 +50,8 @@ The measurement harness's `--check` mode checks the complete generated JavaScrip
 
 Plain CSS function facade and parse-only oracle cases check raw result values, literal versus escaped or underscore name prefixes, nested contexts, comments, statement boundaries, both syntaxes, deterministic arenas, and shared resource limits (`D-086`, IMPLEMENTATION.md section 35). The Sass fuzz target requires `CssDirective` evidence on every retained CSS rule.
 
+URL facade and pinned parse-only oracle cases check raw string versus SassScript call structure, escaped and vendor-prefixed names, literal brackets and comment markers, interpolation, speculative comment rollback, original spans, and shared node/depth/work limits in both syntaxes (`D-087`). The opt-in `external_url_classification_oracle` additionally compares expression classification with the pinned parser; it does not evaluate or load URLs. Permanent fictional fuzz seeds cover these boundaries.
+
 Modern Sass `if()` facade and parse-only oracle cases cover legacy disambiguation, source-preserved branches and conditions, CSS substitutions, inline comments, both surface syntaxes, deterministic arenas, and shared resource bounds (`D-085`, IMPLEMENTATION.md section 35).
 
 ### 3.3 Fuzzing

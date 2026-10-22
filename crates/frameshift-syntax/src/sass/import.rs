@@ -2,7 +2,7 @@
 
 use super::{
     Parser, SassConditionOperator as Operator, SassError, SassErrorKind as Error, SassNodeId as Id,
-    SassNodeKind as Kind, SassSyntax, condition::ValueOptions, css_space, module_url, newline,
+    SassNodeKind as Kind, SassSyntax, condition::ValueOptions, module_url, newline,
 };
 
 impl Parser<'_> {
@@ -108,43 +108,13 @@ impl Parser<'_> {
         }
         let name = self.node(start, Kind::Identifier, Vec::new())?;
         let contents = self.pos;
-        let nodes = self.nodes.len();
-        let comments = self.comments.len();
-        self.expect("(")?;
-        while self.peek().is_some_and(css_space) {
-            self.bump()?;
-        }
-        let mut parts = Vec::new();
-        loop {
-            if self.eat(")")? {
-                let raw = self.node(contents, Kind::InterpolatedText, parts)?;
-                return self.node(start, Kind::Call, vec![name, raw]);
-            }
-            if self.at("#{") {
-                parts.push(self.interpolation()?);
-            } else if self.at("\\") {
-                self.escape(false)?;
-            } else if self.peek().is_some_and(css_space) {
-                while self.peek().is_some_and(css_space) {
-                    self.bump()?;
-                }
-                if !self.at(")") {
-                    break;
-                }
-            } else if self.peek().is_some_and(|c| {
-                matches!(c, '!' | '%' | '&' | '#') || ('*'..='~').contains(&c) || c >= '\u{80}'
-            }) {
-                self.bump()?;
-            } else {
-                break;
-            }
+        if let Some(parts) = self.raw_url_contents()? {
+            let raw = self.node(contents, Kind::InterpolatedText, parts)?;
+            return self.node(start, Kind::Call, vec![name, raw]);
         }
         // Raw URL parsing and SassScript share a prefix. Retry only at that
         // known context, retaining work charges and discarding speculative
         // nodes and comments. Grammar and limit failures are never recovered.
-        self.pos = contents;
-        self.nodes.truncate(nodes);
-        self.comments.truncate(comments);
         let arguments = self.arguments(false, true)?;
         self.node(start, Kind::Call, vec![name, arguments])
     }

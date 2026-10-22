@@ -662,8 +662,9 @@ impl Parser<'_> {
         Ok(())
     }
 
-    /// The contents of a raw `url(...)`, or `None` with no state change.
-    fn raw_url_contents(&mut self) -> Result<Option<Vec<Id>>, SassError> {
+    /// Raw `url(...)` contents, or `None` after restoring speculative state.
+    /// Failed lookahead retains work charges and propagates grammar/limit errors.
+    pub(super) fn raw_url_contents(&mut self) -> Result<Option<Vec<Id>>, SassError> {
         let checkpoint = self.checkpoint();
         if !self.eat("(")? {
             return Ok(None);

@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use super::{
     Parser, SassBinaryOperator as Binary, SassError, SassErrorKind as Error,
     SassListSeparator as Separator, SassNodeId as Id, SassNodeKind as Kind,
-    SassUnaryOperator as Unary, canonical_name,
+    SassUnaryOperator as Unary, canonical_name, decode_name, selector::unvendor,
 };
 
 impl Parser<'_> {
@@ -422,6 +422,14 @@ impl Parser<'_> {
             }
         }
         if self.at("(") {
+            // URL text has its own lexical grammar, including literal brackets
+            // and comment markers. Only a failed raw scan tries SassScript.
+            let decoded = decode_name(&self.text[start..self.pos], false);
+            if unvendor(&decoded).eq_ignore_ascii_case("url")
+                && let Some(parts) = self.raw_url_contents()?
+            {
+                return self.node(start, Kind::String { quoted: false }, parts);
+            }
             let function_name = self.text[start..self.pos].to_ascii_lowercase();
             let name = self.node(start, Kind::Identifier, Vec::new())?;
             // Only the exact decoded lower-case name tries the legacy grammar.
@@ -446,7 +454,7 @@ impl Parser<'_> {
             }
             if matches!(
                 function_name.as_str(),
-                "url" | "-webkit-calc" | "-moz-calc" | "element" | "expression" | "progid"
+                "-webkit-calc" | "-moz-calc" | "element" | "expression" | "progid"
             ) {
                 let contents = self.raw_group()?;
                 return self.node(start, Kind::SpecialFunction, vec![name, contents]);
