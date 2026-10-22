@@ -70,6 +70,8 @@ pub enum SassUnaryOperator {
     Plus,
     /// `-`.
     Minus,
+    /// `/`, used as a literal slash prefix without computing a value.
+    Divide,
     /// `not`.
     Not,
 }
@@ -376,8 +378,11 @@ pub enum SassNodeKind {
     /// CSS special-function contents with interpolation, not SassScript.
     SpecialFunction,
     /// An invocation's arguments, including their enclosing parentheses.
+    /// A literal `var()` call with one positional argument and a trailing comma
+    /// has an explicit empty second argument at its closing parenthesis.
     Arguments,
-    /// One argument, optionally named and/or followed by `...`.
+    /// One argument, optionally named and/or followed by `...`. An empty
+    /// `var()` fallback and its unquoted string child have zero-width spans.
     Argument,
     /// A callable's parameter list, including parentheses.
     Parameters,
@@ -460,7 +465,7 @@ pub struct SassComment {
     pub interpolations: Vec<SassNodeId>,
 }
 
-/// A retained grammar not yet fully validated by Sass parsing.
+/// A grammar that requires evaluation or CSS-specific validation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SassUncheckedKind {
     /// A selector whose grammar depends on evaluation: it contains
@@ -639,9 +644,10 @@ impl<'source> SassDocument<'source> {
 /// Parses SCSS or indented Sass with exact spans and explicit resource bounds.
 ///
 /// No import is resolved and no expression is evaluated. Recognized syntax
-/// errors return no tree. This is an in-progress M3 parser, not a full Sass
-/// validity check. [`SassDocument::unchecked_syntax`] identifies grammars
-/// retained as interpolated text. No result authorizes transformation.
+/// errors return no tree. Syntax follows Dart Sass 1.105.2's normal parser,
+/// including its deliberate raw and evaluation-dependent grammars, identified
+/// by [`SassDocument::unchecked_syntax`]. Parsing does not establish evaluation
+/// validity, CSS semantics, or transformation eligibility.
 pub fn parse_sass(
     source: &SourceText,
     syntax: SassSyntax,

@@ -16,7 +16,9 @@ fn declaration(value: &str, syntax: SassSyntax) -> String {
 pub(super) fn cases() -> Vec<(String, SassSyntax)> {
     let mut cases = Vec::new();
     for syntax in [SassSyntax::Scss, SassSyntax::Indented] {
-        for number in ["0", "1", ".5", "2.75", "1e2", "3E-2"] {
+        for number in [
+            "0", "1", ".5", "2.75", "1e2", "3E-2", "-1", "+1", "-.5", "+.5",
+        ] {
             for unit in [
                 "px", "rem", "-unit", "--unit", "px-name", "px_1", "色", "p\\78",
             ] {

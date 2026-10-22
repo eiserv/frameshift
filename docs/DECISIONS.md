@@ -97,6 +97,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-087 | Continue Sass grammar conformance with raw expression URLs | Accepted |
 | D-088 | Continue both Sass conformance and JavaScript diagnostic recovery | Accepted |
 | D-089 | Sass numeric unit boundaries and default-export diagnostic recovery | Accepted |
+| D-090 | Complete Sass conformance before other M3 work | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -115,7 +116,6 @@ Statuses change through an edit to this file under the integration workflow in D
 | P-016 | Finding codes and identifier schemes | Accepted |
 | P-017 | Minimal relocation policy for output layout | Superseded by D-024 |
 | DF-001 to DF-012 | Deferred decisions | Deferred or resolved (see table) |
-| D-090 | Complete Sass conformance before other M3 work | Accepted |
 | Q-001 to Q-014 | Open questions | Open or resolved (see table) |
 | E1 to E5 | Experiments | E1 and E2 passed; others planned |
 
@@ -1038,7 +1038,9 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Decision:** Complete the SCSS and indented Sass parser scope of `D-079` before resuming the remaining M3 work. The owner explicitly requested finishing Sass as a whole rather than continuing isolated small Sass increments. The implementation must close the remaining syntax gaps and establish conformance against the pinned reference, retaining the parsing-only boundary, resource limits, exact spans, and explicit evidence for evaluation-dependent grammar.
 - **Acceptance:** Compare the complete external pinned Sass conformance corpus with the reference parser, explain representational or evaluation-only differences, add fictional regressions for discovered defects, retain reproducible conformance checks, and run the existing facade, differential, and fuzz checks. Passing a small generated subset alone does not establish completion. Never claim evaluation, import loading, CSS semantic validation, or migration support from syntax conformance.
 - **Integration:** Create and monitor a pull request. Leave it open for the owner to merge, following `D-084`.
-- **Current state:** This entry records the owner's priority and completion criterion, not completed implementation. Section 35 of IMPLEMENTATION.md remains the authoritative record of implemented syntax and validation evidence.
+- **Implementation:** The remaining lexical, declaration, raw-header, and indented whitespace gaps are closed. Empty `var()` fallbacks reuse zero-width argument/string nodes; unary slash adds `SassUnaryOperator::Divide`. The normal parse-time grammar is the authority, including its intentionally raw and evaluation-dependent constructs. The `sass-parser` API's forced selector mode is a distinct grammar, so closure checks the normal mode as well as retaining all earlier specialized oracles. Section 35 of IMPLEMENTATION.md records the reproducible full-corpus evidence.
+- **Reference access:** A development-only, ignored Rust test reads the external pinned sass-spec checkout. Its Node subprocess checks the pinned packages and changes exactly the parser-export wrapper's `parseSelectors` option from `true` to `false` in memory, with an exact single-match guard. It changes no grammar and writes no reference file. This permits parse-only comparison without evaluating source, resolving imports, or shipping reference code. Inline Node orchestration follows the existing oracle pattern; it is not a product dependency or an additional implementation language for the engine.
+- **Rationale and evolution (`D-033`):** Shared raw readers and declaration-first disambiguation remove divergent lexical paths. Retaining explicit empty fallback syntax and signed numeric spelling supplies later dependency and value analysis with accurate operands. Syntax completion does not remove the analysis obligations for evaluated selectors, CSS grammars, or imports, and does not complete M3 or authorize migration.
 
 ## Technique proposals and related accepted decisions
 

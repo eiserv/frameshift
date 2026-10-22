@@ -115,7 +115,7 @@ impl Parser<'_> {
         // Raw URL parsing and SassScript share a prefix. Retry only at that
         // known context, retaining work charges and discarding speculative
         // nodes and comments. Grammar and limit failures are never recovered.
-        let arguments = self.arguments(false, true)?;
+        let arguments = self.arguments(false, true, false)?;
         self.node(start, Kind::Call, vec![name, arguments])
     }
 

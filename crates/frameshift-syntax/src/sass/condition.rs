@@ -32,9 +32,53 @@ pub(super) struct Checkpoint {
     stop_depth: usize,
     selector_evidence: usize,
     media_evidence: usize,
+    at_root_evidence: usize,
+    indentation: Option<char>,
+    interpolated_selector: bool,
+    parent_selectors: bool,
 }
 
 impl Parser<'_> {
+    /// The legacy Gecko rule has a fixed parse-time function grammar.
+    pub(super) fn moz_document_value(&mut self) -> Result<Id, SassError> {
+        let start = self.pos;
+        let mut parts = Vec::new();
+        loop {
+            if self.at("#{") {
+                parts.push(self.interpolation()?);
+            } else {
+                let name = self.identifier()?;
+                let decoded = decode_name(self.spelling(name), false);
+                let raw_url = matches!(decoded.as_ref(), "url" | "url-prefix" | "domain");
+                if !raw_url && decoded != "regexp" {
+                    return Err(self.error(Error::ExpectedIdentifier));
+                }
+                parts.push(name);
+                if raw_url && let Some(contents) = self.raw_url_contents()? {
+                    parts.extend(contents);
+                } else {
+                    self.enter()?;
+                    self.expect("(")?;
+                    if raw_url {
+                        self.space()?;
+                    }
+                    if !self.peek().is_some_and(|c| matches!(c, '\'' | '"')) {
+                        return Err(self.error(Error::ExpectedSyntax));
+                    }
+                    parts.push(self.quoted()?);
+                    self.expect(")")?;
+                    self.depth -= 1;
+                }
+            }
+            self.space()?;
+            if !self.eat(",")? {
+                break;
+            }
+            self.space()?;
+        }
+        self.node(start, Kind::InterpolatedText, parts)
+    }
+
     pub(super) fn checkpoint(&self) -> Checkpoint {
         Checkpoint {
             pos: self.pos,
@@ -48,6 +92,10 @@ impl Parser<'_> {
             stop_depth: self.stop_depth,
             selector_evidence: self.selector_evidence.len(),
             media_evidence: self.media_evidence.len(),
+            at_root_evidence: self.at_root_evidence.len(),
+            indentation: self.indentation,
+            interpolated_selector: self.interpolated_selector,
+            parent_selectors: self.parent_selectors,
         }
     }
 
@@ -64,6 +112,10 @@ impl Parser<'_> {
         self.selector_evidence
             .truncate(checkpoint.selector_evidence);
         self.media_evidence.truncate(checkpoint.media_evidence);
+        self.at_root_evidence.truncate(checkpoint.at_root_evidence);
+        self.indentation = checkpoint.indentation;
+        self.interpolated_selector = checkpoint.interpolated_selector;
+        self.parent_selectors = checkpoint.parent_selectors;
     }
 
     /// Whitespace where a statement may end (`consumeNewlines: false`).

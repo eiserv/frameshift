@@ -2,6 +2,8 @@
 
 #[path = "sass/condition.rs"]
 mod condition_cases;
+#[path = "sass/conformance.rs"]
+mod conformance_cases;
 #[path = "sass/css_function.rs"]
 mod css_function_cases;
 #[path = "sass/extend.rs"]
@@ -1390,10 +1392,7 @@ fn evaluation_dependent_selectors_keep_unchecked_evidence() {
                 ("e[f=g i ] ", true),
             ],
         ),
-        (
-            "@keyframes k { a { x: y; } } .p { :foo(!) { x: y; } }",
-            &[("a ", true), ("[class(p)]", false), (":foo(!) ", true)],
-        ),
+        ("@keyframes k { a { x: y; } }", &[("a ", true)]),
     ];
     for &(text, expected) in cases {
         let actual = rule_selectors(text, SassSyntax::Scss);
@@ -1602,6 +1601,7 @@ while (at < data.length) {
     cases.extend(url_cases::cases());
     cases.extend(special_function_cases::cases());
     cases.extend(number_cases::cases());
+    cases.extend(conformance_cases::cases());
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)

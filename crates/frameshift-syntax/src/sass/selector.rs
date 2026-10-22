@@ -105,7 +105,7 @@ impl Parser<'_> {
         self.nodes.truncate(nodes);
         self.comments.truncate(comments);
         self.pos = span.start();
-        let (header, _) = self.raw_header(false)?;
+        let header = self.raw_header()?;
         debug_assert_eq!(self.nodes[header.0].span, span);
         self.selector_evidence.push(header);
         Ok(header)
@@ -800,7 +800,7 @@ impl Parser<'_> {
         Ok(!self.peek().is_some_and(|c| name_char(c) || c == '\\'))
     }
 
-    fn scan_identifier_text(&mut self, text: &str) -> Result<bool, SassError> {
+    pub(super) fn scan_identifier_text(&mut self, text: &str) -> Result<bool, SassError> {
         if !self.identifier_ahead() {
             return Ok(false);
         }

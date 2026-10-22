@@ -14,20 +14,23 @@ impl Parser<'_> {
         self.enter()?;
         let first = self.space_list()?;
         let mut items = vec![first];
+        let mut separated = false;
         if comma {
             while self.eat(",")? {
-                if !self.expression_newlines && self.peek().is_some_and(super::newline) {
-                    return Err(self.error(Error::ExpectedSyntax));
-                }
+                separated = true;
                 self.skip(self.expression_newlines)?;
                 if !self.expression_start() {
                     break;
                 }
+                if self.operator().is_some_and(|(operator, _, _)| {
+                    matches!(operator, Binary::And | Binary::Or | Binary::Modulo)
+                }) {
+                    return Err(self.error(Error::ExpectedExpression));
+                }
                 items.push(self.space_list()?);
             }
         }
-        let trailing = self.text[..self.pos].trim_end().ends_with(',');
-        let result = if items.len() > 1 || (comma && trailing) {
+        let result = if items.len() > 1 || separated {
             self.node(
                 self.start(first),
                 Kind::List {
@@ -81,7 +84,7 @@ impl Parser<'_> {
             }
             // Sass's strict-unary disambiguation: `1 -2` is a space list,
             // whereas `1 - 2` and `1-2` are binary operations.
-            if matches!(operator, Binary::Add | Binary::Subtract)
+            if operator == Binary::Subtract
                 && self.pos > before_space
                 && self.text[self.pos + 1..]
                     .chars()
@@ -89,6 +92,16 @@ impl Parser<'_> {
                     .is_some_and(|c| !super::css_space(c))
             {
                 break;
+            }
+            if operator == Binary::Modulo {
+                let checkpoint = self.checkpoint();
+                self.expect(spelling)?;
+                self.skip(true)?;
+                let operand = self.expression_start();
+                self.restore(&checkpoint);
+                if !operand {
+                    break;
+                }
             }
             self.expect(spelling)?;
             self.skip(true)?;
@@ -187,7 +200,7 @@ impl Parser<'_> {
                 c.is_ascii_digit()
                     || matches!(
                         c,
-                        '$' | '#' | '\'' | '"' | '(' | '[' | '&' | '+' | '-' | '%'
+                        '$' | '#' | '\'' | '"' | '(' | '[' | '&' | '+' | '-' | '%' | '/'
                     )
             })
             || (self.at(".")
@@ -230,6 +243,14 @@ impl Parser<'_> {
         if self.at("#{") {
             return self.unquoted();
         }
+        if (self.at("-") || self.at("+"))
+            && self.text[self.pos + 1..]
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_digit() || c == '.')
+        {
+            return self.number();
+        }
         if self.peek().is_some_and(|c| c.is_ascii_digit())
             || (self.at(".")
                 && self.text[self.pos + 1..]
@@ -239,15 +260,18 @@ impl Parser<'_> {
         {
             return self.number();
         }
-        if self.at("+") || (self.at("-") && !self.name_start()) {
-            let minus = self.bump()? == Some('-');
+        if self.at("+") || self.at("/") || (self.at("-") && !self.name_start()) {
+            let operator = if self.at("/") {
+                Unary::Divide
+            } else if self.at("-") {
+                Unary::Minus
+            } else {
+                Unary::Plus
+            };
+            self.bump()?;
             self.skip(true)?;
             let value = self.unary_operand()?;
-            return self.node(
-                start,
-                Kind::Unary(if minus { Unary::Minus } else { Unary::Plus }),
-                vec![value],
-            );
+            return self.node(start, Kind::Unary(operator), vec![value]);
         }
         if self.eat("#")? {
             let digit_start = self.pos;
@@ -348,8 +372,15 @@ impl Parser<'_> {
 
     fn number(&mut self) -> Result<Id, SassError> {
         let start = self.pos;
+        let signed = self.eat("-")? || self.eat("+")?;
         while self.peek().is_some_and(|c| c.is_ascii_digit()) {
             self.bump()?;
+        }
+        if self.at(".")
+            && signed
+            && !self.text[self.pos + 1..].starts_with(|c: char| c.is_ascii_digit())
+        {
+            return Err(self.error(Error::ExpectedSyntax));
         }
         if self.at(".")
             && self.text[self.pos + 1..]
@@ -436,7 +467,7 @@ impl Parser<'_> {
             if !self.text[start..self.pos].contains('.') && plain.eq_ignore_ascii_case("if") {
                 if plain == "if" {
                     let checkpoint = self.checkpoint();
-                    match self.arguments(false, true) {
+                    match self.arguments(false, true, false) {
                         Ok(args) => return self.node(start, Kind::Call, vec![name, args]),
                         Err(error)
                             if matches!(
@@ -451,7 +482,9 @@ impl Parser<'_> {
                 }
                 return self.if_expression(start, name);
             }
-            let args = self.arguments(false, true)?;
+            let empty_fallback =
+                !self.text[start..self.pos].contains('.') && decoded.eq_ignore_ascii_case("var");
+            let args = self.arguments(false, true, empty_fallback)?;
             return self.node(start, Kind::Call, vec![name, args]);
         }
         self.node(start, kind, Vec::new())
@@ -522,7 +555,7 @@ impl Parser<'_> {
         }
         if self.at("(") {
             let name = self.node(start, Kind::InterpolatedText, parts)?;
-            let args = self.arguments(false, true)?;
+            let args = self.arguments(false, true, false)?;
             return self.node(start, Kind::Call, vec![name, args]);
         }
         self.node(start, Kind::String { quoted: false }, parts)
@@ -602,6 +635,7 @@ impl Parser<'_> {
         &mut self,
         parameters: bool,
         allow_single_equal: bool,
+        allow_empty_second: bool,
     ) -> Result<Id, SassError> {
         self.enter()?;
         let start = self.pos;
@@ -668,6 +702,11 @@ impl Parser<'_> {
                 break;
             }
             self.skip(true)?;
+            if allow_empty_second && children.len() == 1 && !named && rests == 0 && self.at(")") {
+                let value = self.node(self.pos, Kind::String { quoted: false }, Vec::new())?;
+                children.push(self.node(self.pos, Kind::Argument, vec![value])?);
+                break;
+            }
             if ((parameters && rests > 0) || rests == 2) && !self.at(")") {
                 return Err(self.error(Error::ExpectedSyntax));
             }
@@ -685,44 +724,6 @@ impl Parser<'_> {
             },
             children,
         );
-        self.depth -= 1;
-        result
-    }
-
-    pub(super) fn raw_group(&mut self) -> Result<Id, SassError> {
-        self.enter()?;
-        let start = self.pos;
-        let close = match self.bump()? {
-            Some('(') => ")",
-            Some('[') => "]",
-            Some('{') => "}",
-            Some(_) | None => return Err(self.error(Error::ExpectedSyntax)),
-        };
-        let mut children = Vec::new();
-        loop {
-            if self.eat(close)? {
-                break;
-            }
-            if self.peek().is_none() {
-                return Err(self.error(Error::Unterminated));
-            }
-            if self.at("/*") {
-                self.raw_loud_comment()?;
-            } else if self.at("#{") {
-                children.push(self.interpolation()?);
-            } else if self.peek().is_some_and(|c| matches!(c, '\'' | '"')) {
-                children.push(self.quoted()?);
-            } else if self.peek().is_some_and(|c| matches!(c, '(' | '[' | '{')) {
-                children.push(self.raw_group()?);
-            } else if self.peek().is_some_and(|c| matches!(c, ')' | ']' | '}')) {
-                return Err(self.error(Error::ExpectedSyntax));
-            } else if self.at("\\") {
-                self.escape(false)?;
-            } else {
-                self.bump()?;
-            }
-        }
-        let result = self.node(start, Kind::InterpolatedText, children);
         self.depth -= 1;
         result
     }
