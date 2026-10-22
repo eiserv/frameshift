@@ -452,7 +452,7 @@ impl Parser<'_> {
             }
             At::AtRoot => {
                 if self.at("(") {
-                    children.push(self.raw_header(false)?.0);
+                    children.push(self.at_root_query()?);
                     // A query can leave the enclosing keyframes rule.
                     if context.selectors == SelectorContext::Keyframes {
                         child_context.selectors = SelectorContext::Unknown;
@@ -474,11 +474,7 @@ impl Parser<'_> {
                 block = true;
             }
             At::Extend => {
-                let header = self.raw_header(false)?.0;
-                if self.start(header) == self.end(header) {
-                    return Err(self.error(Error::ExpectedSyntax));
-                }
-                children.push(header);
+                self.extend_header(&mut children)?;
             }
             At::Import => {
                 self.import_header(&mut children, context.mixin || context.control)?;

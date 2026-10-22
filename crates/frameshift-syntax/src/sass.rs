@@ -3,8 +3,10 @@
 //! The reference is Dart Sass 1.105.2 (`D-079`). Both surface syntaxes
 //! share the same arenas; indentation never rewrites the source text.
 
+mod at_root;
 mod condition;
 mod expression;
+mod extend;
 mod import;
 mod module;
 mod module_url;
@@ -163,9 +165,11 @@ pub enum SassAtRule {
     For,
     /// `@while`.
     While,
-    /// `@extend`.
+    /// `@extend`, whose target is a `SelectorList` of single simple
+    /// selectors or, when that is not established, the raw
+    /// `InterpolatedText`, optionally followed by an `!optional` `Flag`.
     Extend,
-    /// `@at-root`.
+    /// `@at-root`, with an optional `AtRootQuery` or an inline `StyleRule`.
     AtRoot,
     /// `@debug`.
     Debug,
@@ -404,6 +408,9 @@ pub enum SassNodeKind {
         /// Whether the source uses the `::` pseudo-element syntax.
         element: bool,
     },
+    /// An `@at-root` query including its parentheses: the expression before
+    /// the optional colon, then the expression after it.
+    AtRootQuery,
     /// Comma-separated `KeyframeSelector` children of a `@keyframes` block.
     KeyframeSelectorList,
     /// `from`, `to`, or a percentage, as spelled.
@@ -436,8 +443,9 @@ pub struct SassComment {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SassUncheckedKind {
     /// A selector whose grammar depends on evaluation: it contains
-    /// interpolation, its keyframes context depends on the include site, it
-    /// is an `@extend` target, or it was retained as raw text.
+    /// interpolation, its keyframes context depends on the include site, or
+    /// it was retained as raw text, including every `@extend` target that
+    /// is not an established list of simple selectors.
     Selector,
     /// A CSS or unknown at-rule's context-specific grammar.
     CssDirective,
@@ -445,7 +453,8 @@ pub enum SassUncheckedKind {
     /// interpolation, variables, calls, or quoted strings. Dart Sass parses
     /// that text again with its stricter evaluation-time query grammar.
     MediaQuery,
-    /// The query of `@at-root`.
+    /// An `@at-root` query whose evaluated text is not already spelled as
+    /// `with` or `without` followed by plain identifiers.
     AtRootPrelude,
     /// Raw contents of a special CSS function.
     SpecialFunction,
@@ -527,6 +536,7 @@ pub struct SassDocument<'source> {
     comments: Vec<SassComment>,
     selector_evidence: Vec<SassNodeId>,
     media_evidence: Vec<SassNodeId>,
+    at_root_evidence: Vec<SassNodeId>,
 }
 
 impl PartialEq for SassDocument<'_> {
@@ -538,6 +548,7 @@ impl PartialEq for SassDocument<'_> {
             && self.comments == other.comments
             && self.selector_evidence == other.selector_evidence
             && self.media_evidence == other.media_evidence
+            && self.at_root_evidence == other.at_root_evidence
     }
 }
 impl Eq for SassDocument<'_> {}
@@ -578,6 +589,7 @@ impl<'source> SassDocument<'source> {
         // Evidence is recorded in ascending node order while parsing.
         let mut selectors = self.selector_evidence.iter().peekable();
         let mut media = self.media_evidence.iter().peekable();
+        let mut queries = self.at_root_evidence.iter().peekable();
         self.nodes
             .iter()
             .enumerate()
@@ -586,17 +598,10 @@ impl<'source> SassDocument<'source> {
                     SassUncheckedKind::Selector
                 } else if media.next_if(|id| id.0 == index).is_some() {
                     SassUncheckedKind::MediaQuery
+                } else if queries.next_if(|id| id.0 == index).is_some() {
+                    SassUncheckedKind::AtRootPrelude
                 } else if node.kind == SassNodeKind::AtRule(SassAtRule::Css) {
                     SassUncheckedKind::CssDirective
-                } else if node.kind == SassNodeKind::AtRule(SassAtRule::Extend) {
-                    SassUncheckedKind::Selector
-                } else if node.kind == SassNodeKind::AtRule(SassAtRule::AtRoot)
-                    && node
-                        .children
-                        .get(1)
-                        .is_some_and(|id| self.nodes[id.0].kind == SassNodeKind::InterpolatedText)
-                {
-                    SassUncheckedKind::AtRootPrelude
                 } else if node.kind == SassNodeKind::SpecialFunction {
                     SassUncheckedKind::SpecialFunction
                 } else {
@@ -637,8 +642,10 @@ pub fn parse_sass(
         stop_words: &[],
         stop_depth: 0,
         interpolated_selector: false,
+        parent_selectors: true,
         selector_evidence: Vec::new(),
         media_evidence: Vec::new(),
+        at_root_evidence: Vec::new(),
     };
     if parser.text.starts_with('\u{feff}') {
         parser.bump()?;
@@ -651,6 +658,7 @@ pub fn parse_sass(
     parser.comments.sort_by_key(|comment| comment.span.start());
     debug_assert!(parser.selector_evidence.is_sorted());
     debug_assert!(parser.media_evidence.is_sorted());
+    debug_assert!(parser.at_root_evidence.is_sorted());
     Ok(SassDocument {
         source,
         syntax,
@@ -659,6 +667,7 @@ pub fn parse_sass(
         comments: parser.comments,
         selector_evidence: parser.selector_evidence,
         media_evidence: parser.media_evidence,
+        at_root_evidence: parser.at_root_evidence,
     })
 }
 
@@ -680,8 +689,11 @@ struct Parser<'source> {
     stop_depth: usize,
     /// Selects the parse-time grammar for selectors with interpolation.
     interpolated_selector: bool,
+    /// Whether the selector grammar accepts `&`; extension targets reject it.
+    parent_selectors: bool,
     selector_evidence: Vec<SassNodeId>,
     media_evidence: Vec<SassNodeId>,
+    at_root_evidence: Vec<SassNodeId>,
 }
 
 impl Parser<'_> {
