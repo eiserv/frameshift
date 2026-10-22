@@ -54,7 +54,7 @@ URL facade and pinned parse-only oracle cases check raw string versus SassScript
 
 Modern Sass `if()` facade and parse-only oracle cases cover legacy disambiguation, source-preserved branches and conditions, CSS substitutions, inline comments, both surface syntaxes, deterministic arenas, and shared resource bounds (`D-085`, IMPLEMENTATION.md section 35).
 
-The `D-088` Sass facade cases cover decoded and vendor-prefixed special-function dispatch, `progid:` paths, raw declaration boundaries, exact spans, comments, interpolation, and inclusive shared limits. The optional `external_special_function_classification_oracle` shares the URL runner and compares acceptance and string-versus-call classification against the pinned parse-only reference (IMPLEMENTATION.md section 35).
+The `D-088` Sass facade cases cover decoded and vendor-prefixed special-function dispatch, `progid:` paths, raw declaration boundaries, exact spans, comments, interpolation, and inclusive shared limits, including the exact outer-parenthesis depth bound and its release before sibling calls. The optional `external_special_function_classification_oracle` shares the URL runner and compares acceptance and string-versus-call classification against the pinned parse-only reference (IMPLEMENTATION.md section 35).
 
 ### 3.3 Fuzzing
 

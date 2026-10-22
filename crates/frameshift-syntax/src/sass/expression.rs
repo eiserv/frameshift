@@ -480,6 +480,7 @@ impl Parser<'_> {
             return Ok(None);
         }
         let name = self.node(start, Kind::Identifier, Vec::new())?;
+        self.enter()?;
         let group_start = self.pos;
         self.expect("(")?;
         let contents = self.declaration_value(ValueOptions {
@@ -492,8 +493,11 @@ impl Parser<'_> {
         })?;
         self.expect(")")?;
         self.nodes[contents.0].span = super::Span::new(group_start, self.pos).unwrap();
-        self.node(start, Kind::SpecialFunction, vec![name, contents])
-            .map(Some)
+        let result = self
+            .node(start, Kind::SpecialFunction, vec![name, contents])
+            .map(Some);
+        self.depth -= 1;
+        result
     }
 
     fn unquoted(&mut self) -> Result<Id, SassError> {

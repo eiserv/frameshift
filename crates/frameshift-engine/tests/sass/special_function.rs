@@ -319,3 +319,68 @@ fn generated_special_functions_preserve_tree_errors_and_limits() {
 fn external_special_function_classification_oracle() {
     url_cases::check_expression_classification(cases(), "special-function");
 }
+
+#[test]
+fn outer_special_function_parentheses_consume_and_release_depth() {
+    for syntax in [SassSyntax::Scss, SassSyntax::Indented] {
+        for name in [
+            "type",
+            "expression",
+            "element",
+            "-vendor-calc",
+            "-vendor-expression",
+            "progid:Alpha",
+        ] {
+            for nested in 0..=4 {
+                let expression = format!("{name}({}{})", "(".repeat(nested), ")".repeat(nested));
+                let src = source(&declaration(&expression, syntax));
+                // Root statements, expression, binary operand, outer function,
+                // and then each additional raw group use the shared depth.
+                let required = 4 + nested;
+                let limits = SassLimits {
+                    max_depth: required,
+                    ..SassLimits::default()
+                };
+                assert!(
+                    parse_sass(&src, syntax, limits).is_ok(),
+                    "{syntax:?}: {expression}"
+                );
+                assert_eq!(
+                    parse_sass(
+                        &src,
+                        syntax,
+                        SassLimits {
+                            max_depth: required - 1,
+                            ..limits
+                        }
+                    )
+                    .unwrap_err()
+                    .kind,
+                    SassErrorKind::DepthLimit,
+                    "{syntax:?}: {expression}"
+                );
+            }
+        }
+        let text = [
+            "type()",
+            "expression()",
+            "-vendor-calc()",
+            "progid:Alpha()",
+            "f()",
+        ]
+        .map(|e| declaration(e, syntax))
+        .join("");
+        let src = source(&text);
+        let doc = parse_sass(
+            &src,
+            syntax,
+            SassLimits {
+                max_depth: 4,
+                ..SassLimits::default()
+            },
+        )
+        .unwrap();
+        check(&doc);
+        assert_eq!(doc.statements().len(), 5);
+    }
+}
