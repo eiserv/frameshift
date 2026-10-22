@@ -5,7 +5,8 @@ use std::collections::BTreeSet;
 use super::{
     Parser, SassBinaryOperator as Binary, SassError, SassErrorKind as Error,
     SassListSeparator as Separator, SassNodeId as Id, SassNodeKind as Kind,
-    SassUnaryOperator as Unary, canonical_name, decode_name, selector::unvendor,
+    SassUnaryOperator as Unary, canonical_name, condition::ValueOptions, decode_name,
+    selector::unvendor,
 };
 
 impl Parser<'_> {
@@ -396,6 +397,10 @@ impl Parser<'_> {
         } else {
             Kind::String { quoted: false }
         };
+        let decoded = decode_name(&self.text[start..self.pos], false);
+        if let Some(special) = self.special_function(start, &decoded)? {
+            return Ok(special);
+        }
         if !self.at("...") && self.eat(".")? {
             if self.at("$") {
                 self.expect("$")?;
@@ -422,15 +427,6 @@ impl Parser<'_> {
             }
         }
         if self.at("(") {
-            // URL text has its own lexical grammar, including literal brackets
-            // and comment markers. Only a failed raw scan tries SassScript.
-            let decoded = decode_name(&self.text[start..self.pos], false);
-            if unvendor(&decoded).eq_ignore_ascii_case("url")
-                && let Some(parts) = self.raw_url_contents()?
-            {
-                return self.node(start, Kind::String { quoted: false }, parts);
-            }
-            let function_name = self.text[start..self.pos].to_ascii_lowercase();
             let name = self.node(start, Kind::Identifier, Vec::new())?;
             // Only the exact decoded lower-case name tries the legacy grammar.
             // A failed attempt retains its work charges, like supports lookahead.
@@ -452,17 +448,52 @@ impl Parser<'_> {
                 }
                 return self.if_expression(start, name);
             }
-            if matches!(
-                function_name.as_str(),
-                "-webkit-calc" | "-moz-calc" | "element" | "expression" | "progid"
-            ) {
-                let contents = self.raw_group()?;
-                return self.node(start, Kind::SpecialFunction, vec![name, contents]);
-            }
             let args = self.arguments(false, true)?;
             return self.node(start, Kind::Call, vec![name, args]);
         }
         self.node(start, kind, Vec::new())
+    }
+
+    fn special_function(&mut self, start: usize, decoded: &str) -> Result<Option<Id>, SassError> {
+        let lower = decoded.to_ascii_lowercase();
+        let normalized = unvendor(&lower);
+        if normalized == "url" {
+            return match self.raw_url_contents()? {
+                Some(parts) => self
+                    .node(start, Kind::String { quoted: false }, parts)
+                    .map(Some),
+                None => Ok(None),
+            };
+        }
+        if normalized == "progid" && self.eat(":")? {
+            while self
+                .peek()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '.')
+            {
+                self.bump()?;
+            }
+        } else if !self.at("(")
+            || !(lower == "type"
+                || matches!(normalized, "expression" | "element")
+                || (normalized == "calc" && normalized != lower))
+        {
+            return Ok(None);
+        }
+        let name = self.node(start, Kind::Identifier, Vec::new())?;
+        let group_start = self.pos;
+        self.expect("(")?;
+        let contents = self.declaration_value(ValueOptions {
+            allow_empty: true,
+            allow_semicolon: false,
+            allow_colon: true,
+            allow_open_brace: true,
+            silent_comments: true,
+            lines: false,
+        })?;
+        self.expect(")")?;
+        self.nodes[contents.0].span = super::Span::new(group_start, self.pos).unwrap();
+        self.node(start, Kind::SpecialFunction, vec![name, contents])
+            .map(Some)
     }
 
     fn unquoted(&mut self) -> Result<Id, SassError> {
