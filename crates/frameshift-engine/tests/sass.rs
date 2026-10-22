@@ -10,6 +10,8 @@ mod extend_cases;
 mod if_cases;
 #[path = "sass/import.rs"]
 mod import_cases;
+#[path = "sass/url.rs"]
+mod url_cases;
 
 use std::collections::BTreeSet;
 
@@ -1593,6 +1595,7 @@ while (at < data.length) {
     cases.extend(extend_cases::cases());
     cases.extend(if_cases::cases());
     cases.extend(css_function_cases::cases());
+    cases.extend(url_cases::cases());
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)

@@ -50,6 +50,9 @@ pub(super) fn cases() -> Vec<Case> {
             ("url($path + '/file')", true, true),
             ("url(a b)", true, true),
             ("url(a(b))", true, true),
+            ("url([a)", true, true),
+            ("url(a;b)", true, true),
+            ("url(\\110000)", true, false),
             ("url('unterminated)", true, false),
             ("url(path", true, false),
         ] {

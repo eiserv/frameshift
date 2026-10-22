@@ -856,6 +856,11 @@ bun@1.4.0",
             "$x: if(foo(/* #{ */ a), a, b);",
             "$x: if(sass(true) var(--a): a);",
             "@media (width: if(sass(true): 1px; else: 2px)) { .a { x: y; } }",
+            "$x: url([a#{1}); $y: url(a;b); $z: u\\72l(//example.invalid/a);",
+            "$x: url(#{1 /* once */} b); $y: -vendor-url($path);",
+            "$x: url(\\110000); $y: url(a b; c);",
+            "$x: _url([a); $y: ns.url([a);",
+            "$x: url(\r\n  [a#{1}\r\n); $next: 2;",
         ]
         .iter()
         .map(|text| (*text).to_owned())
