@@ -70,6 +70,9 @@ impl Parser<'_> {
     // not compile until it is classified here.
     fn snapshot(&self) -> Snapshot {
         let Self {
+            // Observations of the outer program list, unchanged by speculation.
+            program_item_start: _,
+            program_strict: _,
             // Fixed for the whole parse.
             source: _,
             text: _,

@@ -284,10 +284,66 @@ fn program(input: &[u8]) -> Result<(), String> {
     let Some(text) = text(input)? else {
         return Ok(());
     };
+    let source = source(text)?;
     for goal in GOALS {
         for dialect in DIALECTS {
             check::program(text, goal, dialect, ParseLimits::default())
                 .map_err(|error| format!("{goal:?} {dialect:?}: {error}"))?;
+            recovery(&source, goal, dialect)?;
+        }
+    }
+    Ok(())
+}
+
+fn recovery(source: &SourceText, goal: SourceGoal, dialect: JsDialect) -> Result<(), String> {
+    use frameshift_engine::syntax::{
+        RecoveryLimits, parse_js_program, parse_js_program_with_recovery,
+    };
+    let limits = ParseLimits::default();
+    let recovery = RecoveryLimits {
+        max_diagnostics: 8,
+        max_work: 4_096,
+    };
+    let result = parse_js_program_with_recovery(source, goal, dialect, limits, recovery)
+        .map_err(|e| format!("recovery failed: {e}"))?;
+    let repeated = parse_js_program_with_recovery(source, goal, dialect, limits, recovery)
+        .map_err(|e| format!("repeated recovery failed: {e}"))?;
+    if result.diagnostics() != repeated.diagnostics() || result.stop() != repeated.stop() {
+        return Err("JavaScript diagnostic recovery is not deterministic".to_owned());
+    }
+    if result.diagnostics().len() > recovery.max_diagnostics
+        || result
+            .diagnostics()
+            .windows(2)
+            .any(|p| p[0].offset >= p[1].offset)
+    {
+        return Err("JavaScript diagnostics exceed their bound or are unordered".to_owned());
+    }
+    for error in result.diagnostics() {
+        source
+            .validate_offset(error.offset)
+            .map_err(|e| e.to_string())?;
+    }
+    if let Some(stop) = result.stop() {
+        source
+            .validate_offset(stop.offset)
+            .map_err(|e| e.to_string())?;
+    }
+    match parse_js_program(source, goal, dialect, limits) {
+        Ok(strict) => {
+            let tree = result.tree().ok_or("valid source has no recovery tree")?;
+            if !result.diagnostics().is_empty()
+                || result.stop().is_some()
+                || tree.nodes() != strict.nodes()
+                || tree.comments() != strict.comments()
+            {
+                return Err("recovery changed a valid program".to_owned());
+            }
+        }
+        Err(error) => {
+            if result.tree().is_some() || result.diagnostics().first() != Some(&error) {
+                return Err("erroneous source exposes a tree or changed its first error".to_owned());
+            }
         }
     }
     Ok(())

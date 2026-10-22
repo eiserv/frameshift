@@ -16,6 +16,7 @@ mod jsx;
 mod module;
 mod names;
 mod pattern;
+mod recovery;
 mod scope;
 mod speculation;
 mod statement;
@@ -24,6 +25,9 @@ mod typescript;
 use frameshift_core::{SourceText, Span};
 
 pub use error::{ParseError, ParseErrorKind, StrictModeError};
+pub use recovery::{
+    JsProgramParse, RecoveryLimits, RecoveryStop, RecoveryStopKind, parse_js_program_with_recovery,
+};
 
 use crate::{
     ast::{
@@ -245,6 +249,10 @@ fn earliest(a: Option<usize>, b: Option<usize>) -> Option<usize> {
 }
 
 struct Parser<'source> {
+    // Observations at trusted program-item boundaries, used only by diagnostics
+    // recovery. Nested lists and speculative readings never change these.
+    program_item_start: usize,
+    program_strict: Strictness,
     source: &'source SourceText,
     text: &'source str,
     limits: ParseLimits,
@@ -343,6 +351,8 @@ impl<'source> Parser<'source> {
             arguments_forbidden: false,
         };
         Self {
+            program_item_start: 0,
+            program_strict: context.strict,
             source,
             text: source.as_str(),
             limits,

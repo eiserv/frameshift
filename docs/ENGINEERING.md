@@ -416,5 +416,5 @@ Conventional Commit scopes follow the subsystems. Recommended scopes: `cli`, `co
 
 ## 10. Open questions
 
-- JavaScript parser recovery synchronization points and default diagnostic/recovery budgets (M3, under accepted `D-034`). CSS recovery and budgets are implemented under `D-078`.
+- JavaScript diagnostic recovery boundaries and budgets are implemented under `D-085` (IMPLEMENTATION.md section 36); nested-list recovery is not implemented. CSS recovery and budgets are implemented under `D-078`.
 - HTML parser for static output comparison: build or adopt (`Q-005`).

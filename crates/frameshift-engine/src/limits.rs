@@ -14,8 +14,8 @@ use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
 use frameshift_package::{LoadLimits, PackageLimits, WorkspaceLimits};
 use frameshift_syntax::{
-    CssLimits, CssParserLimits, JsonLimits, LexicalLimits, ParseLimits, SassLimits, YamlLimits,
-    YarnLimits,
+    CssLimits, CssParserLimits, JsonLimits, LexicalLimits, ParseLimits, RecoveryLimits, SassLimits,
+    YamlLimits, YarnLimits,
 };
 use frameshift_transform::EditLimits;
 
@@ -46,6 +46,8 @@ pub struct Limits {
     pub hash: HashLimits,
     /// One parse, including its lexical scans.
     pub parse: ParseLimits,
+    /// Additional JavaScript diagnostics and synchronization work.
+    pub recovery: RecoveryLimits,
     /// One CSS tokenization.
     pub css: CssLimits,
     /// Generic CSS structure and recovery.
@@ -186,7 +188,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 47] {
+    pub fn entries(&self) -> [LimitEntry; 49] {
         let Self {
             run,
             ignore,
@@ -196,6 +198,7 @@ impl Limits {
             finding,
             hash,
             parse,
+            recovery,
             css,
             css_parser,
             sass,
@@ -239,6 +242,10 @@ impl Limits {
             max_tokens,
             max_nesting_depth,
         } = parse;
+        let RecoveryLimits {
+            max_diagnostics: recovery_diagnostics,
+            max_work: recovery_work,
+        } = recovery;
         let CssLimits {
             max_tokens: css_tokens,
         } = css;
@@ -323,6 +330,8 @@ impl Limits {
             entry("parse.max-nesting-depth", wide(max_nesting_depth)),
             entry("parse.max-nodes", wide(max_nodes)),
             entry("parse.max-tokens", wide(max_tokens)),
+            entry("parse.recovery.max-diagnostics", wide(recovery_diagnostics)),
+            entry("parse.recovery.max-work", wide(recovery_work)),
             entry("path.max-components", wide(max_components)),
             entry("path.max-path-bytes", wide(max_path_bytes)),
             entry("run.max-directory-depth", wide(max_directory_depth)),

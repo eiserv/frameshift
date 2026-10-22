@@ -161,6 +161,7 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                             | SassNodeKind::Variable
                             | SassNodeKind::Call
                             | SassNodeKind::SpecialFunction
+                            | SassNodeKind::IfExpression
                             | SassNodeKind::String { quoted: true }
                             | SassNodeKind::ParentSelector
                             | SassNodeKind::Null

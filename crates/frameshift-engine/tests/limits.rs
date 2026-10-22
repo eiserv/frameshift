@@ -41,6 +41,8 @@ fn documented_defaults_are_consistent() {
     assert_eq!(value("path.max-components"), Some(256));
     assert_eq!(value("hash.max-bytes"), Some(ALGORITHM_MAX));
     assert_eq!(value("parse.lexical.max-comments"), Some(100_000));
+    assert_eq!(value("parse.recovery.max-diagnostics"), Some(256));
+    assert_eq!(value("parse.recovery.max-work"), Some(1_048_576));
     assert_eq!(value("emit.max-depth"), Some(256));
     assert_eq!(value("sass.max-nodes"), Some(1_000_000));
     assert_eq!(value("sass.max-depth"), Some(128));
@@ -138,8 +140,10 @@ fn entries_are_sorted_named_and_complete() {
     limits.sass.max_nodes = value();
     limits.sass.max_depth = value();
     limits.sass.max_work = value();
+    limits.recovery.max_diagnostics = value();
+    limits.recovery.max_work = value();
     let values: BTreeSet<u64> = limits.entries().iter().map(|entry| entry.value).collect();
-    assert_eq!(values, (1..=47).collect());
+    assert_eq!(values, (1..=49).collect());
     let entries = limits.entries();
     let named = |name: &str| entries.iter().find(|entry| entry.name == name).unwrap();
     assert_eq!(named("run.max-files").value, 1);

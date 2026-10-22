@@ -47,15 +47,18 @@ impl<'source> Parser<'source> {
         goal: SourceGoal,
         dialect: JsDialect,
     ) -> Result<NodeId, ParseError> {
-        self.skip_hashbang()?;
+        let continuation = self.cursor != 0;
+        if !continuation {
+            self.skip_hashbang()?;
+        }
         let (scope, list) = match goal {
             SourceGoal::Script => (ScopeKind::Function, ListKind::Script),
             SourceGoal::Module => (ScopeKind::Module, ListKind::Module),
         };
         self.push_scope(scope)?;
         let mut items = self.take_list();
-        let result = self.parse_program_items(list, &mut items);
-        let module_result = if result.is_ok() && goal == SourceGoal::Module {
+        let result = self.parse_program_items(list, &mut items, continuation);
+        let module_result = if result.is_ok() && goal == SourceGoal::Module && !continuation {
             self.check_exported_bindings()
         } else {
             Ok(())
@@ -81,8 +84,12 @@ impl<'source> Parser<'source> {
         &mut self,
         list: ListKind,
         items: &mut Vec<NodeId>,
+        continuation: bool,
     ) -> Result<(), ParseError> {
-        self.parse_directive_prologue(items)?;
+        if !continuation {
+            self.parse_directive_prologue(items)?;
+        }
+        self.program_strict = self.context.strict;
         self.parse_statement_list(list, items)?;
         if !self.at_end()? {
             return Err(self.error(self.cursor, ParseErrorKind::ExpectedExpression));
@@ -169,6 +176,9 @@ impl<'source> Parser<'source> {
                         return Err(self.error(self.cursor, ParseErrorKind::ExpectedClosingBrace));
                     }
                 }
+            }
+            if matches!(kind, ListKind::Script | ListKind::Module) {
+                self.program_item_start = self.cursor;
             }
             let item = self.parse_statement(Position::List(kind))?;
             self.push_child(items, item)?;
