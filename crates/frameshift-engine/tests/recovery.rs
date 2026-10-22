@@ -407,7 +407,6 @@ fn module_prefixes_keep_ambiguous_statements_and_lexical_contexts_closed() {
     for item in [
         "export default function f() { const a = ; };",
         "export default class C { x = ; };",
-        "export default (1 + );",
         "export function f() { const a = ; };",
         "export class C { x = ; };",
         "export async function f() { const a = ; };",
@@ -500,5 +499,168 @@ fn module_prefix_trivia_and_multibyte_work_use_the_shared_budget() {
     assert_eq!(
         parse(required - 1).stop().unwrap().kind,
         RecoveryStopKind::WorkLimit
+    );
+}
+
+#[test]
+fn default_export_expressions_resume_at_explicit_outer_semicolons() {
+    for dialect in [
+        JsDialect::JavaScript,
+        JsDialect::Jsx,
+        JsDialect::TypeScript,
+        JsDialect::Tsx,
+        JsDialect::TypeScriptDeclaration,
+    ] {
+        for item in [
+            "export default (1 + );",
+            "export/* 色 ; */default/* ; */[';', (1 + )];",
+            "export default {x: ';', y: (1 + )};",
+            "export default f(function () { const x = ; });",
+            "export default () => { const x = ; };",
+            "export default ';' + ;",
+            "export default ;",
+        ] {
+            let text = format!("{item}\r\nconst later = ;");
+            let src = make_source(&text);
+            let strict =
+                parse_js_program(&src, SourceGoal::Module, dialect, ParseLimits::default())
+                    .err()
+                    .unwrap();
+            let parse = || {
+                parse_js_program_with_recovery(
+                    &src,
+                    SourceGoal::Module,
+                    dialect,
+                    ParseLimits::default(),
+                    RecoveryLimits::default(),
+                )
+                .unwrap()
+            };
+            let result = parse();
+            assert_eq!(result.diagnostics()[0], strict);
+            assert_eq!(
+                result.diagnostics().len(),
+                2,
+                "{dialect:?}: {text}: {:?}",
+                result.stop()
+            );
+            assert_eq!(result.diagnostics()[1].offset, text.len() - 1);
+            assert_eq!(result.stop(), None);
+            assert!(result.tree().is_none());
+            let again = parse();
+            assert_eq!(again.diagnostics(), result.diagnostics());
+            assert_eq!(again.stop(), result.stop());
+            assert!(result.into_tree().is_none());
+        }
+    }
+}
+
+#[test]
+fn default_export_prefix_keeps_ambiguous_forms_and_script_goal_closed() {
+    for item in [
+        "export default function f() { const x = ; };",
+        "export default class C { x = ; };",
+        "export default async function f() { const x = ; };",
+        "export default interface I { x: ; };",
+        "export default /;/ + ;",
+        "export default `;` + ;",
+        "export default <P></Q>;",
+        "export default value ? a : ;",
+        "export default (1 + ;",
+        "export default\\u0061 (1 + );",
+        "export defaulted (1 + );",
+    ] {
+        let text = format!("{item} const later = ;");
+        let src = make_source(&text);
+        let result = parse_js_program_with_recovery(
+            &src,
+            SourceGoal::Module,
+            JsDialect::Tsx,
+            ParseLimits::default(),
+            RecoveryLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(result.diagnostics().len(), 1, "{text}");
+        assert_eq!(
+            result.stop().unwrap().kind,
+            RecoveryStopKind::UnsafeBoundary,
+            "{text}"
+        );
+        assert!(result.tree().is_none());
+    }
+    for text in [
+        "export default",
+        "export default /* ; */",
+        "export default // ;\n",
+    ] {
+        let src = make_source(text);
+        let result = parse_js_program_with_recovery(
+            &src,
+            SourceGoal::Module,
+            JsDialect::JavaScript,
+            ParseLimits::default(),
+            RecoveryLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            result.stop().unwrap().kind,
+            RecoveryStopKind::UnsafeBoundary,
+            "{text}"
+        );
+    }
+    let src = make_source("export default (1 + ); const later = ;");
+    let result = parse_js_program_with_recovery(
+        &src,
+        SourceGoal::Script,
+        JsDialect::JavaScript,
+        ParseLimits::default(),
+        RecoveryLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(result.diagnostics().len(), 1);
+    assert_eq!(
+        result.stop().unwrap().kind,
+        RecoveryStopKind::UnsafeBoundary
+    );
+}
+
+#[test]
+fn default_export_prefix_charges_every_utf8_byte_and_retains_strictness() {
+    let src = make_source("export/* 色 ; */default/* ; */(1+);const z=;");
+    for work in 0..=src.len() {
+        let result = parse_js_program_with_recovery(
+            &src,
+            SourceGoal::Module,
+            JsDialect::JavaScript,
+            ParseLimits::default(),
+            RecoveryLimits {
+                max_work: work,
+                ..RecoveryLimits::default()
+            },
+        )
+        .unwrap();
+        assert!(result.tree().is_none());
+        if work == src.len() {
+            assert_eq!(result.diagnostics().len(), 2);
+            assert_eq!(result.stop(), None);
+        } else {
+            let stop = result.stop().unwrap();
+            assert_eq!(stop.kind, RecoveryStopKind::WorkLimit, "{work}");
+            src.validate_offset(stop.offset).unwrap();
+        }
+    }
+    let src = make_source("export default (1 + ); with (o) {} const z = ;");
+    let result = parse_js_program_with_recovery(
+        &src,
+        SourceGoal::Module,
+        JsDialect::JavaScript,
+        ParseLimits::default(),
+        RecoveryLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(result.diagnostics().len(), 2);
+    assert_eq!(
+        result.diagnostics()[1].kind,
+        ParseErrorKind::StrictMode(StrictModeError::With)
     );
 }

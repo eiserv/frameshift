@@ -86,7 +86,8 @@ impl<'source> JsProgramParse<'source> {
 /// ternaries, control/declaration keywords with nested statement grammar, and
 /// unmatched delimiters. No token is inserted and no source text is rewritten.
 /// In modules, static imports, named/star exports, and exported variable
-/// declarations can resume at the same explicit semicolon boundaries.
+/// declarations and default-export expressions can resume at the same explicit
+/// semicolon boundaries. Function and class declaration prefixes still stop.
 /// Nested lists are not independently recovered. Any error withholds the whole
 /// tree, including valid regions. Allocation failure or a zero diagnostic bound
 /// returns `Err`; other stops retain all diagnostics collected so far.
@@ -216,6 +217,7 @@ struct Synchronizer<'text, 'budget> {
 enum ModulePrefix {
     Import,
     Export,
+    DefaultExport,
 }
 
 impl Synchronizer<'_, '_> {
@@ -240,6 +242,13 @@ impl Synchronizer<'_, '_> {
     fn starts(&self, text: &str) -> bool {
         self.text[self.pos..].starts_with(text)
     }
+    fn keyword(&self, word: &str) -> bool {
+        self.starts(word)
+            && !self.text[self.pos + word.len()..]
+                .chars()
+                .next()
+                .is_some_and(|c| c == '\\' || is_js_identifier_part(c))
+    }
 
     fn boundary(&mut self, error: usize) -> Result<usize, RecoveryStop> {
         let mut stack = Vec::new();
@@ -263,21 +272,27 @@ impl Synchronizer<'_, '_> {
                 self.bump()?;
             } else if ch.is_whitespace() || ch == '\u{feff}' {
                 self.bump()?;
-            } else if let Some(prefix) = prefix.take() {
-                let allowed = match prefix {
+            } else if let Some(module_prefix) = prefix.take() {
+                let allowed = match module_prefix {
                     ModulePrefix::Import => {
                         matches!(ch, '\'' | '"' | '{' | '*') || is_js_identifier_start(ch)
                     }
                     ModulePrefix::Export => {
+                        if self.keyword("default") {
+                            for _ in 0.."default".len() {
+                                self.bump()?;
+                            }
+                            prefix = Some(ModulePrefix::DefaultExport);
+                            continue;
+                        }
                         matches!(ch, '{' | '*')
-                            || ["const", "let", "var"].iter().any(|word| {
-                                self.starts(word)
-                                    && !self.text[self.pos + word.len()..]
-                                        .chars()
-                                        .next()
-                                        .is_some_and(|c| c == '\\' || is_js_identifier_part(c))
-                            })
+                            || ["const", "let", "var"]
+                                .iter()
+                                .any(|word| self.keyword(word))
                     }
+                    // The ordinary scan still rejects function/class prefixes
+                    // and every ambiguous lexical or statement boundary.
+                    ModulePrefix::DefaultExport => true,
                 };
                 if !allowed {
                     return Err(self.stop(RecoveryStopKind::UnsafeBoundary));

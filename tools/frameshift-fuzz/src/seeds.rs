@@ -20,7 +20,7 @@ const GENERATED_PER_FAMILY: u64 = 8;
 /// one top-level item.
 const GENERATED_TARGET: usize = 256;
 
-const PROGRAMS: [&str; 22] = [
+const PROGRAMS: [&str; 25] = [
     "#!/usr/bin/env node\n'use strict';\nvar total = 0;\nfor (var i = 0; i < 3; i++) { total += i; }\nmodule.exports = total;\n",
     "<!-- legacy\nwith (scope) { value = 017 + 08 + '\\101'; }\nlabel: function legacy() {}\nif (flag) function inner() {}\n--> trailing\n",
     "import base, * as all from './base.js' with { type: 'json' };\nexport { base as default, all };\nexport * as more from './more.js';\nawait Promise.resolve(import.meta.url);\n",
@@ -43,6 +43,9 @@ const PROGRAMS: [&str; 22] = [
     "export default function f() { const x = ; }; const later = ;",
     "import(1 + ); const later = ;",
     "const a = (1 +\n--> ; ignored\n); const b = ;",
+    "export/* 色 ; */default/* ; */[';', (1 + )]; const later = ;",
+    "export default {x: ';', y: (1 + )}; const later = ;",
+    "export default /;/ + ; const later = ;",
 ];
 
 const EXPRESSIONS: [&str; 16] = [
@@ -795,6 +798,9 @@ bun@1.4.0",
         Target::Yaml => ["", "{\"fictional\": \"\\uD83D\\uDE00\"}", "fictional: [one, two, {three: four}]\n", "? &key [fictional, complex]\n: *key\n", "&a [*a, {self: *a}]", "%YAML 1.2\n---\n{? [a, b]: !!str 9}\n...\n---\nnull\n", "a: >-\n  fictional\n\n  lines\n", "- &key \"hello\\nworld\"\n- *key\n", "{\"a\": [true, false, null, 1.25, -0, \"\\u0041\"]}", "lockfileVersion: '9.0'\nimporters:\n  .:\n    dependencies:\n      fictional:\n        specifier: ^1\n        version: 1.0.0\npackages:\n  fictional@1.0.0:\n    resolution: {integrity: sha512-fake}\nsnapshots:\n  fictional@1.0.0: {}\n"].iter().map(|text| (*text).to_owned()).collect(),
         Target::Sass => [
             "",
+            "$x: 1px-2px; $y: 1px-.5rem; $z: 1--unit;",
+            "$x: 1色-.5色\n$y: 1px--2px\n$z: 1p\\78-2px\n",
+            "$x: 1px-\\32 px; $y: 1--unit-2px; $z: 1px-.;",
             "@import 'fictional', 'theme.css', url(#{$path}) layer(base);",
             "@import url(#{$path} 'tail' + $suffix), 'other';",
             "@import '#{$literal}'\n@import bare, other.css\n",
