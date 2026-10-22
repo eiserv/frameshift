@@ -111,7 +111,7 @@ impl Parser<'_> {
         Ok(header)
     }
 
-    fn selector_list(&mut self) -> Result<Id, SassError> {
+    pub(super) fn selector_list(&mut self) -> Result<Id, SassError> {
         self.enter()?;
         let start = self.pos;
         let first = self.complex_selector()?;
@@ -210,6 +210,9 @@ impl Parser<'_> {
     }
 
     fn parent_selector(&mut self) -> Result<Id, SassError> {
+        if !self.parent_selectors {
+            return Err(self.error(Error::InvalidContext));
+        }
         let start = self.pos;
         self.expect("&")?;
         let mut children = Vec::new();
@@ -535,7 +538,7 @@ impl Parser<'_> {
 
     /// Consumes a raw `url(...)`, returning `false` without consuming
     /// anything when the contents are not a raw URL.
-    fn selector_url(&mut self, parts: &mut Vec<Id>) -> Result<bool, SassError> {
+    pub(super) fn selector_url(&mut self, parts: &mut Vec<Id>) -> Result<bool, SassError> {
         let start = self.pos;
         let nodes = self.nodes.len();
         let interpolated = self.interpolated_selector;
@@ -660,7 +663,10 @@ impl Parser<'_> {
         self.node(start, kind, parts)
     }
 
-    fn selector_identifier_body(&mut self, parts: &mut Vec<Id>) -> Result<(), SassError> {
+    pub(super) fn selector_identifier_body(
+        &mut self,
+        parts: &mut Vec<Id>,
+    ) -> Result<(), SassError> {
         loop {
             match self.peek() {
                 Some(c) if name_char(c) => {
@@ -676,7 +682,7 @@ impl Parser<'_> {
     }
 
     /// Consumes a plain identifier without building a node.
-    fn skip_identifier(&mut self) -> Result<(), SassError> {
+    pub(super) fn skip_identifier(&mut self) -> Result<(), SassError> {
         if self.eat("-")? && self.eat("-")? {
         } else if self.at("\\") {
             self.selector_escape()?;
@@ -726,7 +732,7 @@ impl Parser<'_> {
     }
 
     /// Whether a plain CSS identifier starts here.
-    fn identifier_ahead(&self) -> bool {
+    pub(super) fn identifier_ahead(&self) -> bool {
         let mut chars = self.text[self.pos..].chars();
         match chars.next() {
             Some('-') => chars
@@ -785,7 +791,7 @@ impl Parser<'_> {
         }
     }
 
-    fn identifier_text(&mut self, text: &str) -> Result<bool, SassError> {
+    pub(super) fn identifier_text(&mut self, text: &str) -> Result<bool, SassError> {
         for letter in text.chars() {
             if !self.scan_identifier_char(letter)? {
                 return Ok(false);
@@ -848,7 +854,7 @@ impl Parser<'_> {
     }
 }
 
-fn name_start_char(c: char) -> bool {
+pub(super) fn name_start_char(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '_' || c >= '\u{80}'
 }
 

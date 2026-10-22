@@ -524,6 +524,9 @@ pub fn dictionary(target: Target) -> &'static [&'static str] {
             "50%",
             "to",
             "@at-root",
+            "(without:",
+            "@extend",
+            "!optional",
             "url(",
             "@media",
             "@supports",
@@ -828,6 +831,11 @@ bun@1.4.0",
             ".p { @supports (#{$a} or (b: c)) and (foo bar) { x: y; } }",
             "@import 'theme.css' supports(not (display: grid)) layer(base) screen, print;",
             "@import 'theme.css' supports(--x: url(//y)) (min-width: 1px);",
+            ".p { @extend %a, .b, :not(.c .d) !optional; @extend .e .f; @extend &; }",
+            ".p\n  @extend\n    .a !opt\\69onal\n  @extend url(a;b), #{$x}\n",
+            ".p { @extend .a /* #{ */ ; @extend ; }",
+            ".p { @at-root (without: media supports) { .c { x: y; } } @at-root (with: $m) { .c { x: y; } } }",
+            ".p\n  @at-root (WITH\n    : rule)\n    .c\n      x: y\n",
         ]
         .iter()
         .map(|text| (*text).to_owned())

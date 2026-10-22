@@ -3,7 +3,8 @@
 use std::collections::BTreeSet;
 
 use frameshift_engine::syntax::{
-    SassAtRule, SassLimits, SassNodeKind, SassSyntax, SassUncheckedKind, parse_sass,
+    SassAtRule, SassDocument, SassLimits, SassNode, SassNodeKind, SassSyntax, SassUnchecked,
+    SassUncheckedKind, parse_sass,
 };
 
 use crate::targets;
@@ -199,6 +200,12 @@ pub fn run(input: &[u8]) -> Result<(), String> {
             {
                 return Err("module clause has invalid children".to_owned());
             }
+            if node.kind == SassNodeKind::AtRule(SassAtRule::Extend) {
+                check_extend(&doc, node, &unchecked)?;
+            }
+            if node.kind == SassNodeKind::AtRootQuery {
+                check_at_root_query(&doc, node, &unchecked)?;
+            }
         }
         for rule in doc
             .nodes()
@@ -238,6 +245,91 @@ pub fn run(input: &[u8]) -> Result<(), String> {
         if doc.nodes().len() + doc.comments().len() > SassLimits::default().max_nodes {
             return Err("Sass arena exceeds its limit".to_owned());
         }
+    }
+    Ok(())
+}
+
+/// An established target is a list of single simple selectors without `&`;
+/// any other target is raw text with selector evidence (`D-084`).
+fn check_extend(
+    doc: &SassDocument<'_>,
+    node: &SassNode,
+    unchecked: &[SassUnchecked],
+) -> Result<(), String> {
+    let target = node
+        .children
+        .get(1)
+        .and_then(|&id| doc.node(id))
+        .ok_or("extension without target")?;
+    let evidence = unchecked
+        .iter()
+        .any(|entry| entry.kind == SassUncheckedKind::Selector && entry.span == target.span);
+    let flag = node.children.get(2).and_then(|&id| doc.node(id));
+    if node.children.len() > 3 || flag.is_some_and(|flag| flag.kind != SassNodeKind::Flag) {
+        return Err("invalid extension children".to_owned());
+    }
+    if target.kind == SassNodeKind::InterpolatedText {
+        return if evidence {
+            Ok(())
+        } else {
+            Err("raw extension target without evidence".to_owned())
+        };
+    }
+    if target.kind != SassNodeKind::SelectorList || evidence {
+        return Err(format!("unexpected extension target: {target:?}"));
+    }
+    for &complex in &target.children {
+        let complex = doc.node(complex).ok_or("missing complex selector")?;
+        let [compound] = complex.children[..] else {
+            return Err("complex extension target".to_owned());
+        };
+        let compound = doc.node(compound).ok_or("missing compound selector")?;
+        if compound.kind != SassNodeKind::CompoundSelector || compound.children.len() != 1 {
+            return Err("compound extension target".to_owned());
+        }
+    }
+    let mut stack = target.children.clone();
+    while let Some(id) = stack.pop() {
+        let child = doc.node(id).ok_or("missing extension node")?;
+        if child.kind == SassNodeKind::NestingSelector {
+            return Err("parent selector in an extension target".to_owned());
+        }
+        stack.extend_from_slice(&child.children);
+    }
+    Ok(())
+}
+
+/// A query without evidence spells `kind: rules` with unquoted plain names.
+fn check_at_root_query(
+    doc: &SassDocument<'_>,
+    node: &SassNode,
+    unchecked: &[SassUnchecked],
+) -> Result<(), String> {
+    if !(1..=2).contains(&node.children.len()) {
+        return Err("invalid at-root query arity".to_owned());
+    }
+    let evidence = unchecked
+        .iter()
+        .any(|entry| entry.kind == SassUncheckedKind::AtRootPrelude && entry.span == node.span);
+    if evidence {
+        return Ok(());
+    }
+    let plain = |id| {
+        doc.node(id).is_some_and(|child| {
+            child.kind == (SassNodeKind::String { quoted: false }) && child.children.is_empty()
+        })
+    };
+    let [kind, rules] = node.children[..] else {
+        return Err("at-root query without rules lacks evidence".to_owned());
+    };
+    let rules = doc.node(rules).ok_or("missing at-root rules")?;
+    let plain_rules = if matches!(rules.kind, SassNodeKind::List { .. }) {
+        rules.children.iter().all(|&id| plain(id))
+    } else {
+        rules.kind == (SassNodeKind::String { quoted: false }) && rules.children.is_empty()
+    };
+    if !plain(kind) || !plain_rules {
+        return Err("value-dependent at-root query lacks evidence".to_owned());
     }
     Ok(())
 }

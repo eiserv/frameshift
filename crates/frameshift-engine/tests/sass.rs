@@ -2,6 +2,8 @@
 
 #[path = "sass/condition.rs"]
 mod condition_cases;
+#[path = "sass/extend.rs"]
+mod extend_cases;
 #[path = "sass/import.rs"]
 mod import_cases;
 
@@ -1420,10 +1422,11 @@ fn at_root_selectors_are_style_rules() {
         selector_text(&doc, inline.children[0]),
         "[class(a) > type(b)]"
     );
-    let unchecked: Vec<_> = doc.unchecked_syntax().collect();
-    assert_eq!(unchecked.len(), 1);
-    assert_eq!(unchecked[0].kind, SassUncheckedKind::AtRootPrelude);
-    assert_eq!(unchecked[0].span, at_root[1].span);
+    // A literal query is established and carries no evidence (`D-084`).
+    assert_eq!(doc.unchecked_syntax().count(), 0);
+    let query = doc.node(at_root[1].children[1]).unwrap();
+    assert_eq!(query.kind, SassNodeKind::AtRootQuery);
+    assert_eq!(input.slice(query.span).unwrap(), "(without: media)");
     accepts("@at-root a\n  x: y\n", SassSyntax::Indented);
     assert!(
         parse_sass(
@@ -1583,6 +1586,7 @@ while (at < data.length) {
             .map(|case| (case.text, case.syntax)),
     );
     cases.extend(condition_cases::cases());
+    cases.extend(extend_cases::cases());
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)
@@ -1900,6 +1904,64 @@ fn external_sass_condition_oracle() {
     }
     eprintln!(
         "Sass condition compile oracle: {} fictional cases, {established} without evidence",
+        cases.len()
+    );
+    assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
+}
+
+#[test]
+#[ignore = "requires external pinned Sass 1.105.2"]
+fn external_sass_extend_oracle() {
+    // Optional extensions compile without a matching target; defined
+    // variables keep evaluation errors out of the comparison.
+    let mut cases = Vec::new();
+    for target in extend_cases::TARGETS {
+        if !target.contains('{') {
+            cases.push((
+                format!("$x: x; .p {{ @extend {target} !optional; }}"),
+                SassSyntax::Scss,
+            ));
+            cases.push((
+                format!("$x: x\n.p\n  @extend {target} !optional\n"),
+                SassSyntax::Indented,
+            ));
+        }
+    }
+    let queries: Vec<_> = extend_cases::cases()
+        .into_iter()
+        // Style rules inside keyframes fail evaluation whatever the query.
+        .filter(|(text, _)| {
+            text.contains("@at-root") && !text.contains("@extend") && !text.contains("@keyframes")
+        })
+        .map(|(text, syntax)| {
+            let prefix = if syntax == SassSyntax::Scss {
+                "$m: media; $w: with; "
+            } else {
+                "$m: media\n$w: with\n"
+            };
+            (format!("{prefix}{text}"), syntax)
+        })
+        .collect();
+    let extend_count = cases.len();
+    cases.extend(queries);
+    let verdicts = compile_with_oracle(&cases);
+    let mut mismatches = Vec::new();
+    let mut established = 0;
+    for (index, ((text, syntax), compiled)) in cases.iter().zip(verdicts).enumerate() {
+        let verdict = if index < extend_count {
+            extend_cases::extend_verdict(text, *syntax)
+        } else {
+            extend_cases::query_verdict(text, *syntax)
+        };
+        // A case without evidence must compile, and every compiled case
+        // must be accepted.
+        established += usize::from(verdict == Some(false));
+        if (verdict == Some(false) && !compiled) || (compiled && verdict.is_none()) {
+            mismatches.push(format!("{syntax:?} {compiled} {verdict:?}: {text:?}"));
+        }
+    }
+    eprintln!(
+        "Sass extend and at-root compile oracle: {} fictional cases, {established} without evidence",
         cases.len()
     );
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
