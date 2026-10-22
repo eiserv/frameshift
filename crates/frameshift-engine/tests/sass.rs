@@ -2,6 +2,8 @@
 
 #[path = "sass/condition.rs"]
 mod condition_cases;
+#[path = "sass/css_function.rs"]
+mod css_function_cases;
 #[path = "sass/extend.rs"]
 mod extend_cases;
 #[path = "sass/if_expression.rs"]
@@ -1590,6 +1592,7 @@ while (at < data.length) {
     cases.extend(condition_cases::cases());
     cases.extend(extend_cases::cases());
     cases.extend(if_cases::cases());
+    cases.extend(css_function_cases::cases());
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)

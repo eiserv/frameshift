@@ -216,6 +216,8 @@ impl Parser<'_> {
             allow_empty: true,
             allow_semicolon: true,
             allow_colon: true,
+            allow_open_brace: true,
+            silent_comments: true,
             lines: true,
         })?;
         self.expect(")")?;

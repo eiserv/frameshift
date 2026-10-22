@@ -146,7 +146,7 @@ pub enum SassAtRule {
     Import,
     /// `@mixin`, or `=` in indented syntax.
     Mixin,
-    /// `@function`.
+    /// A Sass `@function`; a literal `--` prefix instead produces `Css`.
     Function,
     /// `@include`, or `+` in indented syntax.
     Include,

@@ -13,6 +13,8 @@ pub(super) struct ValueOptions {
     pub(super) allow_empty: bool,
     pub(super) allow_semicolon: bool,
     pub(super) allow_colon: bool,
+    pub(super) allow_open_brace: bool,
+    pub(super) silent_comments: bool,
     pub(super) lines: bool,
 }
 
@@ -439,6 +441,8 @@ impl Parser<'_> {
                     allow_empty: true,
                     allow_semicolon: true,
                     allow_colon: true,
+                    allow_open_brace: true,
+                    silent_comments: true,
                     lines: true,
                 })?;
                 self.expect(")")?;
@@ -483,6 +487,8 @@ impl Parser<'_> {
                     allow_empty: true,
                     allow_semicolon: true,
                     allow_colon: false,
+                    allow_open_brace: true,
+                    silent_comments: true,
                     lines: true,
                 })?;
                 if self.at(":") {
@@ -515,6 +521,8 @@ impl Parser<'_> {
                 allow_empty: false,
                 allow_semicolon: false,
                 allow_colon: true,
+                allow_open_brace: true,
+                silent_comments: true,
                 lines: false,
             });
         }
@@ -567,7 +575,7 @@ impl Parser<'_> {
                 '\\' => self.escape(true)?,
                 '"' | '\'' => parts.push(self.quoted()?),
                 '/' if self.at("/*") => self.raw_loud_comment()?,
-                '/' if self.at("//") => {
+                '/' if options.silent_comments && self.at("//") => {
                     self.comment(true, false)?;
                     continue;
                 }
@@ -585,6 +593,7 @@ impl Parser<'_> {
                 {
                     break;
                 }
+                '{' if !options.allow_open_brace => break,
                 '(' | '{' | '[' => {
                     self.enter()?;
                     self.bump()?;
