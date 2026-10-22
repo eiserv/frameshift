@@ -64,6 +64,16 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                 .map_err(|e| format!("Sass unchecked span: {e}"))?;
         }
         for node in doc.nodes() {
+            if node.kind == SassNodeKind::SpecialFunction
+                && (node.children.len() != 2
+                    || doc.node(node.children[0]).unwrap().kind != SassNodeKind::Identifier
+                    || doc.node(node.children[1]).unwrap().kind != SassNodeKind::InterpolatedText
+                    || !unchecked.iter().any(|entry| {
+                        entry.kind == SassUncheckedKind::SpecialFunction && entry.span == node.span
+                    }))
+            {
+                return Err("invalid raw special-function structure or evidence".to_owned());
+            }
             if node.kind == SassNodeKind::AtRule(SassAtRule::Css)
                 && !unchecked.iter().any(|entry| {
                     entry.kind == SassUncheckedKind::CssDirective && entry.span == node.span

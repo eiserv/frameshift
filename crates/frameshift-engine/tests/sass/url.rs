@@ -320,6 +320,10 @@ fn url_node_depth_and_speculative_work_bounds_are_enforced() {
 #[test]
 #[ignore = "requires external pinned sass-parser 0.4.58 and Sass 1.105.2"]
 fn external_url_classification_oracle() {
+    check_expression_classification(cases(), "URL");
+}
+
+pub(super) fn check_expression_classification(cases: Vec<(String, SassSyntax)>, label: &str) {
     use std::io::Write;
     use std::process::{Command, Stdio};
     let module = std::env::var("FRAMESHIFT_SASS_PARSER_MODULE")
@@ -340,11 +344,10 @@ while (at < data.length) {
   try { root = p[syntax].parse(source); }
   catch { process.stdout.write('!\n'); continue; }
   const kind = root.nodes[0].expression.sassType;
-  if (!['string', 'function-call', 'interpolated-function-call'].includes(kind)) throw Error('unknown URL expression: ' + kind);
+  if (!['string', 'function-call', 'interpolated-function-call'].includes(kind)) throw Error('unknown expression: ' + kind);
   process.stdout.write(kind === 'string' ? 's\n' : 'c\n');
 }
 "#;
-    let cases = cases();
     let mut child = Command::new("node")
         .arg("-e")
         .arg(script)
@@ -380,7 +383,10 @@ while (at < data.length) {
             Ok(doc) => {
                 check(&doc);
                 let kind = &value(&doc).kind;
-                if *kind == (Kind::String { quoted: false }) {
+                if matches!(
+                    *kind,
+                    Kind::String { quoted: false } | Kind::SpecialFunction
+                ) {
                     "s"
                 } else {
                     assert_eq!(*kind, Kind::Call, "{text:?}");
@@ -392,7 +398,7 @@ while (at < data.length) {
         assert_eq!(actual, answer, "{syntax:?}: {text:?}");
     }
     eprintln!(
-        "{} URL acceptance and classification cases agree",
+        "{} {label} acceptance and classification cases agree",
         cases.len()
     );
 }

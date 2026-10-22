@@ -85,6 +85,8 @@ impl<'source> JsProgramParse<'source> {
 /// non-comment slashes, angle brackets, escapes outside strings, labels or
 /// ternaries, control/declaration keywords with nested statement grammar, and
 /// unmatched delimiters. No token is inserted and no source text is rewritten.
+/// In modules, static imports, named/star exports, and exported variable
+/// declarations can resume at the same explicit semicolon boundaries.
 /// Nested lists are not independently recovered. Any error withholds the whole
 /// tree, including valid regions. Allocation failure or a zero diagnostic bound
 /// returns `Err`; other stops retain all diagnostics collected so far.
@@ -187,6 +189,7 @@ pub fn parse_js_program_with_recovery(
             pos: start,
             work: &mut work,
             max_depth: limits.max_nesting_depth,
+            module: goal == SourceGoal::Module,
         };
         match scan.boundary(error.offset) {
             Ok(next) if next == source.len() => return Ok(output),
@@ -206,6 +209,13 @@ struct Synchronizer<'text, 'budget> {
     pos: usize,
     work: &'budget mut usize,
     max_depth: usize,
+    module: bool,
+}
+
+#[derive(Clone, Copy)]
+enum ModulePrefix {
+    Import,
+    Export,
 }
 
 impl Synchronizer<'_, '_> {
@@ -234,6 +244,7 @@ impl Synchronizer<'_, '_> {
     fn boundary(&mut self, error: usize) -> Result<usize, RecoveryStop> {
         let mut stack = Vec::new();
         let mut first = true;
+        let mut prefix = None;
         while let Some(ch) = self.peek() {
             if self.starts("//") {
                 while self.peek().is_some_and(|c| !line_end(c)) {
@@ -252,6 +263,25 @@ impl Synchronizer<'_, '_> {
                 self.bump()?;
             } else if ch.is_whitespace() || ch == '\u{feff}' {
                 self.bump()?;
+            } else if let Some(prefix) = prefix.take() {
+                let allowed = match prefix {
+                    ModulePrefix::Import => {
+                        matches!(ch, '\'' | '"' | '{' | '*') || is_js_identifier_start(ch)
+                    }
+                    ModulePrefix::Export => {
+                        matches!(ch, '{' | '*')
+                            || ["const", "let", "var"].iter().any(|word| {
+                                self.starts(word)
+                                    && !self.text[self.pos + word.len()..]
+                                        .chars()
+                                        .next()
+                                        .is_some_and(|c| c == '\\' || is_js_identifier_part(c))
+                            })
+                    }
+                };
+                if !allowed {
+                    return Err(self.stop(RecoveryStopKind::UnsafeBoundary));
+                }
             } else if matches!(ch, '\'' | '"') {
                 if first {
                     return Err(self.stop(RecoveryStopKind::UnsafeBoundary));
@@ -268,7 +298,13 @@ impl Synchronizer<'_, '_> {
                     self.bump()?;
                 }
                 let word = &self.text[start..self.pos];
-                if stack.is_empty()
+                if first && self.module && matches!(word, "import" | "export") {
+                    prefix = Some(if word == "import" {
+                        ModulePrefix::Import
+                    } else {
+                        ModulePrefix::Export
+                    });
+                } else if stack.is_empty()
                     && matches!(
                         word,
                         "if" | "else"
@@ -332,7 +368,7 @@ impl Synchronizer<'_, '_> {
                 self.bump()?;
             }
         }
-        if stack.is_empty() {
+        if stack.is_empty() && prefix.is_none() {
             Ok(self.pos)
         } else {
             Err(self.stop(RecoveryStopKind::UnsafeBoundary))

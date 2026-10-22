@@ -20,7 +20,7 @@ const GENERATED_PER_FAMILY: u64 = 8;
 /// one top-level item.
 const GENERATED_TARGET: usize = 256;
 
-const PROGRAMS: [&str; 17] = [
+const PROGRAMS: [&str; 22] = [
     "#!/usr/bin/env node\n'use strict';\nvar total = 0;\nfor (var i = 0; i < 3; i++) { total += i; }\nmodule.exports = total;\n",
     "<!-- legacy\nwith (scope) { value = 017 + 08 + '\\101'; }\nlabel: function legacy() {}\nif (flag) function inner() {}\n--> trailing\n",
     "import base, * as all from './base.js' with { type: 'json' };\nexport { base as default, all };\nexport * as more from './more.js';\nawait Promise.resolve(import.meta.url);\n",
@@ -37,6 +37,11 @@ const PROGRAMS: [&str; 17] = [
     "'use strict'; const a = ; with (o) {} const b = ;",
     "const a = [';', (1 + )]; const b = ;",
     "const a = /;/ + ; const b = ;",
+    "export /* ; */ const 色 = ; import {x as} from 'fictional'; const later = ;",
+    "export {x as} from 'fictional'; export * as ; const later = ;",
+    "import /* ; */ 'fictional' extra; const later = ;",
+    "export default function f() { const x = ; }; const later = ;",
+    "import(1 + ); const later = ;",
     "const a = (1 +\n--> ; ignored\n); const b = ;",
 ];
 
@@ -859,6 +864,10 @@ bun@1.4.0",
             "$x: url([a#{1}); $y: url(a;b); $z: u\\72l(//example.invalid/a);",
             "$x: url(#{1 /* once */} b); $y: -vendor-url($path);",
             "$x: url(\\110000); $y: url(a b; c);",
+            "$x: t\\79pe(url([a)); $y: -fictional-calc(a:b);",
+            "$x: progid:DXImageTransform.Microsoft.Alpha(opacity=20);",
+            "$x: type(/* #{ */ #{1 /* inside */}); $y: type(a;b);",
+            "$x: ns.element(1); $y: progid(1);",
             "$x: _url([a); $y: ns.url([a);",
             "$x: url(\r\n  [a#{1}\r\n); $next: 2;",
         ]

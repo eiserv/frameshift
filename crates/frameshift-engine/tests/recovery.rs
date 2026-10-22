@@ -321,3 +321,184 @@ fn many_errors_are_deterministic_and_bounded() {
     assert_eq!(result.diagnostics(), repeat.diagnostics());
     assert_eq!(result.stop(), repeat.stop());
 }
+
+#[test]
+fn static_module_items_resume_without_exposing_erroneous_trees() {
+    for dialect in [
+        JsDialect::JavaScript,
+        JsDialect::Jsx,
+        JsDialect::TypeScript,
+        JsDialect::Tsx,
+        JsDialect::TypeScriptDeclaration,
+    ] {
+        for item in [
+            "export const 色 = ;",
+            "export let x = ;",
+            "export var x = ;",
+            "export const x = f(function () { const a = ; });",
+            "export /* prefix ; */ const x = [';', (1 + )];",
+            "export { x as } from 'fictional';",
+            "export * as ;",
+            "export * from ;",
+            "import { x as } from 'fictional';",
+            "import * as from 'fictional';",
+            "import value, { x as } from 'fictional';",
+            "import /* prefix ; */ { x as } from 'fictional;name';",
+            "import 'fictional' extra;",
+        ] {
+            let text = format!("{item}\r\nconst later = ;");
+            let source = make_source(&text);
+            let strict =
+                parse_js_program(&source, SourceGoal::Module, dialect, ParseLimits::default())
+                    .err()
+                    .unwrap();
+            let parse = || {
+                parse_js_program_with_recovery(
+                    &source,
+                    SourceGoal::Module,
+                    dialect,
+                    ParseLimits::default(),
+                    RecoveryLimits::default(),
+                )
+                .unwrap()
+            };
+            let result = parse();
+            assert_eq!(result.diagnostics()[0], strict, "{dialect:?}: {text}");
+            assert_eq!(
+                result.diagnostics().len(),
+                2,
+                "{dialect:?}: {text}: {:?}",
+                result.stop()
+            );
+            assert_eq!(
+                result.diagnostics()[1].offset,
+                text.len() - 1,
+                "{dialect:?}: {text}"
+            );
+            assert_eq!(result.stop(), None, "{dialect:?}: {text}");
+            assert!(result.tree().is_none());
+            let again = parse();
+            assert_eq!(result.diagnostics(), again.diagnostics());
+            assert_eq!(result.stop(), again.stop());
+        }
+    }
+}
+
+#[test]
+fn module_prefixes_keep_ambiguous_statements_and_lexical_contexts_closed() {
+    for text in ["export", "export /* ; */", "import", "import // ;\n"] {
+        let source = make_source(text);
+        let result = parse_js_program_with_recovery(
+            &source,
+            SourceGoal::Module,
+            JsDialect::JavaScript,
+            ParseLimits::default(),
+            RecoveryLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(result.diagnostics().len(), 1, "{text}");
+        assert_eq!(
+            result.stop().unwrap().kind,
+            RecoveryStopKind::UnsafeBoundary,
+            "{text}"
+        );
+        assert!(result.tree().is_none());
+    }
+    for item in [
+        "export default function f() { const a = ; };",
+        "export default class C { x = ; };",
+        "export default (1 + );",
+        "export function f() { const a = ; };",
+        "export class C { x = ; };",
+        "export async function f() { const a = ; };",
+        "export constx = ;",
+        "export const\\u0061 = ;",
+        "export type X = ;",
+        "export declare const x = ;",
+        "export interface X { x: ; };",
+        "export const x = /;/ + ;",
+        "export const x = `;` + ;",
+        "export const x = <P></Q>;",
+        "export const x: X = ;",
+        "import(1 + );",
+        "import.meta + ;",
+        "import 'fictional' with { type: };",
+    ] {
+        let text = format!("{item} const later = ;");
+        let source = make_source(&text);
+        let result = parse_js_program_with_recovery(
+            &source,
+            SourceGoal::Module,
+            JsDialect::Tsx,
+            ParseLimits::default(),
+            RecoveryLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(result.diagnostics().len(), 1, "{text}");
+        assert_eq!(
+            result.stop().unwrap().kind,
+            RecoveryStopKind::UnsafeBoundary,
+            "{text}"
+        );
+        assert!(result.tree().is_none());
+    }
+    for item in [
+        "export const x = ;",
+        "export { x as };",
+        "import { x as } from 'fictional';",
+    ] {
+        let text = format!("{item} const later = ;");
+        let source = make_source(&text);
+        let result = parse_js_program_with_recovery(
+            &source,
+            SourceGoal::Script,
+            JsDialect::JavaScript,
+            ParseLimits::default(),
+            RecoveryLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(result.diagnostics().len(), 1);
+        assert_eq!(
+            result.stop().unwrap().kind,
+            RecoveryStopKind::UnsafeBoundary
+        );
+    }
+}
+
+#[test]
+fn module_prefix_trivia_and_multibyte_work_use_the_shared_budget() {
+    let source = make_source("export/* 色 ; */const 色=;import/* ; */{x as}from'f';const z=;");
+    let parse = |work| {
+        parse_js_program_with_recovery(
+            &source,
+            SourceGoal::Module,
+            JsDialect::JavaScript,
+            ParseLimits::default(),
+            RecoveryLimits {
+                max_work: work,
+                ..RecoveryLimits::default()
+            },
+        )
+        .unwrap()
+    };
+    let mut required = None;
+    for work in 0..=source.len() {
+        let result = parse(work);
+        assert!(result.tree().is_none());
+        if result.stop().is_none() {
+            required = Some(work);
+            break;
+        }
+        let stop = result.stop().unwrap();
+        assert_eq!(stop.kind, RecoveryStopKind::WorkLimit);
+        source.validate_offset(stop.offset).unwrap();
+    }
+    let required = required.expect("complete recovery within the source byte count");
+    assert_eq!(required, source.len());
+    let complete = parse(required);
+    assert_eq!(complete.diagnostics().len(), 3);
+    assert_eq!(
+        parse(required - 1).stop().unwrap().kind,
+        RecoveryStopKind::WorkLimit
+    );
+}
