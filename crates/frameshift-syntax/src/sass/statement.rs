@@ -80,7 +80,7 @@ impl Parser<'_> {
                 let name_start = self.pos;
                 self.expect("charset")?;
                 let name = self.node(name_start, Kind::Identifier, Vec::new())?;
-                self.skip(false)?;
+                self.skip(self.syntax == SassSyntax::Scss)?;
                 let (value, _) = self.module_string()?;
                 self.separator()?;
                 items.push(self.node(start, Kind::AtRule(At::Css), vec![name, value])?);
@@ -203,6 +203,22 @@ impl Parser<'_> {
             }
         }
         Err(self.error(Error::ExpectedSyntax))
+    }
+
+    fn looking_at_body(&mut self, indent: usize) -> Result<bool, SassError> {
+        if self.syntax == SassSyntax::Scss {
+            return Ok(self.at("{"));
+        }
+        if !self.peek().is_none_or(newline) {
+            return Ok(false);
+        }
+        let checkpoint = self.checkpoint();
+        let result = (|| {
+            self.skip_statements()?;
+            Ok(self.peek().is_some() && self.current_indent()? > indent)
+        })();
+        self.restore(&checkpoint);
+        result
     }
 
     fn namespaced_variable_ahead(&mut self) -> Result<bool, SassError> {
@@ -343,7 +359,23 @@ impl Parser<'_> {
         {
             return Err(self.error(Error::InvalidContext));
         }
-        self.skip(self.syntax == SassSyntax::Scss)?;
+        self.skip(
+            self.syntax == SassSyntax::Scss
+                || matches!(
+                    kind,
+                    At::Mixin
+                        | At::Function
+                        | At::Include
+                        | At::Return
+                        | At::Debug
+                        | At::Warn
+                        | At::Error
+                        | At::If
+                        | At::Each
+                        | At::For
+                        | At::While
+                ),
+        )?;
         if kind == At::Else && self.keyword("if")? {
             kind = At::ElseIf;
             self.skip(true)?;
@@ -375,7 +407,7 @@ impl Parser<'_> {
                 children.push(callable);
                 self.skip(kind == At::Function || self.syntax == SassSyntax::Scss)?;
                 if self.at("(") {
-                    children.push(self.arguments(true, false)?);
+                    children.push(self.arguments(true, false, false)?);
                 } else if kind == At::Function {
                     return Err(self.error(Error::ExpectedSyntax));
                 }
@@ -398,12 +430,12 @@ impl Parser<'_> {
                 }
                 self.skip(self.syntax == SassSyntax::Scss)?;
                 if self.at("(") {
-                    children.push(self.arguments(false, false)?);
+                    children.push(self.arguments(false, false, false)?);
                 }
                 self.skip(self.syntax == SassSyntax::Scss)?;
-                if self.keyword("using")? {
+                if self.scan_identifier_text("using")? {
                     self.skip(true)?;
-                    children.push(self.arguments(true, false)?);
+                    children.push(self.arguments(true, false, false)?);
                     block = true;
                 } else {
                     optional_block = true;
@@ -411,7 +443,7 @@ impl Parser<'_> {
             }
             At::Content => {
                 if self.at("(") {
-                    children.push(self.arguments(false, false)?);
+                    children.push(self.arguments(false, false, false)?);
                 }
             }
             At::Return | At::Debug | At::Warn | At::Error => {
@@ -474,7 +506,7 @@ impl Parser<'_> {
                     let rule_start = self.pos;
                     let nodes = self.nodes.len();
                     let comments = self.comments.len();
-                    let header = self.raw_header(false)?.0;
+                    let header = self.raw_header()?;
                     if self.start(header) == self.end(header) {
                         return Err(self.error(Error::ExpectedSyntax));
                     }
@@ -505,14 +537,17 @@ impl Parser<'_> {
                 block = true;
             }
             At::Css => {
+                if self.at("!") {
+                    return Err(self.error(Error::ExpectedSyntax));
+                }
                 let name = children[0];
                 let plain_function = self
                     .plain_name(name)
                     .is_some_and(|name| name.eq_ignore_ascii_case("function"));
-                if plain_function {
-                    if self.at("!") {
-                        return Err(self.error(Error::ExpectedSyntax));
-                    }
+                if self.plain_name(name).as_deref() == Some("-moz-document") {
+                    children.push(self.moz_document_value()?);
+                    block = true;
+                } else if plain_function {
                     children.push(self.declaration_value(ValueOptions {
                         allow_empty: true,
                         allow_semicolon: false,
@@ -523,7 +558,14 @@ impl Parser<'_> {
                     })?);
                     child_context.plain_css_function = true;
                 } else {
-                    children.push(self.raw_header(false)?.0);
+                    children.push(self.declaration_value(ValueOptions {
+                        allow_empty: true,
+                        allow_semicolon: false,
+                        allow_colon: true,
+                        allow_open_brace: false,
+                        silent_comments: true,
+                        lines: false,
+                    })?);
                 }
                 optional_block = true;
                 child_context.style = true;
@@ -579,6 +621,9 @@ impl Parser<'_> {
     pub(super) fn interpolated_name(&mut self) -> Result<Id, SassError> {
         let start = self.pos;
         let mut parts = Vec::new();
+        if self.at("-#{") {
+            self.bump()?;
+        }
         if self.name_start() {
             self.name_body()?;
         } else if !self.at("#{") {
@@ -601,131 +646,123 @@ impl Parser<'_> {
 
     fn style_or_declaration(&mut self, indent: usize, context: Context) -> Result<Id, SassError> {
         let start = self.pos;
-        // A leading backslash forces a selector in indented Sass. Its bytes
-        // belong to the rule, but not to the selector that follows it.
         let force_style =
             self.syntax == SassSyntax::Indented && !context.declaration && self.eat("\\")?;
-        if context.plain_css_function
-            && !force_style
-            && let Some(result) = self.css_function_result(start)?
-        {
-            return Ok(result);
+        let allows = context.style || context.mixin || context.content || context.declaration;
+        if allows && !force_style {
+            let checkpoint = self.checkpoint();
+            if let Some(declaration) = self.raw_declaration(start, context)? {
+                return Ok(declaration);
+            }
+            if let Some(declaration) = self.property_declaration(indent, context)? {
+                return Ok(declaration);
+            }
+            self.restore(&checkpoint);
         }
-        // Lookahead shares the real grammar and its work budget. It retains
-        // no speculative nodes or comments and never guesses quote contexts.
+        if context.declaration {
+            return Err(self.error(Error::ExpectedSyntax));
+        }
         let nodes = self.nodes.len();
         let comments = self.comments.len();
-        let (header, colon) = self.raw_header(false)?;
-        let header_end = self.pos;
-        let has_body = self.at("{");
-        let first_colon = colon;
-        let mut candidate = false;
-        let allows_declarations =
-            context.style || context.mixin || context.content || context.declaration;
-        if first_colon.is_some() && allows_declarations && !force_style {
-            let raw_nodes = self.nodes.len();
-            let raw_comments = self.comments.len();
-            let depth = self.depth;
-            self.pos = start;
-            if self.at("*") {
-                self.bump()?;
-            }
-            match self.interpolated_name() {
-                Ok(_) => {
-                    self.skip(false)?;
-                    candidate = Some(self.pos) == first_colon;
-                }
-                Err(error)
-                    if matches!(
-                        error.kind,
-                        Error::NodeLimit | Error::DepthLimit | Error::WorkLimit
-                    ) =>
-                {
-                    return Err(error);
-                }
-                Err(_) => {}
-            }
-            self.nodes.truncate(raw_nodes);
-            self.comments.truncate(raw_comments);
-            self.depth = depth;
-            self.pos = header_end;
+        let header = self.raw_header()?;
+        if self.start(header) == self.end(header) {
+            return Err(self.error(Error::ExpectedSyntax));
         }
-        let declaration = if allows_declarations {
-            candidate
-                && first_colon.is_some_and(|colon| {
-                    let after = &self.text[colon + 1..header_end];
-                    if after.starts_with(':') {
-                        return false;
-                    }
-                    if self.text[start..colon].trim().starts_with("--") {
-                        return true;
-                    }
-                    let selector_prefix = self.name_start_at(colon + 1)
-                        || after.starts_with("#{")
-                        || after.starts_with("-#{");
-                    // Indented Sass requires whitespace after a property
-                    // colon when the value starts like a selector name.
-                    (self.syntax == SassSyntax::Scss && !has_body)
-                        || after.starts_with(css_space)
-                        || !selector_prefix
-                })
-        } else {
-            false
-        };
-        if !declaration {
-            if context.declaration {
-                return Err(self.error(Error::InvalidContext));
-            }
-            if self.start(header) == self.end(header) {
-                return Err(self.error(Error::ExpectedSyntax));
-            }
-            return self.style_rule(start, header, nodes, comments, indent, context);
-        }
-        self.nodes.truncate(nodes);
-        self.comments.truncate(comments);
-        self.pos = start;
-        if self.at("*") || self.at(":") {
+        self.style_rule(start, header, nodes, comments, indent, context)
+    }
+
+    fn property_declaration(
+        &mut self,
+        indent: usize,
+        context: Context,
+    ) -> Result<Option<Id>, SassError> {
+        let start = self.pos;
+        if self
+            .peek()
+            .is_some_and(|c| matches!(c, '*' | ':' | '.' | '#'))
+            && !self.at("#{")
+        {
             self.bump()?;
+            self.skip(self.syntax == SassSyntax::Scss)?;
         }
-        let name_start = self.pos;
+        if !self.name_start() && !self.at("#{") && !self.at("-#{") {
+            return Ok(None);
+        }
         let name = self.interpolated_name()?;
-        self.skip(false)?;
-        self.expect(":")?;
+        if self.at("/*") {
+            self.raw_loud_comment()?;
+            self.nodes[name.0].span = super::Span::new(self.start(name), self.pos).unwrap();
+            self.nodes[name.0].kind = Kind::InterpolatedText;
+        }
         self.skip(self.syntax == SassSyntax::Scss)?;
+        if !self.eat(":")? || (!context.declaration && self.at(":")) {
+            return Ok(None);
+        }
+        if self.syntax == SassSyntax::Indented
+            && !context.declaration
+            && (self.name_start() || self.at("#{") || self.at("-#{"))
+        {
+            return Ok(None);
+        }
+        let whitespace = self.skip(self.syntax == SassSyntax::Scss)?;
+        let ambiguous = !context.declaration
+            && !whitespace
+            && (self.name_start() || self.at("#{") || self.at("-#{"));
+        let before_value = self.checkpoint();
         let mut children = vec![name];
-        if self.text[name_start..self.end(name)].starts_with("--") {
-            if context.declaration {
-                return Err(self.error(Error::InvalidContext));
-            }
-            children.push(self.raw_header(true)?.0);
-            self.separator()?;
-        } else {
+        let result = (|| {
             if !self.at("{") && !self.peek().is_none_or(newline) && !self.at(";") && !self.at("}") {
                 children.push(self.expression(true)?);
             }
             self.skip(self.syntax == SassSyntax::Scss)?;
-            if has_body || (self.syntax == SassSyntax::Indented && self.peek().is_none_or(newline))
+            let block = self.at("{");
+            // Decide before reading children, so nested ambiguous selectors
+            // cannot repeatedly speculate over the same descendant bodies.
+            if ambiguous && self.looking_at_body(indent)? {
+                return Err(self.error(Error::ExpectedSyntax));
+            }
+            let body = if block
+                || (self.syntax == SassSyntax::Indented && self.peek().is_none_or(newline))
             {
-                let body = self.body(
+                self.body(
                     indent,
                     Context {
                         declaration: true,
                         ..context
                     },
-                    has_body,
-                )?;
-                children.extend(body);
+                    block,
+                )?
             } else {
                 self.separator()?;
+                Vec::new()
+            };
+            if children.len() == 1 && body.is_empty() && !block {
+                return Err(self.error(Error::ExpectedExpression));
             }
+            children.extend(body);
+            self.node(start, Kind::Declaration, children).map(Some)
+        })();
+        match result {
+            Err(error)
+                if ambiguous
+                    && !matches!(
+                        error.kind,
+                        Error::NodeLimit | Error::DepthLimit | Error::WorkLimit
+                    ) =>
+            {
+                self.restore(&before_value);
+                self.almost_any_value()?;
+                if self.syntax == SassSyntax::Scss && self.at(";") {
+                    Err(error)
+                } else {
+                    Ok(None)
+                }
+            }
+            other => other,
         }
-        if children.len() == 1 && !has_body {
-            return Err(self.error(Error::ExpectedExpression));
-        }
-        self.node(start, Kind::Declaration, children)
     }
 
-    fn css_function_result(&mut self, start: usize) -> Result<Option<Id>, SassError> {
+    fn raw_declaration(&mut self, start: usize, context: Context) -> Result<Option<Id>, SassError> {
         let checkpoint = self.checkpoint();
         let name = match self.interpolated_name() {
             Ok(name) => name,
@@ -744,17 +781,24 @@ impl Parser<'_> {
         };
         // A glued loud comment is part of the reference's property name.
         if self.at("/*") {
-            self.restore(&checkpoint);
-            return Ok(None);
+            self.raw_loud_comment()?;
+            self.nodes[name.0].span = super::Span::new(self.start(name), self.pos).unwrap();
+            self.nodes[name.0].kind = Kind::InterpolatedText;
         }
-        self.skip(false)?;
-        if !self
-            .plain_name(name)
-            .is_some_and(|name| name.eq_ignore_ascii_case("result"))
+        self.skip(self.syntax == SassSyntax::Scss)?;
+        let custom = self.spelling(name).starts_with("--");
+        if !(custom
+            || (context.plain_css_function
+                && self
+                    .plain_name(name)
+                    .is_some_and(|name| name.eq_ignore_ascii_case("result"))))
             || !self.eat(":")?
         {
             self.restore(&checkpoint);
             return Ok(None);
+        }
+        if custom && context.declaration {
+            return Err(self.error(Error::InvalidContext));
         }
         // Result declarations are raw CSS, even when their contents are not
         // SassScript or look like a nested property block. Preserve // text.
@@ -825,49 +869,19 @@ impl Parser<'_> {
         self.node(start, Kind::StyleRule, children)
     }
 
-    pub(super) fn raw_header(
-        &mut self,
-        curly_values: bool,
-    ) -> Result<(Id, Option<usize>), SassError> {
+    pub(super) fn raw_header(&mut self) -> Result<Id, SassError> {
         let start = self.pos;
         let mut parts = Vec::new();
-        let mut colon = None;
-        // Indented Sass continues after a trailing comma; comments between
-        // the comma and the line end do not count, as Dart Sass omits them.
-        let mut comma = false;
-        while let Some(c) = self.peek() {
-            self.visit()?;
-            if matches!(c, ';' | '}') || (c == '{' && !curly_values) {
+        loop {
+            let (segment, comma) = self.almost_any_value()?;
+            let segment_node = self.nodes.pop().unwrap();
+            debug_assert_eq!(segment.0, self.nodes.len());
+            parts.extend(segment_node.children);
+            if self.syntax != SassSyntax::Indented || !comma || !self.peek().is_some_and(newline) {
                 break;
             }
-            if self.syntax == SassSyntax::Indented && newline(c) && !comma {
-                break;
-            }
-            if c == ':' && colon.is_none() {
-                colon = Some(self.pos);
-            }
-            if !css_space(c) && !self.at("/*") && !(self.at("//") && !curly_values) {
-                comma = c == ',';
-            }
-            if self.at("#{") {
-                parts.push(self.interpolation()?);
-            } else if c == '\'' || c == '"' {
-                parts.push(self.quoted()?);
-            } else if c == '(' || c == '[' || (c == '{' && curly_values) {
-                parts.push(self.raw_group()?);
-            } else if c == ')' || c == ']' {
-                return Err(self.error(Error::ExpectedSyntax));
-            } else if self.at("/*") {
-                self.comment(false, false)?;
-            } else if self.at("//") && !curly_values {
-                self.comment(true, false)?;
-            } else if c == '\\' {
-                self.escape(false)?;
-            } else {
-                self.bump()?;
-            }
+            self.bump()?;
         }
-        let id = self.node(start, Kind::InterpolatedText, parts)?;
-        Ok((id, colon))
+        self.node(start, Kind::InterpolatedText, parts)
     }
 }

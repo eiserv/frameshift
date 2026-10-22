@@ -19,7 +19,7 @@ impl Parser<'_> {
         self.skip(true)?;
         let nodes = self.nodes.len();
         let comments = self.comments.len();
-        let target = self.almost_any_value()?;
+        let target = self.almost_any_value()?.0;
         children.push(self.extend_target(target, nodes, comments)?);
         if self.at("!") {
             let start = self.pos;
@@ -37,15 +37,16 @@ impl Parser<'_> {
     /// Dart Sass's `almostAnyValue`: raw text up to `!`, `;`, `{`, `}`, or an
     /// indented line end outside brackets. The span excludes trailing
     /// whitespace, as evaluation trims it, but keeps an escaped space.
-    fn almost_any_value(&mut self) -> Result<Id, SassError> {
+    pub(super) fn almost_any_value(&mut self) -> Result<(Id, bool), SassError> {
         let start = self.pos;
         let mut parts = Vec::new();
         let mut brackets = Vec::new();
+        let mut comma = false;
         // The URL and interpolated-identifier readers are shared with the
         // parse-time selector grammar, whose rules this reader follows.
         let interpolated = self.interpolated_selector;
         self.interpolated_selector = true;
-        let result = self.almost_any_value_parts(&mut parts, &mut brackets);
+        let result = self.almost_any_value_parts(&mut parts, &mut brackets, &mut comma);
         self.interpolated_selector = interpolated;
         result?;
         let text = &self.text[start..self.pos];
@@ -54,14 +55,19 @@ impl Parser<'_> {
             end += self.text[end..].chars().next().map_or(0, char::len_utf8);
         }
         self.node_between(start, end, Kind::InterpolatedText, parts)
+            .map(|id| (id, comma))
     }
 
     fn almost_any_value_parts(
         &mut self,
         parts: &mut Vec<Id>,
         brackets: &mut Vec<char>,
+        comma: &mut bool,
     ) -> Result<(), SassError> {
         while let Some(c) = self.peek() {
+            if !css_space(c) && !self.at("/*") && !self.at("//") {
+                *comma = c == ',';
+            }
             match c {
                 '\\' => {
                     // The escape is copied raw, as two characters.

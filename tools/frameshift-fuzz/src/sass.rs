@@ -64,6 +64,17 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                 .map_err(|e| format!("Sass unchecked span: {e}"))?;
         }
         for node in doc.nodes() {
+            if node.kind == SassNodeKind::Argument && node.span.is_empty() {
+                let valid = node.children.len() == 1
+                    && doc.node(node.children[0]).is_some_and(|value| {
+                        value.kind == (SassNodeKind::String { quoted: false })
+                            && value.span == node.span
+                            && value.children.is_empty()
+                    });
+                if !valid {
+                    return Err("invalid empty Sass argument".to_owned());
+                }
+            }
             if node.kind == SassNodeKind::SpecialFunction
                 && (node.children.len() != 2
                     || doc.node(node.children[0]).unwrap().kind != SassNodeKind::Identifier
