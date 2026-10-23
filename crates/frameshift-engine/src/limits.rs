@@ -12,6 +12,7 @@ use frameshift_core::{
 };
 use frameshift_emit::EmitLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
+use frameshift_modules::{GraphLimits, ModuleLimits};
 use frameshift_package::{LoadLimits, PackageLimits, WorkspaceLimits};
 use frameshift_syntax::{
     CssLimits, CssParserLimits, JsonLimits, LexicalLimits, ParseLimits, RecoveryLimits, SassLimits,
@@ -64,6 +65,8 @@ pub struct Limits {
     pub package: PackageLimits,
     /// Workspace patterns and their matching work.
     pub workspace: WorkspaceLimits,
+    /// Module resolution, configuration inheritance, and import graph.
+    pub modules: ModuleLimits,
     /// One span rewrite.
     pub edit: EditLimits,
     /// One emitted output file.
@@ -184,11 +187,22 @@ impl Limits {
         }
     }
 
+    /// Returns all limits used by the snapshot module graph builder.
+    pub fn modules(&self) -> GraphLimits {
+        GraphLimits {
+            modules: self.modules,
+            text: self.text,
+            parse: self.parse,
+            json: self.json,
+            path: self.path,
+        }
+    }
+
     /// Lists every configured limit, sorted by name bytes.
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 49] {
+    pub fn entries(&self) -> [LimitEntry; 53] {
         let Self {
             run,
             ignore,
@@ -207,6 +221,7 @@ impl Limits {
             yarn,
             package,
             workspace,
+            modules,
             edit,
             emit,
         } = *self;
@@ -288,6 +303,12 @@ impl Limits {
             max_regexp_bytes,
             max_jsx_text_bytes,
         } = lexical;
+        let ModuleLimits {
+            max_files: module_files,
+            max_edges: module_edges,
+            max_config_depth,
+            max_work: module_work,
+        } = modules;
         let EditLimits {
             max_edits,
             max_output_bytes: edit_output_bytes,
@@ -316,6 +337,10 @@ impl Limits {
             entry("ignore.max-total-bytes", ignore_bytes),
             entry("json.max-depth", wide(json_depth)),
             entry("json.max-nodes", wide(json_nodes)),
+            entry("modules.max-config-depth", wide(max_config_depth)),
+            entry("modules.max-edges", wide(module_edges)),
+            entry("modules.max-files", wide(module_files)),
+            entry("modules.max-work", module_work),
             entry("package.max-lockfile-bytes", max_lockfile_bytes),
             entry("parse.lexical.max-comments", wide(max_comments)),
             entry(

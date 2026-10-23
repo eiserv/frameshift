@@ -142,8 +142,12 @@ fn entries_are_sorted_named_and_complete() {
     limits.sass.max_work = value();
     limits.recovery.max_diagnostics = value();
     limits.recovery.max_work = value();
+    limits.modules.max_files = value();
+    limits.modules.max_edges = value();
+    limits.modules.max_config_depth = value();
+    limits.modules.max_work = value() as u64;
     let values: BTreeSet<u64> = limits.entries().iter().map(|entry| entry.value).collect();
-    assert_eq!(values, (1..=49).collect());
+    assert_eq!(values, (1..=53).collect());
     let entries = limits.entries();
     let named = |name: &str| entries.iter().find(|entry| entry.name == name).unwrap();
     assert_eq!(named("run.max-files").value, 1);

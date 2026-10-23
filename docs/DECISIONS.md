@@ -98,6 +98,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-088 | Continue both Sass conformance and JavaScript diagnostic recovery | Accepted |
 | D-089 | Sass numeric unit boundaries and default-export diagnostic recovery | Accepted |
 | D-090 | Complete Sass conformance before other M3 work | Accepted |
+| D-091 | Close M3 and implement module resolution and the import graph | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1047,6 +1048,7 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Status:** Accepted (2026-10-23), confirmed by the owner through the Codex App question interface.
 - **Decision:** Check the implemented parser capabilities and their recorded conformance evidence against M3, close the milestone when those checks pass, and proceed directly to M4 with module resolution, `tsconfig.json` and `jsconfig.json` path mappings, and a deterministic import graph. Deliver a complete, tested block rather than isolated parser refinements.
 - **Implementation direction (agent default):** Keep framework-independent resolution and graph data in a separate semantics crate behind the engine facade. Resolve only admitted snapshot paths, never installed packages or native filesystem paths. Retain unresolved, computed, external, and invalid-source evidence. Configuration is parsed, never executed; unsupported configuration must not silently select a guessed target. Keep resource limits explicit and graph traversal iterative.
+- **Implemented:** `frameshift-modules` now provides pure admitted-path resolution, JSONC `baseUrl` and `paths` settings with relative inheritance, source-spanned strict-tree dependency extraction, a deterministic snapshot graph and iterative closures, four explicit limits, public-facade regressions, a pinned external TypeScript resolver comparison, and a `modules` fuzz target. The exact lookup profile, unresolved boundaries, M3 capability review, and validation are in IMPLEMENTATION.md section 37. This closes M3 with green integration and begins M4; it does not complete semantic analysis.
 - **Integration:** Open a draft pull request early, push each committed increment, monitor checks and reviews, and leave the completed pull request open for the owner to merge under `D-090`.
 - **Rationale and evolution (`D-033`):** A source-spanned graph with explicit type-only and runtime edges supports later binding analysis, render contexts, dependency assessment, and framework adapters without introducing framework knowledge into resolution. This does not authorize executing source, resolving installed dependency contents, or claiming migration support.
 
