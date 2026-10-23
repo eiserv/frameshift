@@ -27,6 +27,8 @@ pub fn run(input: &[u8]) -> Result<(), String> {
         "src/a.d.ts",
         "src/data.json",
         "src/style.scss",
+        "src/style.d.scss.ts",
+        "src/logo.d.svg.ts",
         "sibling/a.ts",
     ]
     .iter()

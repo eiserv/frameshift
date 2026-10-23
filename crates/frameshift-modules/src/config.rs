@@ -1,7 +1,7 @@
 //! Configuration data retains the origin of inherited relative settings.
 
 use frameshift_core::{SourcePath, SourceText};
-use frameshift_input::{FileRead, Snapshot};
+use frameshift_input::{EntryKind, FileRead, Snapshot};
 use frameshift_syntax::{JsonDialect, JsonLimits, JsonValue, parse_json};
 
 use crate::{ModuleError, Work, join, parent};
@@ -125,7 +125,12 @@ fn parse(
             config.issue(path, ConfigProblem::Unsupported);
         }
         if let Some(id) = options.get("baseUrl") {
-            config.base = Some(join(parent(path.as_str()), doc.value(id)?.as_str()?)?);
+            let base = doc.value(id)?.as_str()?;
+            config.base = Some(if base.is_empty() {
+                parent(path.as_str()).to_owned()
+            } else {
+                join(parent(path.as_str()), base)?
+            });
         }
         if let Some(id) = options.get("paths") {
             let object = doc.value(id)?.as_object()?;
@@ -203,9 +208,20 @@ pub(crate) fn load(
             result.issue(path, ConfigProblem::Invalid);
             continue;
         };
-        let present = SourcePath::new(&target, limits.path)
-            .ok()
-            .is_some_and(|p| snapshot.inventory().files().find(&p).is_some());
+        let Ok(exact) = SourcePath::new(&target, limits.path) else {
+            result.issue(path, ConfigProblem::Invalid);
+            continue;
+        };
+        let present = snapshot.inventory().files().find(&exact).is_some();
+        if !present
+            && snapshot
+                .inventory()
+                .entry(&exact)
+                .is_some_and(|entry| !matches!(entry.kind(), EntryKind::Directory))
+        {
+            result.issue(&exact, ConfigProblem::Unreadable);
+            continue;
+        }
         if !present {
             target.push_str(".json");
         }

@@ -986,6 +986,9 @@ bun@1.4.0",
         .map(|text| (*text).to_owned())
         .collect(),
         Target::Modules => [
+            "./style.scss",
+            "./logo.svg",
+            "{\"compilerOptions\":{\"baseUrl\":\"\"}}\nsrc/a",
             "import './a'; export * from './d';",
             "import type {T} from './a'; type U=import('./a').T;",
             "const x=import('./a'); const y=import(name);",

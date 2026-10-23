@@ -301,10 +301,9 @@ impl Resolver {
                 .rsplit('/')
                 .next()
                 .is_some_and(|name| name.contains('.'))
+            && let Some((stem, extension)) = path.rsplit_once('.')
         {
-            // Assets are real snapshot references, even when TypeScript has
-            // no declaration for their content. No CSS or image validity is implied.
-            candidates.push(path.to_owned());
+            candidates.push(format!("{stem}.d.{extension}.ts"));
         }
         for ext in ["ts", "tsx", "d.ts", "js", "jsx"] {
             candidates.push(format!("{path}.{ext}"));

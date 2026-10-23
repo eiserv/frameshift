@@ -78,7 +78,25 @@ for (const specifier of requests.split('\n')) {
             requests.push(format!("./k{mask}-{ext}.{ext}"));
         }
     }
+    for (i, extension) in ["css", "scss", "svg", "png", "custom", "module.css"]
+        .iter()
+        .enumerate()
+    {
+        for include_asset in [false, true] {
+            let name = format!("resource-{i}-{include_asset}.{extension}");
+            let (stem, extension) = name.rsplit_once('.').unwrap();
+            files.push(format!("src/{stem}.d.{extension}.ts"));
+            if include_asset {
+                files.push(format!("src/{name}"));
+            }
+            requests.push(format!("./{name}"));
+        }
+    }
     let profiles = [
+        (
+            r#"{"baseUrl":"/project"}"#,
+            r#"{"compilerOptions":{"baseUrl":""}}"#,
+        ),
         ("{}", "{}"),
         (
             r#"{"baseUrl":"/project/src"}"#,
@@ -355,6 +373,81 @@ fn arbitrary_extension_declarations_use_ambient_parsing_and_type_only_edges() {
     let node = g.node(&path("types.d.json.ts")).unwrap();
     assert_eq!(node.state, ModuleState::Parsed);
     assert!(node.edges.iter().all(|edge| edge.type_only));
+}
+
+#[test]
+fn review_arbitrary_declarations_precede_assets_and_work_without_assets() {
+    for files in [
+        vec!["src/main.ts", "src/style.d.css.ts"],
+        vec![
+            "src/main.ts",
+            "src/style.css",
+            "src/style.css.ts",
+            "src/style.d.css.ts",
+        ],
+    ] {
+        let mut r = resolver(&files, ResolutionConfig::default());
+        local(&mut r, "./style.css", "src/style.d.css.ts");
+    }
+    let mut r = resolver(
+        &["src/main.ts", "src/theme.module.d.scss.ts"],
+        ResolutionConfig::default(),
+    );
+    local(&mut r, "./theme.module.scss", "src/theme.module.d.scss.ts");
+}
+
+#[test]
+fn review_excluded_exact_inheritance_never_selects_a_json_fallback() {
+    let g = graph(
+        "excluded-extends",
+        &[
+            (".gitignore", "base\n"),
+            ("tsconfig.json", r#"{"extends":"./base"}"#),
+            ("base", "{}"),
+            ("base.json", "{}"),
+            ("src/main.ts", "import './dep';"),
+            ("src/dep.ts", ""),
+        ],
+    );
+    assert!(
+        g.configuration_issues()
+            .iter()
+            .any(|issue| issue.path == path("base") && issue.problem == ConfigProblem::Unreadable)
+    );
+    assert_eq!(
+        g.node(&path("src/main.ts")).unwrap().edges[0].resolution,
+        Resolution::Unresolved(U::Configuration)
+    );
+}
+
+#[test]
+fn review_empty_base_url_denotes_the_originating_config_directory() {
+    for (file, target) in [
+        ("tsconfig.json", "local.ts"),
+        ("config/tsconfig.json", "config/local.ts"),
+    ] {
+        let c = config(r#"{"compilerOptions":{"baseUrl":""}}"#, file);
+        assert!(c.issues().is_empty());
+        let mut r = resolver(&["src/main.ts", target], c);
+        local(&mut r, "local", target);
+    }
+    let g = graph(
+        "inherited-empty-base",
+        &[
+            ("tsconfig.json", r#"{"extends":"./config/base"}"#),
+            ("config/base.json", r#"{"compilerOptions":{"baseUrl":""}}"#),
+            ("config/local.ts", ""),
+            ("src/main.ts", "import 'local';"),
+        ],
+    );
+    assert!(g.configuration_issues().is_empty());
+    assert_eq!(
+        g.node(&path("src/main.ts")).unwrap().edges[0].resolution,
+        Resolution::Local {
+            path: path("config/local.ts"),
+            kind: FileKind::Module
+        }
+    );
 }
 
 #[test]
