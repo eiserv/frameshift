@@ -99,6 +99,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-089 | Sass numeric unit boundaries and default-export diagnostic recovery | Accepted |
 | D-090 | Complete Sass conformance before other M3 work | Accepted |
 | D-091 | Close M3 and implement module resolution and the import graph | Accepted |
+| D-092 | Complete the M4 semantic blocks as stacked pull requests | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1052,6 +1053,16 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Integration:** Open a draft pull request early, push each committed increment, monitor checks and reviews, and leave the completed pull request open for the owner to merge under `D-090`.
 - **Rationale and evolution (`D-033`):** A source-spanned graph with explicit type-only and runtime edges supports later binding analysis, render contexts, dependency assessment, and framework adapters without introducing framework knowledge into resolution. This does not authorize executing source, resolving installed dependency contents, or claiming migration support.
 
+### D-092: Complete the M4 semantic blocks as stacked pull requests
+
+- **Status:** Accepted (2026-10-23), confirmed by the owner through the Claude Code question interface. Resolves `Q-014`.
+- **Decision:** After the module graph of `D-091`, implement all four remaining M4 semantic blocks, in dependency order, each as its own pull request stacked on its predecessor: (1) complete local module resolution with package `imports` and directory package entry points, (2) framework-independent scopes and bindings, (3) the Next.js App Router route tree with render contexts propagated over the import graph, and (4) the static evaluator with experiment E3.
+- **Integration:** The first pull request is based on PR #43's branch and is retargeted to `main` once PR #43 is merged. Open each pull request early as a draft and push every committed increment. The owner authorized the agent to squash-merge PR #43 and each of these pull requests once their checks are green, in stack order; this replaces the owner-merge rule of `D-090` and `D-091` for these pull requests only.
+- **E3 corpus:** E3 measures evaluation coverage on the configuration files of the approved `D-043` sample, fetched again at the pinned commits into a cache outside the repository, parsed but never built, installed, or executed. If the sample cannot be fetched, E3 is prepared with fictional configurations and its real-world measurement stays open.
+- **Fixtures (`Q-014`):** Feature fixtures under `fixtures/features/` follow the inspect fixtures: manifests and lockfiles that name a real framework package, such as `next`, are created at test time from `createdAtTestTime` entries of `fixture.json`, and nothing committed names such a package.
+- **Block 1 (implemented):** Package scopes, `imports`, self-references through `exports`, local directory entry points, and per-edge `import` or `require` modes follow the pinned TypeScript 6.0.3 bundler profile, with fail-closed evidence for `typesVersions`, versioned `types@` conditions, output-directory mapping, and invalid or unsupplied manifests (IMPLEMENTATION.md section 38). A pinned-oracle comparison of generated fictional requests agrees on every case.
+- **Rationale and evolution (`D-033`):** Dependency order lets each block reuse its predecessor: bindings need the complete graph, render contexts and route facts need bindings and the graph, and the evaluator needs `const` bindings and local imports. Separate pull requests keep each block reviewable while delivering the whole M4 semantic layer in one run. Keeping real framework names out of committed manifests preserves the public repository's advisory-scanning signal without a scanner exclusion.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled
@@ -1190,7 +1201,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | Q-011 | Parser error recovery depth | Policy resolved by D-034: bounded recovery at safe grammar boundaries; erroneous files remain ineligible for transformation. CSS synchronization points and budgets are implemented under D-078. JavaScript diagnostic recovery is implemented under D-085, with conservative boundaries and explicit stops. | Implemented; nested-list expansion remains optional |
 | Q-012 | Lowest supported Next.js version | Resolved by D-023 | Resolved |
 | Q-013 | E1 memory budget: per file or retained whole | Resolved by D-045: peak heap demand of the whole corpus with all source texts and trees retained; per-file peaks remain diagnostics | Resolved |
-| Q-014 | Committed fixtures that name real framework packages such as `next`, whose manifests the public repository's advisory scanning reads | Tests and `inspect` fixtures create such manifests at test time only, the fixtures from `createdAtTestTime` entries of `fixture.json` (`D-074`, `D-075`); decide whether feature fixtures do the same, or use another layout or a scanner exclusion, before the first feature fixture | Before the first `fixtures/features/` case |
+| Q-014 | Committed fixtures that name real framework packages such as `next`, whose manifests the public repository's advisory scanning reads | Resolved by D-092: feature fixtures also create such manifests at test time from `createdAtTestTime` entries | Resolved |
 
 ## Experiments
 

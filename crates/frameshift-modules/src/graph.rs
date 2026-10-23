@@ -8,8 +8,8 @@ use frameshift_syntax::{
 };
 
 use crate::{
-    ConfigIssue, ConfigProblem, FileKind, ModuleError, ModuleLimits, Resolution, ResolutionConfig,
-    Resolver, UnresolvedReason, Work, below, config,
+    ConfigIssue, ConfigProblem, FileKind, ModuleError, ModuleLimits, PackageManifest, Resolution,
+    ResolutionConfig, ResolutionMode, Resolver, UnresolvedReason, Work, below, config, parent,
 };
 
 /// All bounds used to build one graph, without runtime environment inputs.
@@ -55,6 +55,8 @@ pub struct Edge {
     pub specifier: Option<String>,
     /// True only for explicitly type-only syntax or declaration files.
     pub type_only: bool,
+    /// The mode whose `import` or `require` conditions package maps use.
+    pub mode: ResolutionMode,
     /// Established target or explicit unresolved evidence.
     pub resolution: Resolution,
 }
@@ -209,6 +211,26 @@ pub fn build_module_graph(
             resolver.excluded.insert(entry.path().as_str().to_owned());
         }
     }
+    // Manifests inside the package supply directory entry points and nested
+    // scopes; those above it can be the package's own scope.
+    for (id, path) in inventory.files().iter() {
+        let directory = parent(path.as_str());
+        if path.as_str().rsplit('/').next() != Some("package.json")
+            || !(below(directory, root) || directory == root || below(root, directory))
+        {
+            continue;
+        }
+        let manifest = match snapshot.read(id).map_err(ModuleError::Snapshot)? {
+            FileRead::Unreadable(_) => None,
+            FileRead::Content(file) => {
+                resolver.work.charge(file.bytes().len())?;
+                SourceText::from_bytes(file.bytes().to_vec(), limits.text)
+                    .ok()
+                    .and_then(|source| PackageManifest::parse(&source, limits.json))
+            }
+        };
+        resolver.add_manifest(path, manifest)?;
+    }
     let mut nodes = Vec::new();
     let mut edge_count = 0;
     for (id, path) in inventory.files().iter() {
@@ -295,11 +317,20 @@ pub fn collect_dependencies(
     }
     let source = tree.source();
     let declaration = FileKind::of(path) == FileKind::Declaration;
-    let mut pending = vec![(tree.root(), declaration)];
+    // The third flag marks the direct child of a whole-declaration `type`
+    // modifier, the only place a `resolution-mode` attribute applies.
+    let mut pending = vec![(tree.root(), declaration, false)];
     let mut edges = Vec::new();
-    while let Some((id, mut type_only)) = pending.pop() {
+    while let Some((id, mut type_only, explicit)) = pending.pop() {
         resolver.work.charge(1)?;
         let node = tree.node(id).expect("parser-owned node");
+        let explicit_child = matches!(
+            node.kind(),
+            N::TypeScript {
+                kind: T::TypeOnly,
+                ..
+            }
+        );
         if matches!(
             node.kind(),
             N::TypeScript {
@@ -330,15 +361,28 @@ pub fn collect_dependencies(
                     })
                 });
         }
+        let mut mode = None;
         let reference: Option<(NodeId, EdgeKind)> =
-            if let N::ImportDeclaration { source, .. } = node.kind() {
+            if let N::ImportDeclaration {
+                source, attributes, ..
+            } = node.kind()
+            {
+                if explicit {
+                    mode = attributes.and_then(|id| attribute_mode(tree, id));
+                }
                 Some((source, EdgeKind::Import))
             } else if let N::ExportNamed {
                 source: Some(source),
+                attributes,
                 ..
             }
-            | N::ExportAll { source, .. } = node.kind()
+            | N::ExportAll {
+                source, attributes, ..
+            } = node.kind()
             {
+                if explicit {
+                    mode = attributes.and_then(|id| attribute_mode(tree, id));
+                }
                 Some((source, EdgeKind::ReExport))
             } else if let N::ImportCall { source, .. } = node.kind() {
                 Some((source, EdgeKind::DynamicImport))
@@ -347,6 +391,9 @@ pub fn collect_dependencies(
                 children,
             } = node.kind()
             {
+                if let Some(&options) = tree.children(children).and_then(|c| c.get(1)) {
+                    mode = import_type_mode(tree, options);
+                }
                 tree.children(children)
                     .and_then(|c| c.first())
                     .copied()
@@ -403,10 +450,11 @@ pub fn collect_dependencies(
                 return Err(ModuleError::EdgeLimit);
             }
             let specifier = tree.string_literal_value(target);
+            let mode = mode.unwrap_or_else(|| resolver.mode(path, kind));
             let resolution = if kind == EdgeKind::RequireCandidate {
                 Resolution::Unresolved(UnresolvedReason::BindingAnalysis)
             } else if let Some(value) = &specifier {
-                resolver.resolve(path, value)?
+                resolver.resolve_in_mode(path, value, mode)?
             } else {
                 Resolution::Unresolved(UnresolvedReason::Computed)
             };
@@ -418,15 +466,78 @@ pub fn collect_dependencies(
                 span: tree.node(target).expect("parser-owned target").span(),
                 specifier,
                 type_only,
+                mode,
                 resolution,
             });
         }
         let first_child = pending.len();
         for child in tree.child_nodes(id).expect("parser-owned children") {
-            pending.push((child, type_only));
+            pending.push((child, type_only, explicit_child));
         }
         pending[first_child..].reverse();
     }
     edges.sort_by_key(|edge| (edge.span.start(), edge.span.end(), edge.kind));
     Ok(edges)
+}
+
+/// A type-only declaration's `with { "resolution-mode": ... }` override:
+/// exactly one string-keyed attribute with the value `import` or `require`.
+/// Any other attribute list keeps the default mode, as in the reference.
+fn attribute_mode(tree: &SyntaxTree<'_>, attributes: NodeId) -> Option<ResolutionMode> {
+    let N::ImportAttributes { attributes } = tree.node(attributes)?.kind() else {
+        return None;
+    };
+    let [attribute] = tree.children(attributes)? else {
+        return None;
+    };
+    let N::ImportAttribute { key, value } = tree.node(*attribute)?.kind() else {
+        return None;
+    };
+    mode_value(tree, key, value)
+}
+
+/// The override of `import("x", { with: { "resolution-mode": ... } })`.
+fn import_type_mode(tree: &SyntaxTree<'_>, options: NodeId) -> Option<ResolutionMode> {
+    let single = |id: NodeId| -> Option<(NodeId, NodeId)> {
+        let N::ObjectExpression { properties, .. } = tree.node(id)?.kind() else {
+            return None;
+        };
+        let [property] = tree.children(properties)? else {
+            return None;
+        };
+        let N::Property {
+            key,
+            value,
+            computed: false,
+        } = tree.node(*property)?.kind()
+        else {
+            return None;
+        };
+        Some((key, value))
+    };
+    let (key, attributes) = single(options)?;
+    let key = tree.node(key)?;
+    if !matches!(
+        key.kind(),
+        N::IdentifierName {
+            has_escape: false,
+            ..
+        }
+    ) || !matches!(tree.source().slice(key.span()).ok()?, "with" | "assert")
+    {
+        return None;
+    }
+    let (key, value) = single(attributes)?;
+    mode_value(tree, key, value)
+}
+
+fn mode_value(tree: &SyntaxTree<'_>, key: NodeId, value: NodeId) -> Option<ResolutionMode> {
+    if tree.string_literal_value(key)? != "resolution-mode" {
+        return None;
+    }
+    match tree.string_literal_value(value)?.as_str() {
+        "import" => Some(ResolutionMode::Import),
+        "require" => Some(ResolutionMode::Require),
+        _ => None,
+    }
 }
