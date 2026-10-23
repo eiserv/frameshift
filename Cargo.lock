@@ -54,6 +54,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "frameshift-bindings"
+version = "0.1.0"
+dependencies = [
+ "frameshift-syntax",
+]
+
+[[package]]
 name = "frameshift-cli"
 version = "0.1.0"
 dependencies = [
@@ -94,6 +101,7 @@ dependencies = [
 name = "frameshift-engine"
 version = "0.1.0"
 dependencies = [
+ "frameshift-bindings",
  "frameshift-core",
  "frameshift-emit",
  "frameshift-input",

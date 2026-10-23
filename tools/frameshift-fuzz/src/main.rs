@@ -11,6 +11,7 @@
 //! depends on it.
 
 mod astro;
+mod bindings;
 mod collections;
 mod coverage;
 mod css;
