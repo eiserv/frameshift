@@ -431,3 +431,31 @@ fn external_config_evaluation() {
         eprintln!("reason {kind} {reason} {count}");
     }
 }
+
+#[test]
+fn node10_configuration_imports_use_typed_alias_and_directory_targets() {
+    let value = config(
+        "node10",
+        &[
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions":{"moduleResolution":"node","paths":{"settings":["plain","typed"]}}}"#,
+            ),
+            (
+                "next.config.ts",
+                "import {base} from 'settings'; import {flag} from './directory'; export default {base, flag};",
+            ),
+            ("plain.js", "export const base = 'javascript';"),
+            ("typed.ts", "export const base = '/typed';"),
+            (
+                "directory/package.json",
+                r#"{"types":"missing.d.ts","main":"entry.js"}"#,
+            ),
+            ("directory/entry.js", "export const flag = true;"),
+        ],
+        "next.config.ts",
+    );
+    assert!(value.is_known(), "{value:?}");
+    assert_eq!(object(&value).get("base"), Some(&string("/typed")));
+    assert_eq!(object(&value).get("flag"), Some(&Value::Bool(true)));
+}

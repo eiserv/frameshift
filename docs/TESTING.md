@@ -236,3 +236,6 @@ The implemented CI, Release, and Package workflows and their current limits are 
 - Normalization rules and thresholds for static output comparison, and the HTML parser to use (`Q-005`).
 - Browser tool and versioned interaction-check protocol for V1 runtime verification and fixture checks (decided in M10).
 - Concrete project list for the real-world corpus, proposed by agents and approved by the project owner in M5 (`D-030`).
+
+
+The Node10 profile (`D-093`, IMPLEMENTATION.md section 42) reuses the fictional resolver projects with separate `external_typescript_node10_oracle` and `external_typescript_node10_package_oracle` tests, using `FRAMESHIFT_TYPESCRIPT_MODULE` and the pinned TypeScript 6.0.3 installation. Ordinary regressions exercise cross-alternative typed precedence, inherited profiles, directory field passes, disabled maps, excluded targets, and evaluator imports. Bundler oracle tests remain independent.

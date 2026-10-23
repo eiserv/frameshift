@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use frameshift_core::SourcePath;
 
+use crate::ResolutionProfile;
 use crate::config::ModuleFormat;
-use crate::package::PackageManifest;
+use crate::package::{ALL, Extensions, PackageManifest, TYPED, UNTYPED};
 use crate::{EdgeKind, ModuleError, ModuleLimits, ResolutionConfig, Work, below, join, parent};
 
 /// Classification by exact, case-sensitive source extension.
@@ -123,7 +124,7 @@ pub struct Resolver {
 }
 
 impl Resolver {
-    /// Builds a resolver for the explicit TypeScript bundler lookup profile.
+    /// Builds a resolver for the configured TypeScript source-lookup profile.
     /// Paths outside `package_root` cannot be resolved as local files.
     pub fn new(
         files: Vec<SourcePath>,
@@ -196,7 +197,9 @@ impl Resolver {
                 } else {
                     match format {
                         ModuleFormat::CommonJs => ResolutionMode::Require,
-                        ModuleFormat::Esm | ModuleFormat::Preserve => ResolutionMode::Import,
+                        ModuleFormat::Esm | ModuleFormat::Preserve | ModuleFormat::Classic => {
+                            ResolutionMode::Import
+                        }
                     }
                 }
             }
@@ -241,6 +244,27 @@ impl Resolver {
         mode: ResolutionMode,
         depth: usize,
     ) -> Result<Resolution, ModuleError> {
+        if self.config.profile() == ResolutionProfile::Node10 {
+            let typed = self.resolve_pass(directory, specifier, mode, depth, TYPED)?;
+            if !matches!(
+                typed,
+                Resolution::External { .. } | Resolution::Unresolved(UnresolvedReason::NotFound)
+            ) {
+                return Ok(typed);
+            }
+            return self.resolve_pass(directory, specifier, mode, depth, UNTYPED);
+        }
+        self.resolve_pass(directory, specifier, mode, depth, ALL)
+    }
+
+    fn resolve_pass(
+        &mut self,
+        directory: &str,
+        specifier: &str,
+        mode: ResolutionMode,
+        depth: usize,
+        extensions: Extensions,
+    ) -> Result<Resolution, ModuleError> {
         use UnresolvedReason as U;
         self.work.charge(specifier.len() + 1)?;
         if !self.config.issues.is_empty() {
@@ -278,7 +302,7 @@ impl Resolver {
                 return Ok(Resolution::Unresolved(U::OutsideRoot));
             };
             return Ok(self
-                .lookup(&path, directory_only)?
+                .lookup(&path, directory_only, extensions)?
                 .unwrap_or(Resolution::Unresolved(U::NotFound)));
         }
         let mapping = if let Some((origin, mappings)) = &self.config.paths {
@@ -322,7 +346,7 @@ impl Resolver {
                 let Some(path) = join(&base, target.trim_end_matches('/')) else {
                     return Ok(Resolution::Unresolved(U::OutsideRoot));
                 };
-                if let Some(result) = self.lookup(&path, target_directory)? {
+                if let Some(result) = self.lookup(&path, target_directory, extensions)? {
                     return Ok(result);
                 }
             }
@@ -331,16 +355,19 @@ impl Resolver {
             let Some(path) = join(base, specifier.trim_end_matches('/')) else {
                 return Ok(Resolution::Unresolved(U::InvalidSpecifier));
             };
-            if let Some(result) = self.lookup(&path, directory_only)? {
+            if let Some(result) = self.lookup(&path, directory_only, extensions)? {
                 return Ok(result);
             }
         }
-        if specifier.starts_with('#')
+        if self.config.profile() == ResolutionProfile::Bundler
+            && specifier.starts_with('#')
             && let Some(result) = self.package_imports(directory, specifier, mode, depth)?
         {
             return Ok(result);
         }
-        if let Some(result) = self.self_reference(directory, specifier, mode)? {
+        if self.config.profile() == ResolutionProfile::Bundler
+            && let Some(result) = self.self_reference(directory, specifier, mode)?
+        {
             return Ok(result);
         }
         // Package names never start with `#`, and installed contents are
@@ -391,6 +418,7 @@ impl Resolver {
         &mut self,
         path: &str,
         directory_only: bool,
+        extensions: Extensions,
     ) -> Result<Option<Resolution>, ModuleError> {
         let mut candidates = Vec::new();
         if !directory_only {
@@ -431,7 +459,9 @@ impl Resolver {
             }
         }
         for candidate in candidates {
-            if let Some(result) = self.probe(&candidate)? {
+            if extensions.accepts(&candidate)
+                && let Some(result) = self.probe(&candidate)?
+            {
                 return Ok(Some(result));
             }
         }
@@ -443,13 +473,16 @@ impl Resolver {
         let manifest = format!("{directory}package.json");
         if let Some(result) = self.probe(&manifest)? {
             return if matches!(result, Resolution::Local { .. }) {
-                self.directory_package(path, &manifest)
+                self.directory_package(path, &manifest, extensions)
             } else {
                 Ok(Some(result))
             };
         }
         for ext in ["ts", "tsx", "d.ts", "js", "jsx"] {
-            if let Some(result) = self.probe(&format!("{directory}index.{ext}"))? {
+            let candidate = format!("{directory}index.{ext}");
+            if extensions.accepts(&candidate)
+                && let Some(result) = self.probe(&candidate)?
+            {
                 return Ok(Some(result));
             }
         }

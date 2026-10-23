@@ -404,6 +404,16 @@ fn snapshot_graph_reads_manifests_and_assigns_edge_modes() {
 #[test]
 #[ignore = "requires an external TypeScript 6.0.3 installation"]
 fn external_typescript_package_scope_oracle() {
+    typescript_package_oracle(false);
+}
+
+#[test]
+#[ignore = "requires an external TypeScript 6.0.3 installation"]
+fn external_typescript_node10_package_oracle() {
+    typescript_package_oracle(true);
+}
+
+fn typescript_package_oracle(node10: bool) {
     use std::io::Write;
     use std::process::{Command, Stdio};
     let module = std::env::var("FRAMESHIFT_TYPESCRIPT_MODULE")
@@ -420,7 +430,7 @@ const host = { fileExists: p => files.has(p), readFile: p => files.get(p) ?? und
  getCurrentDirectory: () => '/project', realpath: p => p };
 const options = ts.convertCompilerOptionsFromJson(input.options, '/project').options;
 if (input.options && Object.keys(input.options).length && !options) throw Error('options');
-options.moduleResolution = ts.ModuleResolutionKind.Bundler;
+options.moduleResolution ??= ts.ModuleResolutionKind.Bundler;
 options.resolveJsonModule = true;
 for (const [importer, specifier, kind] of input.requests) {
  const literal = JSON.stringify(specifier);
@@ -448,6 +458,11 @@ for (const [importer, specifier, kind] of input.requests) {
     let (mut locals, mut required) = (0, 0);
     let mut differences = Vec::new();
     for profile in profiles {
+        let profile = if node10 {
+            profile.replacen("{", r#"{"moduleResolution":"node10","#, 1)
+        } else {
+            profile.to_owned()
+        };
         let input = format!(
             r#"{{"options":{profile},"files":{{{}}},"requests":[{}]}}"#,
             files
@@ -524,7 +539,12 @@ for (const [importer, specifier, kind] of input.requests) {
                     ..
                 }
             ) && expected.starts_with("- ");
-            if actual != expected && !asset {
+            if (if node10 {
+                target != expected.split_once(' ').unwrap().0
+            } else {
+                actual != expected
+            }) && !asset
+            {
                 differences.push(format!(
                     "{profile} {importer} {specifier} {kind:?}: {actual:?} != {expected:?}"
                 ));
@@ -545,11 +565,11 @@ for (const [importer, specifier, kind] of input.requests) {
     );
     // Guard against a vacuous comparison.
     assert!(
-        locals > total / 4 && required > total / 8,
+        locals > total / if node10 { 8 } else { 4 } && required > total / 8,
         "{locals} {required}"
     );
     eprintln!(
-        "TypeScript 6.0.3 package scope oracle: {total} cases, {locals} local, {required} require mode"
+        "TypeScript 6.0.3 package scope oracle (node10={node10}): {total} cases, {locals} local, {required} require mode"
     );
 }
 
@@ -782,4 +802,67 @@ fn oracle_project() -> (Vec<(String, Option<String>)>, Vec<(String, String, Stri
         }
     }
     (files, expanded)
+}
+
+#[test]
+fn node10_ignores_package_maps_and_uses_separate_directory_field_passes() {
+    for allow_js in [false, true] {
+        let mut r = resolver(
+            &[
+                ("src/main.ts", None),
+                (
+                    "package.json",
+                    Some(
+                        r##"{"name":"fictional-self","imports":{"#x":"./x.ts"},"exports":"./x.ts"}"##,
+                    ),
+                ),
+                ("x.ts", None),
+                (
+                    "dir/package.json",
+                    Some(r#"{"types":"missing.d.ts","main":"actual.js","exports":"./other.ts"}"#),
+                ),
+                ("dir/actual.js", None),
+                ("dir/other.ts", None),
+                (
+                    "preferred/package.json",
+                    Some(r#"{"types":"missing.d.ts","main":"actual.js"}"#),
+                ),
+                ("preferred/actual.js", None),
+                ("preferred/index.ts", None),
+                (
+                    "typed/package.json",
+                    Some(r#"{"typings":"types.d.ts","main":"actual.js"}"#),
+                ),
+                ("typed/types.d.ts", None),
+                ("typed/actual.js", None),
+            ],
+            config(&format!(
+                r#"{{"compilerOptions":{{"moduleResolution":"node10","allowJs":{allow_js}}}}}"#
+            )),
+        );
+        for mode in [M::Import, M::Require] {
+            assert_eq!(
+                get(&mut r, "src/main.ts", "#x", mode),
+                Resolution::Unresolved(U::NotFound)
+            );
+            assert_eq!(
+                get(&mut r, "src/main.ts", "fictional-self", mode),
+                Resolution::External {
+                    package: "fictional-self".to_owned()
+                }
+            );
+            assert_eq!(
+                get(&mut r, "src/main.ts", "../dir", mode),
+                local("dir/actual.js")
+            );
+            assert_eq!(
+                get(&mut r, "src/main.ts", "../preferred", mode),
+                local("preferred/index.ts")
+            );
+            assert_eq!(
+                get(&mut r, "src/main.ts", "../typed", mode),
+                local("typed/types.d.ts")
+            );
+        }
+    }
 }
