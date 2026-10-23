@@ -173,8 +173,9 @@ impl Resolver {
         Ok(())
     }
 
-    /// The resolution mode that TypeScript 6.0.3 assigns to a reference of
-    /// this kind in `importer`, from its extension and the emitted format.
+    /// The source/emitted import form, assigned as in TypeScript 6.0.3's
+    /// bundler profile from the reference kind, extension, and output format.
+    /// Node10 records the same form but ignores it for target lookup.
     pub fn mode(&self, importer: &SourcePath, kind: EdgeKind) -> ResolutionMode {
         let path = importer.as_str();
         let has = |extensions: &[&str]| {
@@ -244,17 +245,20 @@ impl Resolver {
         mode: ResolutionMode,
         depth: usize,
     ) -> Result<Resolution, ModuleError> {
-        if self.config.profile() == ResolutionProfile::Node10 {
-            let typed = self.resolve_pass(directory, specifier, mode, depth, TYPED)?;
-            if !matches!(
-                typed,
-                Resolution::External { .. } | Resolution::Unresolved(UnresolvedReason::NotFound)
-            ) {
-                return Ok(typed);
+        match self.config.profile() {
+            ResolutionProfile::Bundler => self.resolve_pass(directory, specifier, mode, depth, ALL),
+            ResolutionProfile::Node10 => {
+                let typed = self.resolve_pass(directory, specifier, mode, depth, TYPED)?;
+                if !matches!(
+                    typed,
+                    Resolution::External { .. }
+                        | Resolution::Unresolved(UnresolvedReason::NotFound)
+                ) {
+                    return Ok(typed);
+                }
+                self.resolve_pass(directory, specifier, mode, depth, UNTYPED)
             }
-            return self.resolve_pass(directory, specifier, mode, depth, UNTYPED);
         }
-        self.resolve_pass(directory, specifier, mode, depth, ALL)
     }
 
     fn resolve_pass(
