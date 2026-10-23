@@ -5,6 +5,7 @@ members = [
     "crates/frameshift-input",
     "crates/frameshift-package",
     "crates/frameshift-nextjs",
+    "crates/frameshift-modules",
     "crates/frameshift-syntax",
     "crates/frameshift-transform",
     "crates/frameshift-emit",

@@ -98,6 +98,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-088 | Continue both Sass conformance and JavaScript diagnostic recovery | Accepted |
 | D-089 | Sass numeric unit boundaries and default-export diagnostic recovery | Accepted |
 | D-090 | Complete Sass conformance before other M3 work | Accepted |
+| D-091 | Close M3 and implement module resolution and the import graph | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1041,6 +1042,15 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Implementation:** The remaining lexical, declaration, raw-header, and indented whitespace gaps are closed. Empty `var()` fallbacks reuse zero-width argument/string nodes; unary slash adds `SassUnaryOperator::Divide`. The normal parse-time grammar is the authority, including its intentionally raw and evaluation-dependent constructs. The `sass-parser` API's forced selector mode is a distinct grammar, so closure checks the normal mode as well as retaining all earlier specialized oracles. Section 35 of IMPLEMENTATION.md records the reproducible full-corpus evidence.
 - **Reference access:** A development-only, ignored Rust test reads the external pinned sass-spec checkout. Its Node subprocess checks the pinned packages and changes exactly the parser-export wrapper's `parseSelectors` option from `true` to `false` in memory, with an exact single-match guard. It changes no grammar and writes no reference file. This permits parse-only comparison without evaluating source, resolving imports, or shipping reference code. Inline Node orchestration follows the existing oracle pattern; it is not a product dependency or an additional implementation language for the engine.
 - **Rationale and evolution (`D-033`):** Shared raw readers and declaration-first disambiguation remove divergent lexical paths. Retaining explicit empty fallback syntax and signed numeric spelling supplies later dependency and value analysis with accurate operands. Syntax completion does not remove the analysis obligations for evaluated selectors, CSS grammars, or imports, and does not complete M3 or authorize migration.
+
+### D-091: Close M3 and implement module resolution and the import graph
+
+- **Status:** Accepted (2026-10-23), confirmed by the owner through the Codex App question interface.
+- **Decision:** Check the implemented parser capabilities and their recorded conformance evidence against M3, close the milestone when those checks pass, and proceed directly to M4 with module resolution, `tsconfig.json` and `jsconfig.json` path mappings, and a deterministic import graph. Deliver a complete, tested block rather than isolated parser refinements.
+- **Implementation direction (agent default):** Keep framework-independent resolution and graph data in a separate semantics crate behind the engine facade. Resolve only admitted snapshot paths, never installed packages or native filesystem paths. Retain unresolved, computed, external, and invalid-source evidence. Configuration is parsed, never executed; unsupported configuration must not silently select a guessed target. Keep resource limits explicit and graph traversal iterative.
+- **Implemented:** `frameshift-modules` now provides pure admitted-path resolution, JSONC `baseUrl` and `paths` settings with relative inheritance, source-spanned strict-tree dependency extraction, a deterministic snapshot graph and iterative closures, four explicit limits, public-facade regressions, a pinned external TypeScript resolver comparison, and a `modules` fuzz target. The exact lookup profile, unresolved boundaries, M3 capability review, and validation are in IMPLEMENTATION.md section 37. This closes M3 with green integration and begins M4; it does not complete semantic analysis.
+- **Integration:** Open a draft pull request early, push each committed increment, monitor checks and reviews, and leave the completed pull request open for the owner to merge under `D-090`.
+- **Rationale and evolution (`D-033`):** A source-spanned graph with explicit type-only and runtime edges supports later binding analysis, render contexts, dependency assessment, and framework adapters without introducing framework knowledge into resolution. This does not authorize executing source, resolving installed dependency contents, or claiming migration support.
 
 ## Technique proposals and related accepted decisions
 

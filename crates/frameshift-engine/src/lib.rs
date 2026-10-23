@@ -22,6 +22,9 @@
 //! consumes this facade, including immutable build identity, rather than
 //! lower layers.
 
+/// Snapshot-only local module resolution and deterministic import graphs.
+pub use frameshift_modules as modules;
+
 mod document;
 pub mod inspect;
 pub mod limits;

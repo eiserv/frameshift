@@ -20,6 +20,7 @@ mod hashes;
 mod identifiers;
 mod json;
 mod lexical;
+mod modules;
 mod mutate;
 mod package;
 mod paths;
