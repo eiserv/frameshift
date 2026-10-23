@@ -201,11 +201,26 @@ fn array_index(key: &str) -> Option<u32> {
         .map(|v| v as u32)
 }
 
-fn insert(entries: &mut Vec<(String, Value)>, key: String, value: Value) {
-    if let Some(entry) = entries.iter_mut().find(|(k, _)| *k == key) {
-        entry.1 = value;
-    } else {
-        entries.push((key, value));
+/// Object properties under construction; a later property with an existing
+/// key replaces its value and keeps its position, as JavaScript does.
+#[derive(Default)]
+struct Entries {
+    entries: Vec<(String, Value)>,
+    index: BTreeMap<String, usize>,
+}
+
+impl Entries {
+    fn insert(&mut self, key: String, value: Value) {
+        if let Some(&i) = self.index.get(&key) {
+            self.entries[i].1 = value;
+        } else {
+            self.index.insert(key.clone(), self.entries.len());
+            self.entries.push((key, value));
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.entries.len()
     }
 }
 
@@ -234,16 +249,12 @@ fn json_value(doc: &JsonDocument<'_>, id: JsonId) -> Value {
         Some(JsonValue::String(s)) => Value::String(s.to_owned()),
         Some(JsonValue::Array(a)) => Value::Array(a.iter().map(|i| json_value(doc, i)).collect()),
         Some(JsonValue::Object(o)) => {
-            let mut entries = Vec::new();
+            let mut entries = Entries::default();
             for member in o.members() {
-                insert(
-                    &mut entries,
-                    member.key().to_owned(),
-                    json_value(doc, member.value()),
-                );
+                entries.insert(member.key().to_owned(), json_value(doc, member.value()));
             }
             Value::Object(Object {
-                entries: order(entries),
+                entries: order(entries.entries),
                 complete: true,
             })
         }
@@ -429,8 +440,16 @@ impl<'s> Evaluator<'s> {
                 return Ok(self.unknown_at(path, None, Reason::Syntax));
             };
             return Ok(if *name == ExportName::Default {
-                let value = json_value(&doc, doc.root());
-                self.charged(path, None, value)
+                // Charge and bound the conversion before building the value.
+                let nodes = doc.node_count();
+                if nodes > self.limits.max_value_size {
+                    self.unknown_at(path, None, Reason::ValueLimit)
+                } else if !self.charge(nodes) {
+                    self.unknown_at(path, None, Reason::WorkLimit)
+                } else {
+                    let value = json_value(&doc, doc.root());
+                    self.charged(path, None, value)
+                }
             } else {
                 self.unknown_at(path, None, Reason::NotExported)
             });
@@ -1028,6 +1047,12 @@ impl<'s> Evaluator<'s> {
                         match self.expr(m, argument, depth + 1)? {
                             Value::Array(more) => items.extend(more),
                             Value::String(s) => {
+                                if !self.charge(s.len()) {
+                                    return Ok(self.unknown(m, e, Reason::WorkLimit));
+                                }
+                                if items.len() + s.len() > self.limits.max_value_size {
+                                    return Ok(self.unknown(m, e, Reason::ValueLimit));
+                                }
                                 items.extend(s.chars().map(|c| Value::String(c.to_string())))
                             }
                             unknown @ Value::Unknown(_) => return Ok(unknown),
@@ -1242,7 +1267,7 @@ impl<'s> Evaluator<'s> {
         properties: &[NodeId],
         depth: usize,
     ) -> Result<Value, EvaluateError> {
-        let mut entries = Vec::new();
+        let mut entries = Entries::default();
         let mut complete = true;
         for &p in properties {
             let kind = m.kind(p);
@@ -1263,11 +1288,11 @@ impl<'s> Evaluator<'s> {
                     continue;
                 };
                 let value = self.expr(m, value, depth + 1)?;
-                insert(&mut entries, key, value);
+                entries.insert(key, value);
             } else if let N::ShorthandProperty { identifier } = kind {
                 let key = m.tree.identifier_value(identifier).unwrap_or_default();
                 let value = self.expr(m, identifier, depth + 1)?;
-                insert(&mut entries, key, value);
+                entries.insert(key, value);
             } else if let N::MethodDefinition {
                 key,
                 computed,
@@ -1290,23 +1315,30 @@ impl<'s> Evaluator<'s> {
                     Reason::Function
                 };
                 let value = self.unknown(m, p, reason);
-                insert(&mut entries, key, value);
+                entries.insert(key, value);
             } else if let N::Spread { argument } = kind {
                 match self.expr(m, argument, depth + 1)? {
                     Value::Object(other) => {
                         complete &= other.complete;
                         for (k, v) in other.entries {
-                            insert(&mut entries, k, v);
+                            entries.insert(k, v);
                         }
                     }
                     Value::Array(items) => {
                         for (i, v) in items.into_iter().enumerate() {
-                            insert(&mut entries, i.to_string(), v);
+                            entries.insert(i.to_string(), v);
                         }
                     }
                     Value::String(s) => {
+                        // Each character becomes a property; bound it first.
+                        if !self.charge(s.len()) {
+                            return Ok(self.unknown(m, p, Reason::WorkLimit));
+                        }
+                        if entries.len() + s.len() > self.limits.max_value_size {
+                            return Ok(self.unknown(m, p, Reason::ValueLimit));
+                        }
                         for (i, c) in s.chars().enumerate() {
-                            insert(&mut entries, i.to_string(), Value::String(c.to_string()));
+                            entries.insert(i.to_string(), Value::String(c.to_string()));
                         }
                     }
                     Value::Null
@@ -1321,7 +1353,7 @@ impl<'s> Evaluator<'s> {
             }
         }
         Ok(Value::Object(Object {
-            entries: order(entries),
+            entries: order(entries.entries),
             complete,
         }))
     }
