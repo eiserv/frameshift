@@ -149,8 +149,10 @@ dependencies = [
 name = "frameshift-nextjs"
 version = "0.1.0"
 dependencies = [
+ "frameshift-bindings",
  "frameshift-core",
  "frameshift-input",
+ "frameshift-modules",
  "frameshift-package",
 ]
 
