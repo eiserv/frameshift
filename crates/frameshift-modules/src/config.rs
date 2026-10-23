@@ -226,7 +226,7 @@ pub(crate) fn load(
             result.issue(&exact, ConfigProblem::Unreadable);
             continue;
         }
-        if !present {
+        if !present && !target.ends_with(".json") {
             target.push_str(".json");
         }
         let Ok(target) = SourcePath::new(&target, limits.path) else {

@@ -1042,3 +1042,70 @@ fn graph_budgets_visit_earlier_source_before_later_large_expressions() {
         Err(ModuleError::EdgeLimit)
     );
 }
+
+#[test]
+fn inherited_configuration_candidate_precedence_matches_typescript() {
+    let cases = [
+        ("base", false, false, None),
+        ("base", true, false, Some("first")),
+        ("base", false, true, Some("second")),
+        ("base", true, true, Some("first")),
+        ("base.json", false, false, None),
+        ("base.json", true, false, Some("first")),
+        ("base.json", false, true, None),
+        ("base.json", true, true, Some("first")),
+        (".json", false, true, None),
+        ("base.json.json", false, true, None),
+        ("nested/base", false, true, Some("second")),
+        ("nested/base.json", false, true, None),
+        ("base.js", false, true, Some("second")),
+        ("BASE.JSON", false, true, Some("second")),
+    ];
+    for (index, (name, exact, suffixed, selected)) in cases.into_iter().enumerate() {
+        let configuration = format!(r#"{{"extends":"./{name}"}}"#);
+        let root = scratch(
+            &format!("config-precedence-{index}"),
+            &[
+                ("tsconfig.json", &configuration),
+                ("entry.ts", "import 'dep';"),
+            ],
+        );
+        for (present, filename, target) in [
+            (exact, name.to_owned(), "first"),
+            (suffixed, format!("{name}.json"), "second"),
+        ] {
+            if !present {
+                continue;
+            }
+            let file = root.join(filename);
+            let directory = file.parent().unwrap();
+            fs::create_dir_all(directory).unwrap();
+            let settings = format!(r#"{{"compilerOptions":{{"baseUrl":"{target}"}}}}"#);
+            fs::write(&file, settings).unwrap();
+            let dependency = directory.join(target).join("dep.ts");
+            fs::create_dir_all(dependency.parent().unwrap()).unwrap();
+            fs::write(dependency, "").unwrap();
+        }
+        let g = build_module_graph(&open(&root), None, GraphLimits::default()).unwrap();
+        let edge = &g.node(&path("entry.ts")).unwrap().edges[0];
+        if let Some(target) = selected {
+            assert!(g.configuration_issues().is_empty(), "{name}");
+            let target = if let Some((directory, _)) = name.rsplit_once('/') {
+                format!("{directory}/{target}/dep.ts")
+            } else {
+                format!("{target}/dep.ts")
+            };
+            assert_eq!(
+                edge.resolution,
+                Resolution::Local {
+                    path: path(&target),
+                    kind: FileKind::Module,
+                },
+                "{name}"
+            );
+        } else {
+            assert!(!g.configuration_issues().is_empty(), "{name}");
+            assert_eq!(edge.resolution, Resolution::Unresolved(U::Configuration));
+        }
+    }
+}
