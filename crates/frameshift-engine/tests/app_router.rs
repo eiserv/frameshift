@@ -132,8 +132,9 @@ const PROJECT: &[(&str, &str)] = &[
     ("middleware.ts", "export function middleware() {}\n"),
 ];
 
-fn analysis() -> AppAnalysis {
-    let snapshot = open("project", PROJECT);
+/// Each test uses its own directory, because tests run in parallel.
+fn analysis(name: &str) -> AppAnalysis {
+    let snapshot = open(name, PROJECT);
     analyze_app(
         &snapshot,
         None,
@@ -193,7 +194,7 @@ fn segments_patterns_and_conventions_follow_next_js() {
 
 #[test]
 fn route_tree_lists_pages_handlers_metadata_and_chains() {
-    let a = analysis();
+    let a = analysis("tree");
     let routes: Vec<_> = a
         .routes
         .routes
@@ -312,7 +313,7 @@ fn route_tree_lists_pages_handlers_metadata_and_chains() {
 
 #[test]
 fn convention_exports_name_next_js_facets() {
-    let a = analysis();
+    let a = analysis("exports");
     let exports = |file: &str| a.exports.iter().find(|e| e.path.as_str() == file).unwrap();
     assert!(exports("app/blog/[slug]/page.tsx").exports("generateStaticParams"));
     assert!(exports("app/layout.tsx").exports("metadata"));
@@ -327,7 +328,7 @@ fn convention_exports_name_next_js_facets() {
 
 #[test]
 fn render_contexts_cross_client_boundaries_over_runtime_edges() {
-    let a = analysis();
+    let a = analysis("contexts");
     let c = &a.contexts;
     let context = |file: &str| {
         let m = c.module(&path(file)).unwrap_or_else(|| panic!("{file}"));
