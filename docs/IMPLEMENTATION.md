@@ -1411,6 +1411,8 @@ Eight new ordinary facade tests cover fallback structure and exclusions, signed 
 
 A final instrumented 120-second Sass smoke run on macOS ARM64 completes without findings: 957408 executions, 19884 features, 4988 inputs. The target includes six new fictional seeds and checks zero-width fallback argument structure as well as the existing grammar, span, evidence, reachability, repetition, and resource contracts. This is a wall-clock smoke run, not the CPU-hour budget of `D-044`, and establishes macOS evidence for this target only.
 
+**Operator follow-up validation (2026-10-24, macOS ARM64).** The 73 ordinary Sass facade tests pass. The pinned normal-parser comparison passes on 15,740 external UTF-8 cases (10 non-UTF-8 sections excluded) and 53,532 fictional cases; the operator-kind/span comparison passes on 48,896 fictional cases. This extends the original closure evidence above without changing its historical workspace or fuzz counts.
+
 ## 36. JavaScript diagnostic recovery (`D-034`, `D-085`, `D-088`, `D-089`)
 
 `frameshift_engine::syntax::parse_js_program_with_recovery(source, goal, dialect, ParseLimits, RecoveryLimits)` is implemented in `crates/frameshift-syntax/src/parser/recovery.rs`. The existing `parse_js_program` and `parse_js_expression` contracts are unchanged: one error and no tree. The new API returns `JsProgramParse`, whose `tree()` and `into_tree()` expose a complete tree only if the original source has no error. An erroneous result retains original-coordinate diagnostics and withholds every syntax node. It never inserts tokens, edits source text, or makes a recovered region eligible for transformation.
