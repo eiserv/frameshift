@@ -2,12 +2,14 @@
 
 use frameshift_engine::foundation::{PathLimits, SourcePath, SourceText, TextLimits};
 use frameshift_engine::modules::{
-    ModuleLimits, Resolution, ResolutionConfig, Resolver, collect_dependencies,
+    ModuleLimits, PackageManifest, Resolution, ResolutionConfig, Resolver, collect_dependencies,
 };
 use frameshift_engine::syntax::{JsonLimits, ParseLimits, SourceGoal, parse_js_program};
 
 /// Checks deterministic configuration, path containment, admitted targets,
 /// order independence, and bounded failures for arbitrary UTF-8 inputs.
+/// The first line is read both as a configuration and as the manifest of
+/// the root and of one nested package directory.
 pub fn run(input: &[u8]) -> Result<(), String> {
     let Some(text) = crate::targets::text(input)? else {
         return Ok(());
@@ -30,6 +32,8 @@ pub fn run(input: &[u8]) -> Result<(), String> {
         "src/style.scss",
         "src/style.d.scss.ts",
         "src/logo.d.svg.ts",
+        "src/d/package.json",
+        "package.json",
         "sibling/a.ts",
     ]
     .iter()
@@ -48,9 +52,14 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                 max_work,
                 ..ModuleLimits::default()
             };
+            let manifest = PackageManifest::parse(&source, JsonLimits::default());
             let resolve = |files, config| {
-                Resolver::new(files, root.as_ref(), config, limits)
-                    .and_then(|mut r| r.resolve(&path("src/main.ts"), reference))
+                Resolver::new(files, root.as_ref(), config, limits).and_then(|mut r| {
+                    for file in ["package.json", "src/d/package.json"] {
+                        r.add_manifest(&path(file), manifest.clone())?;
+                    }
+                    r.resolve(&path("src/main.ts"), reference)
+                })
             };
             let first = resolve(files.clone(), configuration.clone());
             let second = resolve(reversed.clone(), config_again.clone());

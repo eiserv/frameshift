@@ -38,6 +38,14 @@ pub(crate) struct Mapping {
     pub targets: Vec<String>,
 }
 
+/// The emitted module format, which selects package-map conditions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ModuleFormat {
+    CommonJs,
+    Esm,
+    Preserve,
+}
+
 /// Parsed local-resolution settings for the explicit bundler profile.
 ///
 /// Unknown configuration suppresses resolution rather than falling back to
@@ -48,6 +56,14 @@ pub struct ResolutionConfig {
     pub(crate) base: Option<String>,
     pub(crate) paths: Option<(String, Vec<Mapping>)>,
     pub(crate) issues: Vec<ConfigIssue>,
+    // Options are kept per name so that inheritance overrides each one
+    // separately; `finish` validates their combination.
+    pub(crate) module: Option<ModuleFormat>,
+    pub(crate) es5_target: Option<bool>,
+    pub(crate) allow_js: Option<bool>,
+    pub(crate) check_js: Option<bool>,
+    pub(crate) output_directory: bool,
+    pub(crate) unsupported_module: Option<SourcePath>,
 }
 
 impl ResolutionConfig {
@@ -58,7 +74,32 @@ impl ResolutionConfig {
         if !extends.is_empty() {
             config.issue(path, ConfigProblem::Unsupported);
         }
+        config.finish();
         config
+    }
+
+    /// The emitted format, with TypeScript 6.0.3's defaults: an ES5 target
+    /// emits CommonJS, every other target an ECMAScript module.
+    pub(crate) fn format(&self) -> ModuleFormat {
+        self.module.unwrap_or(if self.es5_target == Some(true) {
+            ModuleFormat::CommonJs
+        } else {
+            ModuleFormat::Esm
+        })
+    }
+
+    /// `allowJs`, which defaults to `checkJs`.
+    pub(crate) fn allows_js(&self) -> bool {
+        self.allow_js.or(self.check_js).unwrap_or(false)
+    }
+
+    // Unsupported module kinds select classic or Node.js resolution, or
+    // derive file formats from package scopes; they are rejected only after
+    // inheritance has combined every file's options.
+    fn finish(&mut self) {
+        if let Some(origin) = self.unsupported_module.take() {
+            self.issue(&origin, ConfigProblem::Unsupported);
+        }
     }
 
     /// Problems that prevent this configuration from authorizing resolution.
@@ -123,6 +164,41 @@ fn parse(
             && !doc.value(id)?.as_str()?.eq_ignore_ascii_case("bundler")
         {
             config.issue(path, ConfigProblem::Unsupported);
+        }
+        if let Some(id) = options.get("module") {
+            // Option values are case-insensitive in the reference.
+            config.module = match doc.value(id)?.as_str()?.to_ascii_lowercase().as_str() {
+                "commonjs" => Some(ModuleFormat::CommonJs),
+                "es6" | "es2015" | "es2020" | "es2022" | "esnext" => Some(ModuleFormat::Esm),
+                "preserve" => Some(ModuleFormat::Preserve),
+                "none" | "amd" | "system" | "umd" | "node16" | "node18" | "node20" | "nodenext" => {
+                    config.unsupported_module = Some(path.clone());
+                    None
+                }
+                _ => return None,
+            };
+        }
+        if let Some(id) = options.get("target") {
+            config.es5_target = match doc.value(id)?.as_str()?.to_ascii_lowercase().as_str() {
+                "es5" => Some(true),
+                "es3" | "es6" | "es2015" | "es2016" | "es2017" | "es2018" | "es2019" | "es2020"
+                | "es2021" | "es2022" | "es2023" | "es2024" | "es2025" | "esnext" => Some(false),
+                _ => return None,
+            };
+        }
+        for (name, slot) in [
+            ("allowJs", &mut config.allow_js),
+            ("checkJs", &mut config.check_js),
+        ] {
+            if let Some(id) = options.get(name) {
+                *slot = Some(doc.value(id)?.as_bool()?);
+            }
+        }
+        for name in ["outDir", "declarationDir"] {
+            if let Some(id) = options.get(name) {
+                doc.value(id)?.as_str()?;
+                config.output_directory = true;
+            }
         }
         if let Some(id) = options.get("baseUrl") {
             let base = doc.value(id)?.as_str()?;
@@ -234,21 +310,34 @@ pub(crate) fn load(
             continue;
         };
         let inherited = load(snapshot, &target, limits, active, work)?;
-        if inherited.base.is_some() {
-            result.base = inherited.base;
-        }
-        if inherited.paths.is_some() {
-            result.paths = inherited.paths;
-        }
-        result.issues.extend(inherited.issues);
+        result.inherit(inherited);
     }
     active.pop();
-    if own.base.is_some() {
-        result.base = own.base;
+    result.inherit(own);
+    if active.is_empty() {
+        result.finish();
     }
-    if own.paths.is_some() {
-        result.paths = own.paths;
-    }
-    result.issues.extend(own.issues);
     Ok(result)
+}
+
+impl ResolutionConfig {
+    // Later configurations override each option separately; issues and
+    // unsupported kinds accumulate.
+    fn inherit(&mut self, later: Self) {
+        if later.base.is_some() {
+            self.base = later.base;
+        }
+        if later.paths.is_some() {
+            self.paths = later.paths;
+        }
+        if later.module.is_some() || later.unsupported_module.is_some() {
+            self.module = later.module;
+            self.unsupported_module = later.unsupported_module;
+        }
+        self.es5_target = later.es5_target.or(self.es5_target);
+        self.allow_js = later.allow_js.or(self.allow_js);
+        self.check_js = later.check_js.or(self.check_js);
+        self.output_directory |= later.output_directory;
+        self.issues.extend(later.issues);
+    }
 }

@@ -629,9 +629,10 @@ fn references_are_canonicalized_only_inside_the_package_boundary() {
             "{s}"
         );
     }
+    // Without a visible package scope, an import map cannot be established.
     assert_eq!(
         r.resolve(&path("src/main.ts"), "#internal").unwrap(),
-        Resolution::Unresolved(U::PackageImports)
+        Resolution::Unresolved(U::PackageManifest)
     );
     assert_eq!(
         r.resolve(&path("missing.ts"), "pkg"),

@@ -1,12 +1,14 @@
 //! Snapshot-only module resolution and source-spanned dependency graphs.
 //!
 //! The explicit profile follows TypeScript 6.0.3 bundler source lookup for
-//! local files. Package contents, custom bundler configuration, and binding
-//! analysis are outside this contract. Resolution never establishes that an
+//! local files, package `imports`, self-references through `exports`, and
+//! local directory entry points. Installed package contents, custom bundler
+//! configuration, and binding analysis are outside this contract. Resolution never establishes that an
 //! import can execute, that a dependency is declared, or that migration is safe.
 
 mod config;
 mod graph;
+mod package;
 mod resolve;
 
 use std::fmt;
@@ -16,7 +18,8 @@ pub use graph::{
     Edge, EdgeKind, GraphLimits, ModuleGraph, ModuleNode, ModuleState, build_module_graph,
     collect_dependencies,
 };
-pub use resolve::{FileKind, Resolution, Resolver, UnresolvedReason};
+pub use package::PackageManifest;
+pub use resolve::{FileKind, Resolution, ResolutionMode, Resolver, UnresolvedReason};
 
 /// Explicit limits shared by configuration loading and graph construction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

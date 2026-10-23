@@ -1,8 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 use frameshift_core::SourcePath;
 
-use crate::{ModuleError, ModuleLimits, ResolutionConfig, Work, below, join, parent};
+use crate::config::ModuleFormat;
+use crate::package::PackageManifest;
+use crate::{EdgeKind, ModuleError, ModuleLimits, ResolutionConfig, Work, below, join, parent};
 
 /// Classification by exact, case-sensitive source extension.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,10 +59,18 @@ pub enum UnresolvedReason {
     Excluded,
     /// Configuration is invalid, unavailable, or has unmodeled resolver semantics.
     Configuration,
-    /// Package `imports` needs condition and package-scope analysis.
+    /// A package `imports` or `exports` entry needs semantics outside the
+    /// profile: versioned `types@` conditions, a `$\`` replacement pattern,
+    /// or bare targets nested past the recursion bound.
     PackageImports,
-    /// A local directory has a package manifest whose entry points are not modeled.
+    /// A local directory manifest uses `typesVersions`, or its manifest was
+    /// not supplied to the resolver.
     DirectoryPackage,
+    /// The governing `package.json` is invalid, unreadable, excluded, or not
+    /// visible inside the run root.
+    PackageManifest,
+    /// A package `imports` or `exports` entry maps the request to `null`.
+    MappedToNull,
     /// The specifier expression is not a string literal with a UTF-8 StringValue.
     Computed,
     /// A CommonJS-looking call needs binding analysis before it is a dependency.
@@ -87,6 +98,15 @@ pub enum Resolution {
     Unresolved(UnresolvedReason),
 }
 
+/// TypeScript resolution mode, which selects package-map conditions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ResolutionMode {
+    /// ECMAScript import semantics: `import`, `types`, and `default`.
+    Import,
+    /// CommonJS semantics: `require`, `types`, and `default`.
+    Require,
+}
+
 /// Pure local lookup over an explicit, complete set of admitted paths.
 ///
 /// The caller must supply every candidate path, not only parsed modules.
@@ -95,6 +115,8 @@ pub enum Resolution {
 pub struct Resolver {
     pub(crate) files: BTreeMap<String, SourcePath>,
     pub(crate) excluded: BTreeSet<String>,
+    // `None` records an invalid or unreadable manifest.
+    pub(crate) manifests: BTreeMap<String, Option<Arc<PackageManifest>>>,
     pub(crate) config: ResolutionConfig,
     pub(crate) root: String,
     pub(crate) work: Work,
@@ -123,24 +145,104 @@ impl Resolver {
         Ok(Self {
             files: indexed,
             excluded: BTreeSet::new(),
+            manifests: BTreeMap::new(),
             config,
             root: package_root.map_or("", SourcePath::as_str).to_owned(),
             work,
         })
     }
 
-    /// Resolves one reference and charges the cumulative deterministic work budget.
+    /// Supplies one admitted `package.json`, or `None` when it is invalid
+    /// or unreadable. Package scopes, `imports`, self-references, and
+    /// directory entry points consult only supplied manifests; an admitted
+    /// manifest that was not supplied leaves such lookups unresolved.
+    pub fn add_manifest(
+        &mut self,
+        path: &SourcePath,
+        manifest: Option<PackageManifest>,
+    ) -> Result<(), ModuleError> {
+        self.work.charge(path.as_str().len() + 1)?;
+        if !self.files.contains_key(path.as_str())
+            || path.as_str().rsplit('/').next() != Some("package.json")
+        {
+            return Err(ModuleError::InvalidRoot);
+        }
+        self.manifests
+            .insert(path.as_str().to_owned(), manifest.map(Arc::new));
+        Ok(())
+    }
+
+    /// The resolution mode that TypeScript 6.0.3 assigns to a reference of
+    /// this kind in `importer`, from its extension and the emitted format.
+    pub fn mode(&self, importer: &SourcePath, kind: EdgeKind) -> ResolutionMode {
+        let path = importer.as_str();
+        let has = |extensions: &[&str]| {
+            extensions
+                .iter()
+                .any(|e| path.len() > e.len() && path.ends_with(e))
+        };
+        let format = self.config.format();
+        match kind {
+            EdgeKind::ImportEquals | EdgeKind::RequireCandidate => ResolutionMode::Require,
+            EdgeKind::DynamicImport if format == ModuleFormat::Preserve => ResolutionMode::Import,
+            EdgeKind::Import
+            | EdgeKind::ReExport
+            | EdgeKind::DynamicImport
+            | EdgeKind::ImportType => {
+                if has(&[".cjs", ".cts"]) {
+                    ResolutionMode::Require
+                } else if has(&[".mjs", ".mts"]) {
+                    ResolutionMode::Import
+                } else {
+                    match format {
+                        ModuleFormat::CommonJs => ResolutionMode::Require,
+                        ModuleFormat::Esm | ModuleFormat::Preserve => ResolutionMode::Import,
+                    }
+                }
+            }
+        }
+    }
+
+    /// Resolves one static import and charges the cumulative deterministic
+    /// work budget; equivalent to [`Resolver::resolve_in_mode`] with the mode
+    /// of [`EdgeKind::Import`].
     pub fn resolve(
         &mut self,
         importer: &SourcePath,
         specifier: &str,
     ) -> Result<Resolution, ModuleError> {
-        use UnresolvedReason as U;
+        let mode = self.mode(importer, EdgeKind::Import);
+        self.resolve_in_mode(importer, specifier, mode)
+    }
+
+    /// Resolves one reference in an explicit resolution mode.
+    pub fn resolve_in_mode(
+        &mut self,
+        importer: &SourcePath,
+        specifier: &str,
+        mode: ResolutionMode,
+    ) -> Result<Resolution, ModuleError> {
         self.work
             .charge(specifier.len() + importer.as_str().len() + 1)?;
         if !self.files.contains_key(importer.as_str()) || !below(importer.as_str(), &self.root) {
             return Err(ModuleError::InvalidRoot);
         }
+        let directory = parent(importer.as_str()).to_owned();
+        self.resolve_from(&directory, specifier, mode, 0)
+    }
+
+    /// Full lookup from a containing directory, in the reference's order:
+    /// relative paths, `paths`, `baseUrl`, package `imports`, the package's
+    /// own name through `exports`, then bare package classification.
+    pub(crate) fn resolve_from(
+        &mut self,
+        directory: &str,
+        specifier: &str,
+        mode: ResolutionMode,
+        depth: usize,
+    ) -> Result<Resolution, ModuleError> {
+        use UnresolvedReason as U;
+        self.work.charge(specifier.len() + 1)?;
         if !self.config.issues.is_empty() {
             return Ok(Resolution::Unresolved(U::Configuration));
         }
@@ -149,9 +251,6 @@ impl Resolver {
             || specifier.contains('#') && !specifier.starts_with('#')
         {
             return Ok(Resolution::Unresolved(U::InvalidSpecifier));
-        }
-        if specifier.starts_with('#') {
-            return Ok(Resolution::Unresolved(U::PackageImports));
         }
         if let Some(name) = specifier.strip_prefix("node:") {
             return Ok(
@@ -175,8 +274,7 @@ impl Resolver {
             || specifier.starts_with("./")
             || specifier.starts_with("../")
         {
-            let Some(path) = join(parent(importer.as_str()), specifier.trim_end_matches('/'))
-            else {
+            let Some(path) = join(directory, specifier.trim_end_matches('/')) else {
                 return Ok(Resolution::Unresolved(U::OutsideRoot));
             };
             return Ok(self
@@ -237,6 +335,19 @@ impl Resolver {
                 return Ok(result);
             }
         }
+        if specifier.starts_with('#')
+            && let Some(result) = self.package_imports(directory, specifier, mode, depth)?
+        {
+            return Ok(result);
+        }
+        if let Some(result) = self.self_reference(directory, specifier, mode)? {
+            return Ok(result);
+        }
+        // Package names never start with `#`, and installed contents are
+        // never resolved, so a failed import map is a missing target.
+        if specifier.starts_with('#') {
+            return Ok(Resolution::Unresolved(U::NotFound));
+        }
         let parts: Vec<_> = specifier.split('/').collect();
         if parts
             .iter()
@@ -255,7 +366,7 @@ impl Resolver {
         Ok(Resolution::External { package })
     }
 
-    fn probe(&mut self, path: &str) -> Result<Option<Resolution>, ModuleError> {
+    pub(crate) fn probe(&mut self, path: &str) -> Result<Option<Resolution>, ModuleError> {
         self.work.charge(path.len() + 1)?;
         if !below(path, &self.root) && path != self.root {
             return Ok(Some(Resolution::Unresolved(UnresolvedReason::OutsideRoot)));
@@ -329,12 +440,13 @@ impl Resolver {
         } else {
             format!("{path}/")
         };
-        if let Some(result) = self.probe(&format!("{directory}package.json"))? {
-            return Ok(Some(if matches!(result, Resolution::Local { .. }) {
-                Resolution::Unresolved(UnresolvedReason::DirectoryPackage)
+        let manifest = format!("{directory}package.json");
+        if let Some(result) = self.probe(&manifest)? {
+            return if matches!(result, Resolution::Local { .. }) {
+                self.directory_package(path, &manifest)
             } else {
-                result
-            }));
+                Ok(Some(result))
+            };
         }
         for ext in ["ts", "tsx", "d.ts", "js", "jsx"] {
             if let Some(result) = self.probe(&format!("{directory}index.{ext}"))? {
