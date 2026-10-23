@@ -1337,6 +1337,32 @@ impl<'source> SyntaxTree<'source> {
         Some(crate::value::string_literal_value(spelling))
     }
 
+    /// Returns the StringValue of an identifier, identifier name, binding
+    /// identifier, label, or private name node, with `\u` escapes decoded;
+    /// a private name keeps its leading `#`. A JSX identifier, which has no
+    /// escapes, returns its spelling. Returns `None` for any other node or an
+    /// ID outside this tree.
+    pub fn identifier_value(&self, id: NodeId) -> Option<String> {
+        let node = self.node(id)?;
+        let spelling = self.source.slice(node.span).ok()?;
+        if let SyntaxNodeKind::Identifier { has_escape, .. }
+        | SyntaxNodeKind::IdentifierName { has_escape, .. }
+        | SyntaxNodeKind::BindingIdentifier { has_escape }
+        | SyntaxNodeKind::LabelIdentifier { has_escape }
+        | SyntaxNodeKind::PrivateIdentifier { has_escape } = node.kind
+        {
+            Some(if has_escape {
+                crate::value::identifier_chars(spelling).collect()
+            } else {
+                spelling.to_owned()
+            })
+        } else if matches!(node.kind, SyntaxNodeKind::JsxIdentifier) {
+            Some(spelling.to_owned())
+        } else {
+            None
+        }
+    }
+
     /// Returns comments encountered while parsing, in source order.
     pub fn comments(&self) -> &[crate::Comment] {
         &self.comments
