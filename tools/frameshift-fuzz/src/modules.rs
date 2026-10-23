@@ -24,6 +24,7 @@ pub fn run(input: &[u8]) -> Result<(), String> {
         "src/a.ts",
         "src/a.js",
         "src/d/index.ts",
+        "src/d.ts",
         "src/a.d.ts",
         "src/data.json",
         "src/style.scss",

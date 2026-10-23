@@ -92,7 +92,45 @@ for (const specifier of requests.split('\n')) {
             requests.push(format!("./{name}"));
         }
     }
+    files.extend([
+        "src/directory.ts".to_owned(),
+        "src/directory/index.ts".to_owned(),
+    ]);
+    requests.extend(
+        [
+            "./directory",
+            "./directory/",
+            "alias/directory/",
+            "directory/",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned()),
+    );
+    files.extend(
+        ["src.ts", "src/index.ts", "index.ts", ".ts"]
+            .iter()
+            .map(|s| (*s).to_owned()),
+    );
+    requests.extend(
+        [
+            ".",
+            "..",
+            "./directory/..",
+            "./directory/.",
+            "./directory/../",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned()),
+    );
     let profiles = [
+        (
+            r#"{"baseUrl":"/project"}"#,
+            r#"{"compilerOptions":{"baseUrl":"./"}}"#,
+        ),
+        (
+            r#"{"baseUrl":"/project/src"}"#,
+            r#"{"compilerOptions":{"baseUrl":"src/"}}"#,
+        ),
         (
             r#"{"baseUrl":"/project"}"#,
             r#"{"compilerOptions":{"baseUrl":""}}"#,
@@ -447,6 +485,92 @@ fn review_empty_base_url_denotes_the_originating_config_directory() {
             path: path("config/local.ts"),
             kind: FileKind::Module
         }
+    );
+}
+
+#[test]
+fn review_trailing_base_url_separator_preserves_the_config_origin() {
+    for (base, file, target) in [
+        ("./", "tsconfig.json", "local.ts"),
+        ("src/", "tsconfig.json", "src/local.ts"),
+        ("./src/", "config/tsconfig.json", "config/src/local.ts"),
+    ] {
+        let c = config(
+            &format!(r#"{{"compilerOptions":{{"baseUrl":"{base}"}}}}"#),
+            file,
+        );
+        assert!(c.issues().is_empty(), "{base}");
+        let mut r = resolver(&["src/main.ts", target], c);
+        local(&mut r, "local", target);
+    }
+    for base in ["/", "//", "src//", "src//nested"] {
+        assert!(
+            !config(
+                &format!(r#"{{"compilerOptions":{{"baseUrl":"{base}"}}}}"#),
+                "tsconfig.json"
+            )
+            .issues()
+            .is_empty()
+        );
+    }
+}
+
+#[test]
+fn review_trailing_import_slash_selects_only_directory_candidates() {
+    let files = [
+        "src/main.ts",
+        "src/dir.ts",
+        "src/dir/index.ts",
+        "src.ts",
+        "src/index.ts",
+        "index.ts",
+        ".ts",
+    ];
+    let mut r = resolver(&files, ResolutionConfig::default());
+    local(&mut r, "./dir", "src/dir.ts");
+    local(&mut r, "./dir/", "src/dir/index.ts");
+    local(&mut r, ".", "src/index.ts");
+    local(&mut r, "..", "index.ts");
+    local(&mut r, "./dir/..", "src/index.ts");
+    local(&mut r, "./dir/.", "src/dir/index.ts");
+    let c = config(
+        r#"{"compilerOptions":{"baseUrl":"src","paths":{"alias/*":["*"],"directory":["dir/"]}}}"#,
+        "tsconfig.json",
+    );
+    let mut r = resolver(&files, c);
+    local(&mut r, "alias/dir/", "src/dir/index.ts");
+    local(&mut r, "directory", "src/dir/index.ts");
+    local(&mut r, "dir/", "src/dir/index.ts");
+}
+
+#[test]
+fn review_cts_and_declaration_cts_keep_module_dependencies() {
+    let g = graph(
+        "cts-modules",
+        &[
+            (
+                "entry.cts",
+                "import {value} from './dep'; export {value}; export * from './dep';",
+            ),
+            (
+                "ambient.d.cts",
+                "import type {T} from './dep'; export const current: T;",
+            ),
+            ("dep.ts", "export const value=1; export type T=string;"),
+            ("sloppy.cjs", "with (scope) { require('./dep'); }"),
+        ],
+    );
+    for (file, count) in [("entry.cts", 2), ("ambient.d.cts", 1), ("sloppy.cjs", 1)] {
+        let node = g.node(&path(file)).unwrap();
+        assert_eq!(node.state, ModuleState::Parsed, "{file}");
+        assert_eq!(node.edges.len(), count, "{file}");
+    }
+    assert!(
+        g.node(&path("ambient.d.cts"))
+            .unwrap()
+            .edges
+            .iter()
+            .all(|e| e.type_only)
     );
 }
 

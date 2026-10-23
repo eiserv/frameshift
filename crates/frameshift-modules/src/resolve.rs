@@ -169,6 +169,7 @@ impl Resolver {
         if specifier.contains(':') || specifier.starts_with('/') {
             return Ok(Resolution::Unresolved(U::InvalidSpecifier));
         }
+        let directory_only = directory_request(specifier);
         if specifier == "."
             || specifier == ".."
             || specifier.starts_with("./")
@@ -179,7 +180,7 @@ impl Resolver {
                 return Ok(Resolution::Unresolved(U::OutsideRoot));
             };
             return Ok(self
-                .lookup(&path)?
+                .lookup(&path, directory_only)?
                 .unwrap_or(Resolution::Unresolved(U::NotFound)));
         }
         let mapping = if let Some((origin, mappings)) = &self.config.paths {
@@ -219,19 +220,20 @@ impl Resolver {
             for target in mapping.targets {
                 self.work.charge(target.len() + capture.len() + 1)?;
                 let target = target.replacen('*', &capture, 1);
-                let Some(path) = join(&base, &target) else {
+                let target_directory = directory_only || directory_request(&target);
+                let Some(path) = join(&base, target.trim_end_matches('/')) else {
                     return Ok(Resolution::Unresolved(U::OutsideRoot));
                 };
-                if let Some(result) = self.lookup(&path)? {
+                if let Some(result) = self.lookup(&path, target_directory)? {
                     return Ok(result);
                 }
             }
         }
         if let Some(base) = &self.config.base {
-            let Some(path) = join(base, specifier) else {
+            let Some(path) = join(base, specifier.trim_end_matches('/')) else {
                 return Ok(Resolution::Unresolved(U::InvalidSpecifier));
             };
-            if let Some(result) = self.lookup(&path)? {
+            if let Some(result) = self.lookup(&path, directory_only)? {
                 return Ok(result);
             }
         }
@@ -274,42 +276,48 @@ impl Resolver {
         }))
     }
 
-    fn lookup(&mut self, path: &str) -> Result<Option<Resolution>, ModuleError> {
+    fn lookup(
+        &mut self,
+        path: &str,
+        directory_only: bool,
+    ) -> Result<Option<Resolution>, ModuleError> {
         let mut candidates = Vec::new();
-        let families: &[(&[&str], &[&str])] = &[
-            (&[".d.mts", ".mts", ".mjs"], &["mts", "d.mts", "mjs"]),
-            (&[".d.cts", ".cts", ".cjs"], &["cts", "d.cts", "cjs"]),
-            (&[".tsx", ".jsx"], &["tsx", "ts", "d.ts", "jsx", "js"]),
-            (
-                &[".d.ts", ".ts", ".js"],
-                &["ts", "tsx", "d.ts", "js", "jsx"],
-            ),
-            (&[".json"], &["d.json.ts", "json"]),
-        ];
-        let mut substituted = false;
-        for (suffixes, replacements) in families {
-            if let Some(stem) = suffixes.iter().find_map(|suffix| path.strip_suffix(suffix)) {
-                for ext in *replacements {
-                    candidates.push(format!("{stem}.{ext}"));
+        if !directory_only {
+            let families: &[(&[&str], &[&str])] = &[
+                (&[".d.mts", ".mts", ".mjs"], &["mts", "d.mts", "mjs"]),
+                (&[".d.cts", ".cts", ".cjs"], &["cts", "d.cts", "cjs"]),
+                (&[".tsx", ".jsx"], &["tsx", "ts", "d.ts", "jsx", "js"]),
+                (
+                    &[".d.ts", ".ts", ".js"],
+                    &["ts", "tsx", "d.ts", "js", "jsx"],
+                ),
+                (&[".json"], &["d.json.ts", "json"]),
+            ];
+            let mut substituted = false;
+            for (suffixes, replacements) in families {
+                if let Some(stem) = suffixes.iter().find_map(|suffix| path.strip_suffix(suffix)) {
+                    for ext in *replacements {
+                        candidates.push(format!("{stem}.{ext}"));
+                    }
+                    substituted = true;
+                    break;
                 }
-                substituted = true;
-                break;
             }
-        }
-        if !substituted
-            && path
-                .rsplit('/')
-                .next()
-                .is_some_and(|name| name.contains('.'))
-            && let Some((stem, extension)) = path.rsplit_once('.')
-        {
-            candidates.push(format!("{stem}.d.{extension}.ts"));
-        }
-        for ext in ["ts", "tsx", "d.ts", "js", "jsx"] {
-            candidates.push(format!("{path}.{ext}"));
-        }
-        if !substituted {
-            candidates.push(path.to_owned());
+            if !substituted
+                && path
+                    .rsplit('/')
+                    .next()
+                    .is_some_and(|name| name.contains('.'))
+                && let Some((stem, extension)) = path.rsplit_once('.')
+            {
+                candidates.push(format!("{stem}.d.{extension}.ts"));
+            }
+            for ext in ["ts", "tsx", "d.ts", "js", "jsx"] {
+                candidates.push(format!("{path}.{ext}"));
+            }
+            if !substituted {
+                candidates.push(path.to_owned());
+            }
         }
         for candidate in candidates {
             if let Some(result) = self.probe(&candidate)? {
@@ -335,4 +343,11 @@ impl Resolver {
         }
         Ok(None)
     }
+}
+
+fn directory_request(reference: &str) -> bool {
+    matches!(reference, "." | "..")
+        || reference.ends_with('/')
+        || reference.ends_with("/.")
+        || reference.ends_with("/..")
 }

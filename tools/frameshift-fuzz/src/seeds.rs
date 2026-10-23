@@ -986,6 +986,10 @@ bun@1.4.0",
         .map(|text| (*text).to_owned())
         .collect(),
         Target::Modules => [
+            "./d",
+            "./d/",
+            "./d/..",
+            "{\"compilerOptions\":{\"baseUrl\":\"src/\"}}\na",
             "./style.scss",
             "./logo.svg",
             "{\"compilerOptions\":{\"baseUrl\":\"\"}}\nsrc/a",

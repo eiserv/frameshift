@@ -151,7 +151,9 @@ impl ModuleGraph {
 /// Configuration selection prefers its `tsconfig.json` over `jsconfig.json`.
 /// Relative inheritance stays within the run root. Local dependencies stay
 /// inside the selected package; sibling workspace code is not analyzed.
-/// An incomplete inventory or changed snapshot returns no graph.
+/// An incomplete inventory or changed snapshot returns no graph. `.cjs` uses
+/// Script goal; TypeScript surfaces, including `.cts` and `.d.cts`, use Module
+/// goal with their implementation or ambient dialect.
 pub fn build_module_graph(
     snapshot: &Snapshot,
     package_root: Option<&SourcePath>,
@@ -244,12 +246,11 @@ pub fn build_module_graph(
                         } else {
                             JsDialect::JavaScript
                         };
-                        let goal =
-                            if path.as_str().ends_with(".cjs") || path.as_str().ends_with(".cts") {
-                                SourceGoal::Script
-                            } else {
-                                SourceGoal::Module
-                            };
+                        let goal = if path.as_str().ends_with(".cjs") {
+                            SourceGoal::Script
+                        } else {
+                            SourceGoal::Module
+                        };
                         match parse_js_program(&source, goal, dialect, limits.parse) {
                             Err(error) => node.state = ModuleState::SyntaxError(error),
                             Ok(tree) => {

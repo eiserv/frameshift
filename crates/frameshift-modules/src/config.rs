@@ -126,6 +126,10 @@ fn parse(
         }
         if let Some(id) = options.get("baseUrl") {
             let base = doc.value(id)?.as_str()?;
+            if base.starts_with('/') {
+                return None;
+            }
+            let base = base.strip_suffix('/').unwrap_or(base);
             config.base = Some(if base.is_empty() {
                 parent(path.as_str()).to_owned()
             } else {
