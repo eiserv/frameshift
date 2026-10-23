@@ -28,6 +28,9 @@ pub use frameshift_modules as modules;
 /// Scopes, bindings, references, imports, and exports of one syntax tree.
 pub use frameshift_bindings as bindings;
 
+/// Partial static evaluation of configuration files and constants.
+pub use frameshift_evaluate as evaluate;
+
 mod document;
 pub mod inspect;
 pub mod limits;

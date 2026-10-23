@@ -15,8 +15,8 @@ use frameshift_engine::{
 };
 
 use crate::{
-    astro, bindings, collections, css, edits, gitignore, hashes, identifiers, json, lexical,
-    modules, package, paths, sass, seeds, semver, workspace, yaml, yarn,
+    astro, bindings, collections, css, edits, evaluate, gitignore, hashes, identifiers, json,
+    lexical, modules, package, paths, sass, seeds, semver, workspace, yaml, yarn,
 };
 
 /// A fuzzed engine entry point with its contracts.
@@ -67,6 +67,8 @@ pub enum Target {
     Modules,
     /// Scopes, bindings, and references of every tree that parses.
     Bindings,
+    /// Static evaluation of the exports of every tree that parses.
+    Evaluate,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -83,7 +85,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 22] = [
+    pub const ALL: [Self; 23] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -106,6 +108,7 @@ impl Target {
         Self::Sass,
         Self::Modules,
         Self::Bindings,
+        Self::Evaluate,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -133,6 +136,7 @@ impl Target {
             Self::Sass => "sass",
             Self::Modules => "modules",
             Self::Bindings => "bindings",
+            Self::Evaluate => "evaluate",
         }
     }
 
@@ -201,6 +205,9 @@ impl Target {
             Self::Modules => {
                 "module configuration and lookup: repetition, order independence, containment, admitted targets, and work bounds"
             }
+            Self::Evaluate => {
+                "static evaluation of exports: repetition, request-order independence, the value depth bound, unknown parts, and small work limits"
+            }
             Self::Bindings => {
                 "scope and binding analysis: repetition, scope tree order, reference nodes, names and meanings, and the declaration index"
             }
@@ -226,7 +233,8 @@ impl Target {
             | Self::Hashes
             | Self::Collections
             | Self::Package
-            | Self::Bindings => 4_096,
+            | Self::Bindings
+            | Self::Evaluate => 4_096,
             Self::Yaml | Self::Yarn | Self::Workspace | Self::Css | Self::Sass | Self::Modules => {
                 1_024
             }
@@ -271,6 +279,7 @@ impl Target {
             Self::Sass => sass::run(input),
             Self::Modules => modules::run(input),
             Self::Bindings => bindings::run(input),
+            Self::Evaluate => evaluate::run(input),
         }
     }
 }

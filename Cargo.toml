@@ -7,6 +7,7 @@ members = [
     "crates/frameshift-nextjs",
     "crates/frameshift-modules",
     "crates/frameshift-bindings",
+    "crates/frameshift-evaluate",
     "crates/frameshift-syntax",
     "crates/frameshift-transform",
     "crates/frameshift-emit",
