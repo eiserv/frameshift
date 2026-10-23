@@ -85,6 +85,27 @@ pub struct ModuleNode {
     pub state: ModuleState,
     /// Every extracted reference; empty after any parse error.
     pub edges: Vec<Edge>,
+    /// The module's directive prologue, such as `"use client"`.
+    pub directives: Vec<Directive>,
+    /// Directive prologues of function bodies, such as an inline
+    /// `"use server"`, in source order.
+    pub function_directives: Vec<Directive>,
+}
+
+/// One directive of a prologue: a string literal statement before any other
+/// statement of a program or function body.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Directive {
+    /// The decoded value, absent when it is not representable.
+    pub value: Option<String>,
+    /// Whether the spelling contains an escape or line continuation, which
+    /// ECMAScript's `"use strict"` rule and framework directives treat as a
+    /// different directive.
+    pub escaped: bool,
+    /// The string literal span, including quotes.
+    pub span: Span,
+    /// The enclosing function body, absent for the module prologue.
+    pub function: Option<NodeId>,
 }
 
 /// Deterministic source dependency graph, with nodes in source-path byte order.
@@ -160,6 +181,19 @@ pub fn build_module_graph(
     snapshot: &Snapshot,
     package_root: Option<&SourcePath>,
     limits: GraphLimits,
+) -> Result<ModuleGraph, ModuleError> {
+    build_module_graph_with(snapshot, package_root, limits, &mut |_, _| Ok(()))
+}
+
+/// Builds the graph as [`build_module_graph`] does, and lets `visit` inspect
+/// each strict syntax tree once, in path order, before its arena is dropped.
+/// Later analyses, such as binding analysis or framework fact extraction,
+/// share the parse this way. An error from `visit` returns no graph.
+pub fn build_module_graph_with(
+    snapshot: &Snapshot,
+    package_root: Option<&SourcePath>,
+    limits: GraphLimits,
+    visit: &mut dyn FnMut(&SourcePath, &SyntaxTree<'_>) -> Result<(), ModuleError>,
 ) -> Result<ModuleGraph, ModuleError> {
     let inventory = snapshot.inventory();
     if !inventory.is_complete() {
@@ -244,6 +278,8 @@ pub fn build_module_graph(
             kind,
             state: ModuleState::Parsed,
             edges: Vec::new(),
+            directives: Vec::new(),
+            function_directives: Vec::new(),
         };
         match snapshot.read(id).map_err(ModuleError::Snapshot)? {
             FileRead::Unreadable(_) => node.state = ModuleState::Unreadable,
@@ -283,6 +319,9 @@ pub fn build_module_graph(
                                     limits.modules.max_edges - edge_count,
                                 )?;
                                 edge_count += node.edges.len();
+                                (node.directives, node.function_directives) =
+                                    directives(&tree, &mut resolver.work)?;
+                                visit(path, &tree)?;
                             }
                         }
                     }
@@ -540,4 +579,57 @@ fn mode_value(tree: &SyntaxTree<'_>, key: NodeId, value: NodeId) -> Option<Resol
         "require" => Some(ResolutionMode::Require),
         _ => None,
     }
+}
+
+/// The module prologue and every function-body prologue of a strict tree,
+/// found with an explicit stack because trees can be as deep as their nodes.
+pub(crate) fn directives(
+    tree: &SyntaxTree<'_>,
+    work: &mut Work,
+) -> Result<(Vec<Directive>, Vec<Directive>), ModuleError> {
+    let mut module = Vec::new();
+    let mut functions = Vec::new();
+    let mut pending = vec![tree.root()];
+    while let Some(id) = pending.pop() {
+        work.charge(1)?;
+        let kind = tree.node(id).expect("parser-owned node").kind();
+        let prologue = if let N::Program { body, .. } = kind {
+            Some((body, None))
+        } else if let N::FunctionBody { body, .. } = kind {
+            Some((body, Some(id)))
+        } else {
+            None
+        };
+        if let Some((body, function)) = prologue {
+            for &statement in tree.children(body).expect("parser-owned list") {
+                let N::Directive { expression } =
+                    tree.node(statement).expect("parser-owned node").kind()
+                else {
+                    break;
+                };
+                let span = tree.node(expression).expect("parser-owned node").span();
+                let spelling = tree.source().slice(span).unwrap_or("");
+                let target = if function.is_some() {
+                    &mut functions
+                } else {
+                    &mut module
+                };
+                target
+                    .try_reserve(1)
+                    .map_err(|_| ModuleError::AllocationFailed)?;
+                target.push(Directive {
+                    value: tree.string_literal_value(expression),
+                    escaped: spelling.contains('\\'),
+                    span,
+                    function,
+                });
+            }
+        }
+        pending
+            .try_reserve(8)
+            .map_err(|_| ModuleError::AllocationFailed)?;
+        pending.extend(tree.child_nodes(id).expect("parser-owned children"));
+    }
+    functions.sort_by_key(|d: &Directive| (d.span.start(), d.span.end()));
+    Ok((module, functions))
 }

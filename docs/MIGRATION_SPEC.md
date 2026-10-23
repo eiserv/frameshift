@@ -221,7 +221,7 @@ Steps 1 and 2 are both behavior-preserving for static rendering. Step 2 exists s
 
 ### 9.2 Render contexts
 
-Analysis computes each component's render contexts (section 9 of [ARCHITECTURE.md](ARCHITECTURE.md)):
+Analysis computes each component's render contexts (section 9 of [ARCHITECTURE.md](ARCHITECTURE.md)). Module-level contexts are implemented (`D-092`, section 40 of [IMPLEMENTATION.md](IMPLEMENTATION.md)); per-component contexts follow with the component graph:
 
 - **Server only:** a candidate for step 1.
 - **Client** (inside a `'use client'` module, or reachable from one through imports): step 3 if the component is a topmost client boundary rendered from server context, otherwise part of an island's internal tree.

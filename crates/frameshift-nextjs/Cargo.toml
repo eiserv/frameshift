@@ -10,6 +10,8 @@ publish.workspace = true
 frameshift-core = { path = "../frameshift-core" }
 frameshift-input = { path = "../frameshift-input" }
 frameshift-package = { path = "../frameshift-package" }
+frameshift-modules = { path = "../frameshift-modules" }
+frameshift-bindings = { path = "../frameshift-bindings" }
 
 [lints]
 workspace = true
