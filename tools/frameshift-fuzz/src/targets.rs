@@ -15,8 +15,8 @@ use frameshift_engine::{
 };
 
 use crate::{
-    astro, collections, css, edits, gitignore, hashes, identifiers, json, lexical, modules,
-    package, paths, sass, seeds, semver, workspace, yaml, yarn,
+    astro, bindings, collections, css, edits, gitignore, hashes, identifiers, json, lexical,
+    modules, package, paths, sass, seeds, semver, workspace, yaml, yarn,
 };
 
 /// A fuzzed engine entry point with its contracts.
@@ -65,6 +65,8 @@ pub enum Target {
     Sass,
     /// Snapshot-only module references and JSONC resolver settings.
     Modules,
+    /// Scopes, bindings, and references of every tree that parses.
+    Bindings,
 }
 
 /// Every dialect, in the order of `JsDialect`.
@@ -81,7 +83,7 @@ pub const GOALS: [SourceGoal; 2] = [SourceGoal::Script, SourceGoal::Module];
 
 impl Target {
     /// Every target, in the order the documentation lists them.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::Program,
         Self::Expression,
         Self::RegExp,
@@ -103,6 +105,7 @@ impl Target {
         Self::Css,
         Self::Sass,
         Self::Modules,
+        Self::Bindings,
     ];
 
     /// Returns the name used on the command line and in directories.
@@ -129,6 +132,7 @@ impl Target {
             Self::Css => "css",
             Self::Sass => "sass",
             Self::Modules => "modules",
+            Self::Bindings => "bindings",
         }
     }
 
@@ -197,6 +201,9 @@ impl Target {
             Self::Modules => {
                 "module configuration and lookup: repetition, order independence, containment, admitted targets, and work bounds"
             }
+            Self::Bindings => {
+                "scope and binding analysis: repetition, scope tree order, reference nodes, names and meanings, and the declaration index"
+            }
             Self::Sass => {
                 "SCSS and indented Sass: grammar, spans, arena reachability, deterministic errors and resource bounds"
             }
@@ -218,7 +225,8 @@ impl Target {
             | Self::Identifiers
             | Self::Hashes
             | Self::Collections
-            | Self::Package => 4_096,
+            | Self::Package
+            | Self::Bindings => 4_096,
             Self::Yaml | Self::Yarn | Self::Workspace | Self::Css | Self::Sass | Self::Modules => {
                 1_024
             }
@@ -262,6 +270,7 @@ impl Target {
             Self::Css => css::run(input),
             Self::Sass => sass::run(input),
             Self::Modules => modules::run(input),
+            Self::Bindings => bindings::run(input),
         }
     }
 }

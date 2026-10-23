@@ -25,6 +25,9 @@
 /// Snapshot-only local module resolution and deterministic import graphs.
 pub use frameshift_modules as modules;
 
+/// Scopes, bindings, references, imports, and exports of one syntax tree.
+pub use frameshift_bindings as bindings;
+
 mod document;
 pub mod inspect;
 pub mod limits;
