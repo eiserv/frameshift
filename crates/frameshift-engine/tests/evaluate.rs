@@ -203,6 +203,25 @@ fn calls_functions_packages_and_mutations_stay_unknown() {
         }
     );
     let value = config(
+        "destructure",
+        &[
+            (
+                "next.config.js",
+                "const { a, b: c = 2, d = 3 } = { a: 1, d: undefined };\nconst { e } = require('./e');\nmodule.exports = { a, c, d, e };\n",
+            ),
+            ("e.js", "module.exports = { e: 1 };\n"),
+        ],
+        "next.config.js",
+    );
+    let o = object(&value);
+    assert_eq!(o.get("a"), Some(&number(1.0)));
+    assert_eq!(o.get("c"), Some(&number(2.0)));
+    assert_eq!(o.get("d"), Some(&number(3.0)));
+    assert_eq!(
+        reason(o.get("e").unwrap()),
+        &Reason::Call(Some("require".into()))
+    );
+    let value = config(
         "let",
         &[("next.config.js", "let a = { x: 1 };\nmodule.exports = a;\n")],
         "next.config.js",
@@ -275,6 +294,140 @@ fn cycles_limits_and_missing_exports_are_explicit() {
     );
     assert_eq!(
         reason(&evaluator.config(&path("missing.mjs")).unwrap()),
-        &Reason::Unresolved
+        &Reason::Unresolved(None)
     );
+}
+
+/// Experiment E3: evaluation coverage of real configuration files in the
+/// directories of `FRAMESHIFT_E3_DIRS` (separated by `;`), which are read
+/// through snapshots and never built, installed, or executed.
+#[test]
+#[ignore = "requires the approved real-world sample outside the repository"]
+fn external_config_evaluation() {
+    use std::collections::BTreeMap;
+    let dirs = std::env::var("FRAMESHIFT_E3_DIRS").expect("set FRAMESHIFT_E3_DIRS");
+    let names = |stem: &str| {
+        ["js", "cjs", "mjs", "ts", "mts", "cts"]
+            .map(|ext| format!("{stem}.config.{ext}"))
+            .to_vec()
+    };
+    let kinds = [
+        ("next", names("next")),
+        ("tailwind", names("tailwind")),
+        ("postcss", names("postcss")),
+    ];
+    // kind -> class -> count; kind -> reason -> count.
+    let mut classes: BTreeMap<(&str, &str), usize> = BTreeMap::new();
+    let mut reasons: BTreeMap<(&str, String), usize> = BTreeMap::new();
+    let mut keys: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+    for dir in dirs.split(';').filter(|d| !d.is_empty()) {
+        let mut findings = FindingCollector::new(FindingLimits::default());
+        let mut limits = Limits::default();
+        limits.run.max_files = 400_000;
+        limits.run.max_entries = 800_000;
+        limits.run.max_total_bytes = 4 << 30;
+        let snapshot =
+            snapshot(std::path::Path::new(dir), limits.snapshot(), &mut findings).unwrap();
+        let files: Vec<SourcePath> = snapshot.inventory().files().as_slice().to_vec();
+        for file in &files {
+            let name = file.as_str().rsplit('/').next().unwrap();
+            let Some((kind, _)) = kinds
+                .iter()
+                .find(|(_, list)| list.iter().any(|n| n == name))
+            else {
+                continue;
+            };
+            let package = file.as_str().rsplit_once('/').map(|(d, _)| path(d));
+            let Ok(mut evaluator) = Evaluator::new(
+                &snapshot,
+                package.as_ref(),
+                limits.modules(),
+                EvaluateLimits::default(),
+            ) else {
+                *classes.entry((kind, "no-resolver")).or_default() += 1;
+                continue;
+            };
+            let value = evaluator.config(file).unwrap();
+            let class = match &value {
+                v if v.is_known() => "known",
+                Value::Object(o) => {
+                    let known = o.entries.iter().filter(|(_, v)| v.is_known()).count();
+                    let entry = keys.entry(kind).or_default();
+                    entry.0 += known;
+                    entry.1 += o.entries.len();
+                    if known > 0 {
+                        "partial"
+                    } else {
+                        "object-unknown"
+                    }
+                }
+                Value::Undefined
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Number(_)
+                | Value::BigInt(_)
+                | Value::String(_)
+                | Value::Array(_)
+                | Value::Unknown(_) => "unknown",
+            };
+            if let Value::Object(o) = &value
+                && class == "known"
+            {
+                let entry = keys.entry(kind).or_default();
+                entry.0 += o.entries.len();
+                entry.1 += o.entries.len();
+            }
+            *classes.entry((kind, class)).or_default() += 1;
+            for unknown in value.unknowns() {
+                if std::env::var("FRAMESHIFT_E3_VERBOSE").is_ok_and(|v| {
+                    format!("{:?}", unknown.reason)
+                        .to_lowercase()
+                        .starts_with(&v)
+                }) {
+                    eprintln!(
+                        "detail {dir} {} {:?} {:?}",
+                        file.as_str(),
+                        unknown.reason,
+                        unknown.module.as_str()
+                    );
+                }
+                let reason = match &unknown.reason {
+                    Reason::Call(_) => "call".to_owned(),
+                    Reason::Package { .. } => "package".to_owned(),
+                    Reason::Global(_) => "global".to_owned(),
+                    Reason::Environment(_) => "environment".to_owned(),
+                    Reason::Unresolved(Some(r)) => format!("unresolved-{r:?}").to_lowercase(),
+                    other @ (Reason::Unsupported
+                    | Reason::Function
+                    | Reason::RegExp
+                    | Reason::Dynamic
+                    | Reason::Mutable
+                    | Reason::Unresolved(None)
+                    | Reason::NotExported
+                    | Reason::Syntax
+                    | Reason::Cycle
+                    | Reason::DepthLimit
+                    | Reason::WorkLimit
+                    | Reason::ValueLimit) => format!("{other:?}").to_lowercase(),
+                };
+                *reasons.entry((kind, reason)).or_default() += 1;
+            }
+            if let Value::Object(o) = &value
+                && !o.complete
+            {
+                *reasons
+                    .entry((kind, "incomplete-object".to_owned()))
+                    .or_default() += 1;
+            }
+        }
+    }
+    for ((kind, class), count) in &classes {
+        eprintln!("class {kind} {class} {count}");
+    }
+    for (kind, (known, total)) in &keys {
+        eprintln!("keys {kind} {known}/{total}");
+    }
+    for ((kind, reason), count) in &reasons {
+        eprintln!("reason {kind} {reason} {count}");
+    }
 }

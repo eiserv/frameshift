@@ -148,8 +148,10 @@ pub enum Reason {
         /// The imported name, `default`, or `*` for a namespace.
         name: String,
     },
-    /// A module reference without an established local module.
-    Unresolved,
+    /// A module reference without an established local module, with the
+    /// resolver's reason when it gave one; an asset, stylesheet, or missing
+    /// file has none.
+    Unresolved(Option<frameshift_modules::UnresolvedReason>),
     /// A module that does not export the name.
     NotExported,
     /// A module that is not UTF-8 text or does not parse strictly.

@@ -289,7 +289,7 @@ impl<'s> Evaluator<'s> {
     }
 
     /// An evaluator without a snapshot: it evaluates only trees that the
-    /// caller supplies, and every import is [`Reason::Unresolved`].
+    /// caller supplies, and every import is [`Reason::Unresolved`] without a resolver reason.
     pub fn detached(graph: GraphLimits, limits: EvaluateLimits) -> Self {
         Self {
             snapshot: None,
@@ -409,10 +409,10 @@ impl<'s> Evaluator<'s> {
 
     fn load(&mut self, path: &SourcePath, name: &ExportName) -> Result<Value, EvaluateError> {
         let Some(snapshot) = self.snapshot else {
-            return Ok(self.unknown_at(path, None, Reason::Unresolved));
+            return Ok(self.unknown_at(path, None, Reason::Unresolved(None)));
         };
         let Some(id) = snapshot.inventory().files().find(path) else {
-            return Ok(self.unknown_at(path, None, Reason::Unresolved));
+            return Ok(self.unknown_at(path, None, Reason::Unresolved(None)));
         };
         let file = match snapshot.read(id).map_err(EvaluateError::Snapshot)? {
             FileRead::Content(file) => file,
@@ -457,10 +457,10 @@ impl<'s> Evaluator<'s> {
 
     fn resolve(&mut self, m: &Module<'_, '_>, source: NodeId) -> Result<Option<SourcePath>, Value> {
         let Some(specifier) = m.tree.string_literal_value(source) else {
-            return Err(self.unknown(m, source, Reason::Unresolved));
+            return Err(self.unknown(m, source, Reason::Unresolved(None)));
         };
         let Some(resolver) = self.resolver.as_mut() else {
-            return Err(self.unknown(m, source, Reason::Unresolved));
+            return Err(self.unknown(m, source, Reason::Unresolved(None)));
         };
         match resolver.resolve(m.path, &specifier) {
             Ok(Resolution::Local {
@@ -483,8 +483,11 @@ impl<'s> Evaluator<'s> {
                     name: String::new(),
                 },
             )),
-            Ok(Resolution::Local { .. } | Resolution::Unresolved(_)) | Err(_) => {
-                Err(self.unknown(m, source, Reason::Unresolved))
+            Ok(Resolution::Unresolved(reason)) => {
+                Err(self.unknown(m, source, Reason::Unresolved(Some(reason))))
+            }
+            Ok(Resolution::Local { .. }) | Err(_) => {
+                Err(self.unknown(m, source, Reason::Unresolved(None)))
             }
         }
     }
@@ -497,7 +500,7 @@ impl<'s> Evaluator<'s> {
     ) -> Result<Value, EvaluateError> {
         let target = match self.resolve(m, source) {
             Ok(Some(target)) => target,
-            Ok(None) => return Ok(self.unknown(m, source, Reason::Unresolved)),
+            Ok(None) => return Ok(self.unknown(m, source, Reason::Unresolved(None))),
             Err(mut unknown) => {
                 if let Value::Unknown(Unknown {
                     reason: Reason::Package { name, .. },
@@ -667,7 +670,10 @@ impl<'s> Evaluator<'s> {
                             }
                         );
                 if !direct {
-                    return Ok(self.unknown_at(m.path, span, Reason::Unsupported));
+                    return match (init, name) {
+                        (Some(init), Some(name)) => self.destructured(m, target, init, name, span),
+                        _ => Ok(self.unknown_at(m.path, span, Reason::Unsupported)),
+                    };
                 }
                 match init {
                     Some(init) => self.expr(m, init, 0),
@@ -690,6 +696,79 @@ impl<'s> Evaluator<'s> {
             | K::Namespace
             | K::TypeParameter
             | K::Arguments => Ok(self.unknown_at(m.path, span, Reason::Unsupported)),
+        }
+    }
+
+    /// `const { key: name = fallback } = init`: one property of a known
+    /// object, with its default for `undefined`. Nested and rest patterns
+    /// are outside the subset.
+    fn destructured(
+        &mut self,
+        m: &mut Module<'_, '_>,
+        mut target: NodeId,
+        init: NodeId,
+        name: NodeId,
+        span: Option<Span>,
+    ) -> Result<Value, EvaluateError> {
+        if matches!(
+            m.kind(target),
+            N::TypeScript {
+                kind: T::TypedBinding { .. },
+                ..
+            }
+        ) && let Some(&first) = m.children(target).first()
+        {
+            target = first;
+        }
+        let N::ObjectPattern { properties, .. } = m.kind(target) else {
+            return Ok(self.unknown_at(m.path, span, Reason::Unsupported));
+        };
+        let mut found = None;
+        for &p in m.tree.children(properties).unwrap_or_default() {
+            let kind = m.kind(p);
+            if let N::ShorthandPatternProperty { target, default } = kind
+                && target == name
+            {
+                found = m.tree.identifier_value(name).map(|key| (key, default));
+            } else if let N::PatternProperty {
+                key,
+                value,
+                computed: false,
+            } = kind
+            {
+                let (bound, default) =
+                    if let N::AssignmentPattern { target, default } = m.kind(value) {
+                        (target, Some(default))
+                    } else {
+                        (value, None)
+                    };
+                if bound == name {
+                    found = self.static_key(m, key).map(|key| (key, default));
+                }
+            }
+        }
+        let Some((key, default)) = found else {
+            return Ok(self.unknown_at(m.path, span, Reason::Unsupported));
+        };
+        let base = self.expr(m, init, 0)?;
+        let value = match &base {
+            Value::Unknown(_) => return Ok(base),
+            Value::Object(object) => match object.get(&key) {
+                Some(value) => value.clone(),
+                None if object.complete => Value::Undefined,
+                None => return Ok(self.unknown_at(m.path, span, Reason::Unsupported)),
+            },
+            Value::Undefined
+            | Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::BigInt(_)
+            | Value::String(_)
+            | Value::Array(_) => return Ok(self.unknown_at(m.path, span, Reason::Unsupported)),
+        };
+        match (value, default) {
+            (Value::Undefined, Some(default)) => self.expr(m, default, 0),
+            (value, _) => Ok(value),
         }
     }
 
