@@ -1211,6 +1211,7 @@ fn node10_inheritance_overrides_profiles_without_losing_option_origins() {
     for (child, target) in [
         ("node10", "config/typed.ts"),
         ("bundler", "config/plain.js"),
+        ("inherited", "config/typed.ts"),
     ] {
         let g = graph(
             &format!("node10-inherit-{child}"),
@@ -1221,9 +1222,13 @@ fn node10_inheritance_overrides_profiles_without_losing_option_origins() {
                 ),
                 (
                     "tsconfig.json",
-                    &format!(
-                        r#"{{"extends":"./config/base.json","compilerOptions":{{"moduleResolution":"{child}"}}}}"#
-                    ),
+                    &if child == "inherited" {
+                        r#"{"extends":"./config/base.json"}"#.to_owned()
+                    } else {
+                        format!(
+                            r#"{{"extends":"./config/base.json","compilerOptions":{{"moduleResolution":"{child}"}}}}"#
+                        )
+                    },
                 ),
                 ("entry.ts", "import 'choice';"),
                 ("config/plain.js", ""),
@@ -1282,4 +1287,46 @@ fn node10_excluded_typed_candidates_never_select_javascript() {
         g.node(&path("entry.ts")).unwrap().edges[0].resolution,
         Resolution::Unresolved(U::Excluded)
     );
+}
+
+#[test]
+fn node10_second_pass_work_is_cumulative_and_has_an_inclusive_boundary() {
+    let c = config(
+        r#"{"compilerOptions":{"moduleResolution":"node10","paths":{"chosen":["absent","src/a.js"]}}}"#,
+        "tsconfig.json",
+    );
+    let files = vec![path("src/main.ts"), path("src/a.js")];
+    let attempt = |max_work| {
+        Resolver::new(
+            files.clone(),
+            None,
+            c.clone(),
+            ModuleLimits {
+                max_work,
+                ..ModuleLimits::default()
+            },
+        )
+        .and_then(|mut r| r.resolve(&path("src/main.ts"), "chosen"))
+    };
+    let expected = Resolution::Local {
+        path: path("src/a.js"),
+        kind: FileKind::Module,
+    };
+    let (mut low, mut high) = (0, ModuleLimits::default().max_work);
+    while low < high {
+        let mid = low + (high - low) / 2;
+        match attempt(mid) {
+            Ok(result) => {
+                assert_eq!(result, expected);
+                high = mid;
+            }
+            Err(error) => {
+                assert_eq!(error, ModuleError::WorkLimit);
+                low = mid + 1;
+            }
+        }
+    }
+    assert!(low > 0);
+    assert_eq!(attempt(low), Ok(expected));
+    assert_eq!(attempt(low - 1), Err(ModuleError::WorkLimit));
 }
