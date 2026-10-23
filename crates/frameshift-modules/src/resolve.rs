@@ -23,7 +23,15 @@ impl FileKind {
     /// Classifies a path without reading content.
     pub fn of(path: &SourcePath) -> Self {
         let path = path.as_str();
-        if path.ends_with(".d.ts") || path.ends_with(".d.mts") || path.ends_with(".d.cts") {
+        if path.ends_with(".d.ts")
+            || path.ends_with(".d.mts")
+            || path.ends_with(".d.cts")
+            || path.ends_with(".ts")
+                && path
+                    .rsplit('/')
+                    .next()
+                    .is_some_and(|name| name.contains(".d."))
+        {
             return Self::Declaration;
         }
         match path.rsplit_once('.').map(|(_, ext)| ext) {

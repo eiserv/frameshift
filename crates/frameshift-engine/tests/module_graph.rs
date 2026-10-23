@@ -321,6 +321,43 @@ fn typed_extension_families_preserve_the_reference_priority() {
 }
 
 #[test]
+fn arbitrary_extension_declarations_use_ambient_parsing_and_type_only_edges() {
+    for file in [
+        "a.d.json.ts",
+        "a.d.css.ts",
+        "a.d.foo.bar.ts",
+        "a.d..ts",
+        ".d.foo.ts",
+        "a.d.mts",
+        "a.d.cts",
+    ] {
+        assert_eq!(FileKind::of(&path(file)), FileKind::Declaration, "{file}");
+    }
+    for file in [
+        "a.d.foo.mts",
+        "a.d.foo.cts",
+        "a.d.tsx",
+        "a.D.foo.ts",
+        "dir.d.foo/value.ts",
+    ] {
+        assert_eq!(FileKind::of(&path(file)), FileKind::Module, "{file}");
+    }
+    let g = graph(
+        "arbitrary-declarations",
+        &[
+            (
+                "types.d.json.ts",
+                "import {T} from './a'; export const value: T;",
+            ),
+            ("a.ts", "export type T=string;"),
+        ],
+    );
+    let node = g.node(&path("types.d.json.ts")).unwrap();
+    assert_eq!(node.state, ModuleState::Parsed);
+    assert!(node.edges.iter().all(|edge| edge.type_only));
+}
+
+#[test]
 fn invalid_configuration_and_unmodeled_options_never_guess() {
     for source in [
         r#"{"compilerOptions":{"paths":{"x**":["x"]}}}"#,
@@ -753,5 +790,38 @@ fn long_module_chains_and_cycles_do_not_use_recursive_graph_traversal() {
         closure
             .windows(2)
             .all(|nodes| nodes[0].path < nodes[1].path)
+    );
+}
+
+#[test]
+fn graph_budgets_visit_earlier_source_before_later_large_expressions() {
+    use frameshift_engine::modules::collect_dependencies;
+    use frameshift_engine::syntax::{JsDialect, ParseLimits, SourceGoal, parse_js_program};
+    let source = text(&format!(
+        "import './a'; const later=[{}];",
+        vec!["0"; 100].join(",")
+    ));
+    let tree = parse_js_program(
+        &source,
+        SourceGoal::Module,
+        JsDialect::TypeScript,
+        ParseLimits::default(),
+    )
+    .unwrap();
+    let mut r = Resolver::new(
+        vec![path("src/main.ts"), path("src/a.ts")],
+        None,
+        ResolutionConfig::default(),
+        ModuleLimits {
+            max_work: 64,
+            ..ModuleLimits::default()
+        },
+    )
+    .unwrap();
+    // The first import reaches the edge bound before the later array can
+    // consume the work budget. This makes source-order charging observable.
+    assert_eq!(
+        collect_dependencies(&tree, &path("src/main.ts"), &mut r, 0),
+        Err(ModuleError::EdgeLimit)
     );
 }

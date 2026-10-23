@@ -420,9 +420,11 @@ pub fn collect_dependencies(
                 resolution,
             });
         }
+        let first_child = pending.len();
         for child in tree.child_nodes(id).expect("parser-owned children") {
             pending.push((child, type_only));
         }
+        pending[first_child..].reverse();
     }
     edges.sort_by_key(|edge| (edge.span.start(), edge.span.end(), edge.kind));
     Ok(edges)
