@@ -11,6 +11,7 @@ use frameshift_core::{
     FindingLimits, HashLimits, IdentifierLimits, PathLimits, RunLimits, TextLimits, UnitId,
 };
 use frameshift_emit::EmitLimits;
+use frameshift_evaluate::EvaluateLimits;
 use frameshift_input::{DiscoveryLimits, IgnoreLimits, SnapshotLimits};
 use frameshift_modules::{GraphLimits, ModuleLimits};
 use frameshift_package::{LoadLimits, PackageLimits, WorkspaceLimits};
@@ -67,6 +68,8 @@ pub struct Limits {
     pub workspace: WorkspaceLimits,
     /// Module resolution, configuration inheritance, and import graph.
     pub modules: ModuleLimits,
+    /// Static evaluation work, nesting, and value size.
+    pub evaluate: EvaluateLimits,
     /// One span rewrite.
     pub edit: EditLimits,
     /// One emitted output file.
@@ -202,7 +205,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 53] {
+    pub fn entries(&self) -> [LimitEntry; 56] {
         let Self {
             run,
             ignore,
@@ -222,6 +225,7 @@ impl Limits {
             package,
             workspace,
             modules,
+            evaluate,
             edit,
             emit,
         } = *self;
@@ -309,6 +313,11 @@ impl Limits {
             max_config_depth,
             max_work: module_work,
         } = modules;
+        let EvaluateLimits {
+            max_work: evaluate_work,
+            max_depth: evaluate_depth,
+            max_value_size,
+        } = evaluate;
         let EditLimits {
             max_edits,
             max_output_bytes: edit_output_bytes,
@@ -329,6 +338,9 @@ impl Limits {
             entry("edit.max-output-bytes", wide(edit_output_bytes)),
             entry("emit.max-depth", wide(max_depth)),
             entry("emit.max-output-bytes", wide(emit_output_bytes)),
+            entry("evaluate.max-depth", wide(evaluate_depth)),
+            entry("evaluate.max-value-size", wide(max_value_size)),
+            entry("evaluate.max-work", evaluate_work),
             entry("finding.max-findings", wide(max_findings)),
             entry("finding.max-text-bytes", wide(max_text_bytes)),
             entry("hash.max-bytes", hash_bytes),

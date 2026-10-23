@@ -16,6 +16,7 @@ mod collections;
 mod coverage;
 mod css;
 mod edits;
+mod evaluate;
 mod gitignore;
 mod hashes;
 mod identifiers;

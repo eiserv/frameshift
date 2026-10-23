@@ -1363,6 +1363,18 @@ impl<'source> SyntaxTree<'source> {
         }
     }
 
+    /// Returns the cooked value of an untagged template segment of this
+    /// tree: escapes decoded, line continuations removed, and CR and CRLF
+    /// line terminators normalized to LF, as ECMAScript's TV defines it.
+    /// Returns `None` for a segment with an invalid escape, a span outside
+    /// the source, or a value with an unpaired surrogate escape.
+    pub fn template_cooked(&self, token: &TemplateToken) -> Option<String> {
+        if token.invalid_escape.is_some() {
+            return None;
+        }
+        crate::value::template_cooked(self.source.slice(token.content_span).ok()?)
+    }
+
     /// Returns comments encountered while parsing, in source order.
     pub fn comments(&self) -> &[crate::Comment] {
         &self.comments

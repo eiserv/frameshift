@@ -181,7 +181,7 @@ The language is decided. Two experiments validate the core techniques before mil
   - The result confirms or refutes the assumption that a span-precise AST is enough without a concrete syntax tree (`P-003`).
 - Result (2026-10-13): passed on Windows x86_64 and Linux x86_64, with macOS byte identity shown by M1 CI, and `P-003` is accepted (`D-048`, `D-049`, section 11 of [IMPLEMENTATION.md](IMPLEMENTATION.md)).
 
-Later experiments, run before the milestones that depend on them, are listed in [DECISIONS.md](DECISIONS.md): E3 (static evaluation coverage), E4 (static output comparison), and E5 (draft and immutable release flow).
+Later experiments, run before the milestones that depend on them, are listed in [DECISIONS.md](DECISIONS.md): E3 (static evaluation coverage, measured under `D-092`), E4 (static output comparison), and E5 (draft and immutable release flow).
 
 ### 2.9 Revisiting the language decision
 

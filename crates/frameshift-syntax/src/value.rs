@@ -196,3 +196,67 @@ fn escape_unit(chars: &mut Chars<'_>) -> Option<u32> {
         other => u32::from(other),
     })
 }
+
+/// The TV of accepted template content: escapes decoded as UTF-16 code
+/// units, line continuations removed, CR and CRLF normalized to LF.
+pub(crate) fn template_cooked(content: &str) -> Option<String> {
+    let mut units: Vec<u16> = Vec::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+    let push = |units: &mut Vec<u16>, c: char| {
+        let mut buffer = [0; 2];
+        units.extend_from_slice(c.encode_utf16(&mut buffer));
+    };
+    let hex = |chars: &mut std::iter::Peekable<Chars<'_>>, count: usize| -> Option<u32> {
+        let mut value = 0;
+        for _ in 0..count {
+            value = value * 16 + chars.next()?.to_digit(16)?;
+        }
+        Some(value)
+    };
+    while let Some(c) = chars.next() {
+        match c {
+            '\r' => {
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                units.push(u16::from(b'\n'));
+            }
+            '\\' => {
+                let escaped = chars.next()?;
+                match escaped {
+                    'n' => units.push(0x0A),
+                    't' => units.push(0x09),
+                    'r' => units.push(0x0D),
+                    'b' => units.push(0x08),
+                    'f' => units.push(0x0C),
+                    'v' => units.push(0x0B),
+                    '0' => units.push(0),
+                    'x' => units.push(u16::try_from(hex(&mut chars, 2)?).ok()?),
+                    'u' if chars.peek() == Some(&'{') => {
+                        chars.next();
+                        let mut value: u32 = 0;
+                        loop {
+                            let d = chars.next()?;
+                            if d == '}' {
+                                break;
+                            }
+                            value = value.checked_mul(16)?.checked_add(d.to_digit(16)?)?;
+                        }
+                        push(&mut units, char::from_u32(value)?);
+                    }
+                    'u' => units.push(u16::try_from(hex(&mut chars, 4)?).ok()?),
+                    // A line continuation contributes nothing.
+                    '\r' => {
+                        if chars.peek() == Some(&'\n') {
+                            chars.next();
+                        }
+                    }
+                    '\n' | '\u{2028}' | '\u{2029}' => {}
+                    other => push(&mut units, other),
+                }
+            }
+            other => push(&mut units, other),
+        }
+    }
+    String::from_utf16(&units).ok()
+}

@@ -104,6 +104,7 @@ dependencies = [
  "frameshift-bindings",
  "frameshift-core",
  "frameshift-emit",
+ "frameshift-evaluate",
  "frameshift-input",
  "frameshift-modules",
  "frameshift-nextjs",
@@ -115,6 +116,17 @@ dependencies = [
 [[package]]
 name = "frameshift-entity-gen"
 version = "0.1.0"
+
+[[package]]
+name = "frameshift-evaluate"
+version = "0.1.0"
+dependencies = [
+ "frameshift-bindings",
+ "frameshift-core",
+ "frameshift-input",
+ "frameshift-modules",
+ "frameshift-syntax",
+]
 
 [[package]]
 name = "frameshift-fuzz"
