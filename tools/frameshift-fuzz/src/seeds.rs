@@ -1053,6 +1053,10 @@ bun@1.4.0",
         .map(|text| (*text).to_owned())
         .collect(),
         Target::Modules => [
+            "{\"compilerOptions\":{\"moduleResolution\":\"node\",\"paths\":{\"alias\":[\"src/a.js\",\"src/d\"]}}}\nalias",
+            "{\"compilerOptions\":{\"moduleResolution\":\"node10\",\"baseUrl\":\"src\"}}\nd",
+            "{\"compilerOptions\":{\"moduleResolution\":\"node10\"}}\n./style.scss",
+            "{\"compilerOptions\":{\"moduleResolution\":\"node10\"}}\n#internal",
             "./d",
             "./d/",
             "./d/..",

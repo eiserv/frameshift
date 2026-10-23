@@ -445,7 +445,47 @@ for (const [importer, specifier, kind] of input.requests) {
  process.stdout.write((r ? r.resolvedFileName.slice('/project/'.length) : '-') + ' ' + (mode === 1 ? 'require' : 'import') + '\n');
 }
 "#;
-    let (files, requests) = oracle_project();
+    let (mut files, mut requests) = oracle_project();
+    if node10 {
+        for (i, manifest) in [
+            r#"{"types":"missing.d.ts","main":"entry.js"}"#,
+            r#"{"typings":"missing.d.ts","types":"types.d.ts","main":"entry.js"}"#,
+            r#"{"main":"entry"}"#,
+            r#"{"main":"./entry/"}"#,
+            r#"{"main":"entry.json"}"#,
+            r#"{"exports":"./entry.js"}"#,
+        ]
+        .iter()
+        .enumerate()
+        {
+            for mask in 1..64 {
+                let root = format!("passes-{i}-{mask}");
+                files.push((format!("{root}/package.json"), Some((*manifest).to_owned())));
+                for (bit, name) in [
+                    "entry.js",
+                    "entry.ts",
+                    "types.d.ts",
+                    "index.ts",
+                    "index.js",
+                    "entry/index.d.ts",
+                ]
+                .iter()
+                .enumerate()
+                {
+                    if mask & (1 << bit) != 0 {
+                        files.push((format!("{root}/{name}"), None));
+                    }
+                }
+                for suffix in ["", "/"] {
+                    requests.push((
+                        "root/src/main.ts".to_owned(),
+                        format!("../../{root}{suffix}"),
+                        "static".to_owned(),
+                    ));
+                }
+            }
+        }
+    }
     let profiles = [
         r#"{"allowJs":true,"module":"esnext"}"#,
         r#"{"module":"esnext"}"#,

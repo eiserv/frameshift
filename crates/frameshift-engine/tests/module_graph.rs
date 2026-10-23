@@ -132,7 +132,30 @@ for (const specifier of requests.split('\n')) {
         .iter()
         .map(|s| (*s).to_owned()),
     );
-    let profiles = [
+    if profile == "node10" {
+        for mask in 1..64 {
+            for (bit, suffix) in [
+                "first.js",
+                "first/index.ts",
+                "second.ts",
+                "second/index.d.ts",
+                "base.d.ts",
+                "first.json",
+            ]
+            .iter()
+            .enumerate()
+            {
+                if mask & (1 << bit) != 0 {
+                    files.push(format!("src/pass{mask}/{suffix}"));
+                }
+            }
+            for name in ["first", "second", "base"] {
+                requests.push(format!("./pass{mask}/{name}"));
+            }
+            requests.push(format!("phase/{mask}"));
+        }
+    }
+    let mut profiles = vec![
         (
             r#"{"baseUrl":"/project"}"#,
             r#"{"compilerOptions":{"baseUrl":"./"}}"#,
@@ -159,6 +182,9 @@ for (const specifier of requests.split('\n')) {
             r#"{"compilerOptions":{"baseUrl":"src","paths":{"alias/*":["absent/*","*"]}}}"#,
         ),
     ];
+    if profile == "node10" {
+        profiles.push((r#"{"baseUrl":"/project/src","paths":{"phase/*":["pass*/first","pass*/second","pass*/base"]}}"#, r#"{"compilerOptions":{"baseUrl":"src","paths":{"phase/*":["pass*/first","pass*/second","pass*/base"]}}}"#));
+    }
     let mut total = 0;
     let mut differences = Vec::new();
     for (reference_config, own_config) in profiles {
