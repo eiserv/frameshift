@@ -14,6 +14,8 @@ mod if_cases;
 mod import_cases;
 #[path = "sass/number.rs"]
 mod number_cases;
+#[path = "sass/operator.rs"]
+mod operator_cases;
 #[path = "sass/special_function.rs"]
 mod special_function_cases;
 #[path = "sass/url.rs"]
@@ -1601,6 +1603,7 @@ while (at < data.length) {
     cases.extend(url_cases::cases());
     cases.extend(special_function_cases::cases());
     cases.extend(number_cases::cases());
+    cases.extend(operator_cases::cases());
     cases.extend(conformance_cases::cases());
     let mut child = Command::new("node")
         .arg("-e")

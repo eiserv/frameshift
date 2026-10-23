@@ -12,7 +12,7 @@ use super::{
 impl Parser<'_> {
     pub(super) fn expression(&mut self, comma: bool) -> Result<Id, SassError> {
         self.enter()?;
-        let first = self.space_list()?;
+        let first = self.space_list(true)?;
         let mut items = vec![first];
         let mut separated = false;
         if comma {
@@ -22,12 +22,12 @@ impl Parser<'_> {
                 if !self.expression_start() {
                     break;
                 }
-                if self.operator().is_some_and(|(operator, _, _)| {
+                if self.operator()?.is_some_and(|(operator, _, _)| {
                     matches!(operator, Binary::And | Binary::Or | Binary::Modulo)
                 }) {
                     return Err(self.error(Error::ExpectedExpression));
                 }
-                items.push(self.space_list()?);
+                items.push(self.space_list(false)?);
             }
         }
         let result = if items.len() > 1 || separated {
@@ -46,8 +46,8 @@ impl Parser<'_> {
         result
     }
 
-    fn space_list(&mut self) -> Result<Id, SassError> {
-        let first = self.binary(0)?;
+    fn space_list(&mut self, positive_literal: bool) -> Result<Id, SassError> {
+        let first = self.binary(0, positive_literal)?;
         let mut items = vec![first];
         loop {
             self.skip(self.expression_newlines)?;
@@ -55,7 +55,7 @@ impl Parser<'_> {
                 break;
             }
             // Sass forms space-separated lists even from adjacent primaries.
-            items.push(self.binary(0)?);
+            items.push(self.binary(0, true)?);
         }
         if items.len() == 1 {
             return Ok(first);
@@ -70,13 +70,13 @@ impl Parser<'_> {
         )
     }
 
-    fn binary(&mut self, minimum: u8) -> Result<Id, SassError> {
+    fn binary(&mut self, minimum: u8, positive_literal: bool) -> Result<Id, SassError> {
         self.enter()?;
-        let mut left = self.primary()?;
+        let mut left = self.primary(positive_literal)?;
         loop {
             let before_space = self.end(left);
             self.skip(self.expression_newlines)?;
-            let Some((operator, precedence, spelling)) = self.operator() else {
+            let Some((operator, precedence, width)) = self.operator()? else {
                 break;
             };
             if precedence < minimum {
@@ -95,7 +95,7 @@ impl Parser<'_> {
             }
             if operator == Binary::Modulo {
                 let checkpoint = self.checkpoint();
-                self.expect(spelling)?;
+                self.consume_operator(width)?;
                 self.skip(true)?;
                 let operand = self.expression_start();
                 self.restore(&checkpoint);
@@ -103,9 +103,9 @@ impl Parser<'_> {
                     break;
                 }
             }
-            self.expect(spelling)?;
+            self.consume_operator(width)?;
             self.skip(true)?;
-            let right = self.binary(precedence + 1)?;
+            let right = self.binary(precedence + 1, true)?;
             let end = self.end(right);
             left = self.node(self.start(left), Kind::Binary(operator), vec![left, right])?;
             self.nodes[left.0].span = super::Span::new(self.start(left), end).unwrap();
@@ -114,16 +114,25 @@ impl Parser<'_> {
         Ok(left)
     }
 
-    fn operator(&self) -> Option<(Binary, u8, &'static str)> {
-        // A media feature ends its operands at a top-level comparison.
+    fn operator(&mut self) -> Result<Option<(Binary, u8, usize)>, SassError> {
         if self.until_comparison
             && (self.at("<") || self.at(">") || (self.at("=") && !self.at("==")))
         {
-            return None;
+            return Ok(None);
+        }
+        for (word, operator, precedence) in [("or", Binary::Or, 1), ("and", Binary::And, 2)] {
+            // The reference's expression loop dispatches on a literal lower-case
+            // first letter, then scans the whole word without case or escape bias.
+            if self.text[self.pos..].starts_with(word.chars().next().unwrap()) {
+                let start = self.pos;
+                if self.scan_identifier_text(word)? {
+                    let width = self.pos - start;
+                    self.pos = start;
+                    return Ok(Some((operator, precedence, width)));
+                }
+            }
         }
         for (text, operator, precedence) in [
-            ("or", Binary::Or, 1),
-            ("and", Binary::And, 2),
             ("==", Binary::Equal, 3),
             ("!=", Binary::NotEqual, 3),
             ("<=", Binary::LessEqual, 4),
@@ -140,42 +149,30 @@ impl Parser<'_> {
             if operator == Binary::SingleEqual && !self.single_equals {
                 continue;
             }
-            if !self.at(text) {
-                continue;
-            }
-            if operator == Binary::Subtract && self.name_start() {
-                continue;
-            }
-            if matches!(operator, Binary::Or | Binary::And)
-                && self.text[self.pos + text.len()..]
-                    .chars()
-                    .next()
-                    .is_some_and(|c| {
-                        c.is_ascii_alphanumeric()
-                            || c == '_'
-                            || c == '-'
-                            || c == '\\'
-                            || c >= '\u{80}'
-                    })
+            if !self.at(text)
+                || (operator == Binary::Subtract && (self.name_start() || self.at("-#{")))
             {
                 continue;
             }
-            return Some((operator, precedence, text));
+            return Ok(Some((operator, precedence, text.len())));
         }
-        None
+        Ok(None)
+    }
+
+    fn consume_operator(&mut self, width: usize) -> Result<(), SassError> {
+        let end = self.pos + width;
+        while self.pos < end {
+            self.bump()?;
+        }
+        Ok(())
     }
 
     fn important_ahead(&self) -> bool {
-        let Some(rest) = self.text[self.pos..].strip_prefix('!') else {
-            return false;
-        };
-        let rest = rest.trim_start_matches(super::css_space);
-        rest.get(..9)
-            .is_some_and(|s| s.eq_ignore_ascii_case("important"))
-            && rest[9..]
-                .chars()
+        self.text[self.pos..].strip_prefix('!').is_some_and(|rest| {
+            rest.chars()
                 .next()
-                .is_none_or(|c| !c.is_ascii_alphanumeric() && !matches!(c, '_' | '-'))
+                .is_none_or(|c| matches!(c, 'i' | 'I') || super::css_space(c))
+        })
     }
 
     pub(super) fn expression_start(&self) -> bool {
@@ -210,7 +207,9 @@ impl Parser<'_> {
                     .is_some_and(|c| c.is_ascii_digit()))
     }
 
-    fn primary(&mut self) -> Result<Id, SassError> {
+    // After a comma, the reference expression loop treats `+1` as unary plus.
+    // Its initial expression and operator operands instead read a signed number.
+    fn primary(&mut self, positive_literal: bool) -> Result<Id, SassError> {
         let start = self.pos;
         if self.at("$") {
             return self.variable();
@@ -235,15 +234,10 @@ impl Parser<'_> {
         if self.eat("&")? {
             return self.node(start, Kind::ParentSelector, Vec::new());
         }
-        if self.keyword("not")? {
-            self.skip(true)?;
-            let value = self.unary_operand()?;
-            return self.node(start, Kind::Unary(Unary::Not), vec![value]);
-        }
-        if self.at("#{") {
+        if self.at("#{") || self.at("-#{") {
             return self.unquoted();
         }
-        if (self.at("-") || self.at("+"))
+        if (self.at("-") || (positive_literal && self.at("+")))
             && self.text[self.pos + 1..]
                 .chars()
                 .next()
@@ -322,7 +316,7 @@ impl Parser<'_> {
 
     fn unary_operand(&mut self) -> Result<Id, SassError> {
         self.enter()?;
-        let result = self.primary();
+        let result = self.primary(true);
         self.depth -= 1;
         result
     }
@@ -424,6 +418,11 @@ impl Parser<'_> {
             return self.unquoted_from(start);
         }
         let plain = canonical_name(&self.text[start..self.pos]);
+        if plain == "not" {
+            self.skip(true)?;
+            let value = self.unary_operand()?;
+            return self.node(start, Kind::Unary(Unary::Not), vec![value]);
+        }
         let kind = if plain == "true" || plain == "false" {
             Kind::Boolean
         } else if plain == "null" {

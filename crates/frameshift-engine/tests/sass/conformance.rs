@@ -414,6 +414,7 @@ fn external_sass_conformance() {
         generated_cases()
             .into_iter()
             .chain(self::cases())
+            .chain(super::operator_cases::cases())
             .enumerate()
             .map(|(i, (text, syntax))| (format!("fictional-{i}"), text, syntax)),
     );
