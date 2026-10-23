@@ -196,75 +196,8 @@ pub fn build_module_graph_with(
     visit: &mut dyn FnMut(&SourcePath, &SyntaxTree<'_>) -> Result<(), ModuleError>,
 ) -> Result<ModuleGraph, ModuleError> {
     let inventory = snapshot.inventory();
-    if !inventory.is_complete() {
-        return Err(ModuleError::IncompleteInventory);
-    }
-    if inventory.files().len() > limits.modules.max_files {
-        return Err(ModuleError::FileLimit);
-    }
     let root = package_root.map_or("", SourcePath::as_str);
-    if let Some(path) = package_root
-        && !inventory
-            .entry(path)
-            .is_some_and(|e| matches!(e.kind(), EntryKind::Directory))
-    {
-        return Err(ModuleError::InvalidRoot);
-    }
-    let prefix = if root.is_empty() {
-        String::new()
-    } else {
-        format!("{root}/")
-    };
-    let mut work = Work {
-        remaining: limits.modules.max_work,
-    };
-    let mut configuration = ResolutionConfig::default();
-    for filename in ["tsconfig.json", "jsconfig.json"] {
-        let path = SourcePath::new(&format!("{prefix}{filename}"), limits.path)
-            .map_err(|_| ModuleError::InvalidRoot)?;
-        if inventory.files().find(&path).is_some() {
-            configuration = config::load(snapshot, &path, limits, &mut Vec::new(), &mut work)?;
-            break;
-        }
-        if inventory.entry(&path).is_some() {
-            configuration.issues.push(ConfigIssue {
-                path,
-                problem: ConfigProblem::Unreadable,
-            });
-            break;
-        }
-    }
-    let files = inventory.files().as_slice().to_vec();
-    let mut resolver = Resolver::new(files, package_root, configuration.clone(), limits.modules)?;
-    resolver
-        .work
-        .charge((limits.modules.max_work - work.remaining) as usize)?;
-    for entry in inventory.entries() {
-        resolver.work.charge(entry.path().as_str().len() + 1)?;
-        if !matches!(entry.kind(), EntryKind::Directory) {
-            resolver.excluded.insert(entry.path().as_str().to_owned());
-        }
-    }
-    // Manifests inside the package supply directory entry points and nested
-    // scopes; those above it can be the package's own scope.
-    for (id, path) in inventory.files().iter() {
-        let directory = parent(path.as_str());
-        if path.as_str().rsplit('/').next() != Some("package.json")
-            || !(below(directory, root) || directory == root || below(root, directory))
-        {
-            continue;
-        }
-        let manifest = match snapshot.read(id).map_err(ModuleError::Snapshot)? {
-            FileRead::Unreadable(_) => None,
-            FileRead::Content(file) => {
-                resolver.work.charge(file.bytes().len())?;
-                SourceText::from_bytes(file.bytes().to_vec(), limits.text)
-                    .ok()
-                    .and_then(|source| PackageManifest::parse(&source, limits.json))
-            }
-        };
-        resolver.add_manifest(path, manifest)?;
-    }
+    let (mut resolver, configuration) = resolver_and_config(snapshot, package_root, limits)?;
     let mut nodes = Vec::new();
     let mut edge_count = 0;
     for (id, path) in inventory.files().iter() {
@@ -288,27 +221,8 @@ pub fn build_module_graph_with(
                 match SourceText::from_bytes(file.bytes().to_vec(), limits.text) {
                     Err(_) => node.state = ModuleState::InvalidText,
                     Ok(source) => {
-                        let declaration = kind == FileKind::Declaration;
-                        let dialect = if declaration {
-                            JsDialect::TypeScriptDeclaration
-                        } else if path.as_str().ends_with(".tsx") {
-                            JsDialect::Tsx
-                        } else if path.as_str().ends_with(".ts")
-                            || path.as_str().ends_with(".mts")
-                            || path.as_str().ends_with(".cts")
-                        {
-                            JsDialect::TypeScript
-                        } else if path.as_str().ends_with(".js") || path.as_str().ends_with(".jsx")
-                        {
-                            JsDialect::Jsx
-                        } else {
-                            JsDialect::JavaScript
-                        };
-                        let goal = if path.as_str().ends_with(".cjs") {
-                            SourceGoal::Script
-                        } else {
-                            SourceGoal::Module
-                        };
+                        let (goal, dialect) =
+                            source_kind(path).expect("module and declaration files have a kind");
                         match parse_js_program(&source, goal, dialect, limits.parse) {
                             Err(error) => node.state = ModuleState::SyntaxError(error),
                             Ok(tree) => {
@@ -632,4 +546,120 @@ pub(crate) fn directives(
     }
     functions.sort_by_key(|d: &Directive| (d.span.start(), d.span.end()));
     Ok((module, functions))
+}
+
+/// The resolver that [`build_module_graph`] uses for the selected package:
+/// its `tsconfig.json` or `jsconfig.json` with inheritance, every excluded
+/// entry, and every manifest that can govern the package. Later analyses,
+/// such as the static evaluator, resolve references exactly as the graph does.
+pub fn snapshot_resolver(
+    snapshot: &Snapshot,
+    package_root: Option<&SourcePath>,
+    limits: GraphLimits,
+) -> Result<Resolver, ModuleError> {
+    resolver_and_config(snapshot, package_root, limits).map(|(resolver, _)| resolver)
+}
+
+fn resolver_and_config(
+    snapshot: &Snapshot,
+    package_root: Option<&SourcePath>,
+    limits: GraphLimits,
+) -> Result<(Resolver, ResolutionConfig), ModuleError> {
+    let inventory = snapshot.inventory();
+    if !inventory.is_complete() {
+        return Err(ModuleError::IncompleteInventory);
+    }
+    if inventory.files().len() > limits.modules.max_files {
+        return Err(ModuleError::FileLimit);
+    }
+    let root = package_root.map_or("", SourcePath::as_str);
+    if let Some(path) = package_root
+        && !inventory
+            .entry(path)
+            .is_some_and(|e| matches!(e.kind(), EntryKind::Directory))
+    {
+        return Err(ModuleError::InvalidRoot);
+    }
+    let prefix = if root.is_empty() {
+        String::new()
+    } else {
+        format!("{root}/")
+    };
+    let mut work = Work {
+        remaining: limits.modules.max_work,
+    };
+    let mut configuration = ResolutionConfig::default();
+    for filename in ["tsconfig.json", "jsconfig.json"] {
+        let path = SourcePath::new(&format!("{prefix}{filename}"), limits.path)
+            .map_err(|_| ModuleError::InvalidRoot)?;
+        if inventory.files().find(&path).is_some() {
+            configuration = config::load(snapshot, &path, limits, &mut Vec::new(), &mut work)?;
+            break;
+        }
+        if inventory.entry(&path).is_some() {
+            configuration.issues.push(ConfigIssue {
+                path,
+                problem: ConfigProblem::Unreadable,
+            });
+            break;
+        }
+    }
+    let files = inventory.files().as_slice().to_vec();
+    let mut resolver = Resolver::new(files, package_root, configuration.clone(), limits.modules)?;
+    resolver
+        .work
+        .charge((limits.modules.max_work - work.remaining) as usize)?;
+    for entry in inventory.entries() {
+        resolver.work.charge(entry.path().as_str().len() + 1)?;
+        if !matches!(entry.kind(), EntryKind::Directory) {
+            resolver.excluded.insert(entry.path().as_str().to_owned());
+        }
+    }
+    // Manifests inside the package supply directory entry points and nested
+    // scopes; those above it can be the package's own scope.
+    for (id, path) in inventory.files().iter() {
+        let directory = parent(path.as_str());
+        if path.as_str().rsplit('/').next() != Some("package.json")
+            || !(below(directory, root) || directory == root || below(root, directory))
+        {
+            continue;
+        }
+        let manifest = match snapshot.read(id).map_err(ModuleError::Snapshot)? {
+            FileRead::Unreadable(_) => None,
+            FileRead::Content(file) => {
+                resolver.work.charge(file.bytes().len())?;
+                SourceText::from_bytes(file.bytes().to_vec(), limits.text)
+                    .ok()
+                    .and_then(|source| PackageManifest::parse(&source, limits.json))
+            }
+        };
+        resolver.add_manifest(path, manifest)?;
+    }
+    Ok((resolver, configuration))
+}
+
+/// The source goal and dialect that the graph parses a module path with,
+/// or `None` for a path that is not a module or declaration file: `.cjs`
+/// uses Script goal, every other surface Module goal.
+pub fn source_kind(path: &SourcePath) -> Option<(SourceGoal, JsDialect)> {
+    let kind = FileKind::of(path);
+    let text = path.as_str();
+    let dialect = match kind {
+        FileKind::Declaration => JsDialect::TypeScriptDeclaration,
+        FileKind::Module if text.ends_with(".tsx") => JsDialect::Tsx,
+        FileKind::Module
+            if text.ends_with(".ts") || text.ends_with(".mts") || text.ends_with(".cts") =>
+        {
+            JsDialect::TypeScript
+        }
+        FileKind::Module if text.ends_with(".js") || text.ends_with(".jsx") => JsDialect::Jsx,
+        FileKind::Module => JsDialect::JavaScript,
+        FileKind::Stylesheet | FileKind::Json | FileKind::Asset => return None,
+    };
+    let goal = if text.ends_with(".cjs") {
+        SourceGoal::Script
+    } else {
+        SourceGoal::Module
+    };
+    Some((goal, dialect))
 }

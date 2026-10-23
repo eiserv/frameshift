@@ -16,7 +16,8 @@ use std::fmt;
 pub use config::{ConfigIssue, ConfigProblem, ResolutionConfig};
 pub use graph::{
     Directive, Edge, EdgeKind, GraphLimits, ModuleGraph, ModuleNode, ModuleState,
-    build_module_graph, build_module_graph_with, collect_dependencies,
+    build_module_graph, build_module_graph_with, collect_dependencies, snapshot_resolver,
+    source_kind,
 };
 pub use package::PackageManifest;
 pub use resolve::{FileKind, Resolution, ResolutionMode, Resolver, UnresolvedReason};
