@@ -132,6 +132,9 @@ impl Value {
 pub enum Reason {
     /// A syntax form outside the safe subset, such as `new` or assignment.
     Unsupported,
+    /// A nonliteral object prototype, set by a literal `__proto__` key. It
+    /// never adds an own property.
+    Prototype,
     /// A function or method call, with the callee's source spelling when it
     /// is a name or member chain.
     Call(Option<String>),

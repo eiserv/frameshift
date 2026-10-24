@@ -609,6 +609,51 @@ export default function Page() {
 }
 
 #[test]
+fn angle_bracket_assertions_keep_call_provenance_in_ts_modules() {
+    let text = r#"import { cookies } from 'next/headers';
+export function GET() {
+    return (<() => unknown>cookies)();
+}"#;
+    let facts = analyze("angle-assertion", &[("app/route.ts", text)], None);
+    let uses: Vec<_> = module(&facts, "app/route.ts").api_uses().collect();
+    assert_eq!(uses.len(), 1, "{uses:#?}");
+    assert_eq!(uses[0].kind, ImportedUseKind::Call);
+}
+
+#[test]
+fn declared_default_exports_never_fall_back_to_commonjs() {
+    let files = [
+        ("app/page.tsx", "export default () => null;"),
+        ("base.js", "export const present = true;"),
+        (
+            "next.config.js",
+            "export { missing as default } from './base.js';\nmodule.exports = { output: 'export' };",
+        ),
+    ];
+    let facts = analyze(
+        "declared-default",
+        &files,
+        Some(config_file("next.config.js")),
+    );
+    assert_eq!(
+        facts.configuration.property(&["output"]),
+        ConfigProperty::Unknown
+    );
+    let Value::Unknown(unknown) = facts
+        .configuration
+        .value
+        .as_ref()
+        .expect("evaluated config")
+    else {
+        panic!(
+            "declared default export must not fall back: {:?}",
+            facts.configuration.value
+        );
+    };
+    assert_eq!(unknown.reason, Reason::NotExported);
+}
+
+#[test]
 fn framework_spelling_mapped_to_local_or_unresolved_code_is_not_api_provenance() {
     let source = "import { cookies } from 'next/headers'; export default function Page() { return cookies(); }";
     let files = [

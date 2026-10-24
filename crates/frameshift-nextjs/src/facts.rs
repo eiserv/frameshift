@@ -339,6 +339,17 @@ fn unwrap(tree: &SyntaxTree<'_>, mut node: NodeId) -> NodeId {
                 return node;
             };
             node = *first;
+        } else if let N::TypeScript {
+            kind: T::Assertion,
+            children,
+        } = kind
+        {
+            // An angle-bracket assertion stores its type first and the
+            // asserted expression second.
+            let Some(inner) = tree.children(children).and_then(|c| c.get(1)) else {
+                return node;
+            };
+            node = *inner;
         } else {
             return node;
         }
@@ -531,16 +542,14 @@ pub fn analyze_app_facts_with(
                     .map_err(|error| FactError::App(AppError::Modules(error)))?;
                 if config.is_some_and(|file| file.path == *path && file.load == ConfigLoad::Loaded)
                 {
+                    let declares_default = bindings
+                        .exports()
+                        .iter()
+                        .any(|export| !export.type_only && export.name == ExportName::Default);
                     let mut value = evaluator
                         .tree_export(path, tree, bindings, &ExportName::Default)
                         .map_err(FactError::Evaluate)?;
-                    if matches!(
-                        &value,
-                        Value::Unknown(Unknown {
-                            reason: Reason::NotExported,
-                            ..
-                        })
-                    ) {
+                    if !declares_default {
                         value = evaluator
                             .tree_export(path, tree, bindings, &ExportName::Assignment)
                             .map_err(FactError::Evaluate)?;

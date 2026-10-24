@@ -1340,7 +1340,11 @@ impl<'s> Evaluator<'s> {
                         unknown
                     } else {
                         Unknown {
-                            reason: Reason::Unsupported,
+                            reason: if prototype {
+                                Reason::Prototype
+                            } else {
+                                Reason::Unsupported
+                            },
                             module: m.path.clone(),
                             span: Some(m.span(p)),
                         }
@@ -1390,21 +1394,30 @@ impl<'s> Evaluator<'s> {
             } else if let N::Spread { argument } = kind {
                 match self.expr(m, argument, depth + 1)? {
                     Value::Object(other) => {
-                        complete &= other.complete;
-                        if !other.complete {
-                            let unknown =
-                                other
-                                    .unknown_properties
-                                    .first()
-                                    .cloned()
-                                    .unwrap_or(Unknown {
-                                        reason: Reason::Unsupported,
-                                        module: m.path.clone(),
-                                        span: Some(m.span(p)),
-                                    });
+                        // A spread copies own enumerable properties only; a
+                        // source prototype never reaches the destination, so
+                        // prototype uncertainty does not hide its keys.
+                        let mut own_unknowns = Vec::new();
+                        let mut prototype_unknown = false;
+                        for unknown in other.unknown_properties {
+                            if matches!(unknown.reason, Reason::Prototype) {
+                                prototype_unknown = true;
+                            } else {
+                                own_unknowns.push(unknown);
+                            }
+                        }
+                        let own_complete =
+                            other.complete || (prototype_unknown && own_unknowns.is_empty());
+                        complete &= own_complete;
+                        if !own_complete {
+                            let unknown = own_unknowns.first().cloned().unwrap_or(Unknown {
+                                reason: Reason::Unsupported,
+                                module: m.path.clone(),
+                                span: Some(m.span(p)),
+                            });
                             entries.invalidate(unknown);
                         }
-                        unknown_properties.extend(other.unknown_properties);
+                        unknown_properties.extend(own_unknowns);
                         for (k, v) in other.entries {
                             entries.insert(k, v);
                         }

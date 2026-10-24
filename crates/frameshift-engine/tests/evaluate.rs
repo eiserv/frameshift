@@ -404,6 +404,7 @@ fn external_config_evaluation() {
                     other @ (Reason::Unsupported
                     | Reason::Function
                     | Reason::RegExp
+                    | Reason::Prototype
                     | Reason::Dynamic
                     | Reason::Mutable
                     | Reason::Unresolved(None)
@@ -543,6 +544,30 @@ fn incomplete_property_evidence_obeys_value_and_work_limits() {
         },
     );
     assert_eq!(reason(&value), &Reason::WorkLimit);
+}
+
+#[test]
+fn prototype_uncertainty_never_hides_own_keys_of_a_spread() {
+    let value = config(
+        "prototype-spread",
+        &[(
+            "next.config.mjs",
+            "const plugin = process.env.PLUGIN;\nexport default { pageExtensions: ['tsx'], images: { unoptimized: true }, ...{ __proto__: plugin } };\n",
+        )],
+        "next.config.mjs",
+    );
+    let o = object(&value);
+    assert!(o.complete, "{o:#?}");
+    assert_eq!(
+        o.get("pageExtensions"),
+        Some(&Value::Array(vec![string("tsx")]))
+    );
+    assert_eq!(o.get("images").map(object).map(|i| i.complete), Some(true));
+    assert!(
+        o.unknown_properties.is_empty(),
+        "{:#?}",
+        o.unknown_properties
+    );
 }
 
 #[test]
