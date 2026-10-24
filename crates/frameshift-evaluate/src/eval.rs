@@ -579,7 +579,13 @@ impl<'s> Evaluator<'s> {
         m: &mut Module<'_, '_>,
         name: &ExportName,
     ) -> Result<Value, EvaluateError> {
-        let exports = m.bindings.exports().to_vec();
+        let exports: Vec<_> = m
+            .bindings
+            .exports()
+            .iter()
+            .filter(|export| !export.type_only)
+            .cloned()
+            .collect();
         if let Some(export) = exports.iter().find(|e| e.name == *name) {
             return match &export.kind {
                 ExportKind::Local(Target::Binding(b)) => self.binding(m, *b),
@@ -596,21 +602,26 @@ impl<'s> Evaluator<'s> {
         if *name == ExportName::Assignment {
             return self.common_js(m);
         }
-        if let ExportName::Named(_) = name {
+        if let ExportName::Named(n) = name {
+            let mut found = None;
             for export in exports.iter().filter(|e| e.name == ExportName::Star) {
                 if let ExportKind::ReExport { source, .. } = &export.kind {
-                    let ExportName::Named(n) = name else { continue };
                     let value = self.reexport(m, *source, &ImportedName::Named(n.clone()))?;
-                    if !matches!(
-                        &value,
-                        Value::Unknown(Unknown {
-                            reason: Reason::NotExported,
-                            ..
-                        })
-                    ) {
+                    if let Value::Unknown(unknown) = &value {
+                        if unknown.reason == Reason::NotExported {
+                            continue;
+                        }
                         return Ok(value);
                     }
+                    if found.is_some() {
+                        // Equal values do not establish identical binding provenance.
+                        return Ok(self.unknown(m, export.node, Reason::Unsupported));
+                    }
+                    found = Some(value);
                 }
+            }
+            if let Some(value) = found {
+                return Ok(value);
             }
         }
         Ok(self.unknown_at(m.path, None, Reason::NotExported))

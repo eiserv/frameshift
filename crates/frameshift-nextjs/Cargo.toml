@@ -15,5 +15,7 @@ frameshift-bindings = { path = "../frameshift-bindings" }
 
 frameshift-syntax = { path = "../frameshift-syntax" }
 
+frameshift-evaluate = { path = "../frameshift-evaluate" }
+
 [lints]
 workspace = true

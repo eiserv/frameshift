@@ -1,0 +1,503 @@
+configuration ConfigurationFacts {
+    file: Some(
+        ConfigFile {
+            path: SourcePath(
+                "next.config.mjs",
+            ),
+            load: Loaded,
+        },
+    ),
+    value: Some(
+        Object(
+            Object {
+                entries: [
+                    (
+                        "output",
+                        String(
+                            "export",
+                        ),
+                    ),
+                    (
+                        "webpack",
+                        Unknown(
+                            Unknown {
+                                reason: Function,
+                                module: SourcePath(
+                                    "next.config.mjs",
+                                ),
+                                span: Some(
+                                    Span {
+                                        start: 58,
+                                        end: 70,
+                                    },
+                                ),
+                            },
+                        ),
+                    ),
+                ],
+                complete: false,
+                unknown_properties: [
+                    Unknown {
+                        reason: Environment(
+                            Some(
+                                "CONFIG",
+                            ),
+                        ),
+                        module: SourcePath(
+                            "next.config.mjs",
+                        ),
+                        span: Some(
+                            Span {
+                                start: 20,
+                                end: 38,
+                            },
+                        ),
+                    },
+                ],
+            },
+        ),
+    ),
+}
+modules [
+    FrameworkModuleFacts {
+        path: SourcePath(
+            "app/page.tsx",
+        ),
+        exports: [
+            ExportFact {
+                kind: Segment,
+                name: Named(
+                    "dynamic",
+                ),
+                span: Span {
+                    start: 249,
+                    end: 273,
+                },
+                value: String(
+                    "force-static",
+                ),
+            },
+            ExportFact {
+                kind: Segment,
+                name: Named(
+                    "dynamicParams",
+                ),
+                span: Span {
+                    start: 288,
+                    end: 309,
+                },
+                value: Bool(
+                    false,
+                ),
+            },
+            ExportFact {
+                kind: Segment,
+                name: Named(
+                    "revalidate",
+                ),
+                span: Span {
+                    start: 324,
+                    end: 343,
+                },
+                value: Number(
+                    Number(
+                        120.0,
+                    ),
+                ),
+            },
+            ExportFact {
+                kind: Segment,
+                name: Named(
+                    "fetchCache",
+                ),
+                span: Span {
+                    start: 358,
+                    end: 384,
+                },
+                value: String(
+                    "force-cache",
+                ),
+            },
+            ExportFact {
+                kind: Segment,
+                name: Named(
+                    "runtime",
+                ),
+                span: Span {
+                    start: 399,
+                    end: 417,
+                },
+                value: String(
+                    "nodejs",
+                ),
+            },
+            ExportFact {
+                kind: Segment,
+                name: Named(
+                    "preferredRegion",
+                ),
+                span: Span {
+                    start: 432,
+                    end: 478,
+                },
+                value: Array(
+                    [
+                        String(
+                            "home",
+                        ),
+                        String(
+                            "fictional-region",
+                        ),
+                    ],
+                ),
+            },
+            ExportFact {
+                kind: Segment,
+                name: Named(
+                    "maxDuration",
+                ),
+                span: Span {
+                    start: 493,
+                    end: 509,
+                },
+                value: Number(
+                    Number(
+                        30.0,
+                    ),
+                ),
+            },
+            ExportFact {
+                kind: Metadata,
+                name: Named(
+                    "metadata",
+                ),
+                span: Span {
+                    start: 524,
+                    end: 595,
+                },
+                value: Object(
+                    Object {
+                        entries: [
+                            (
+                                "title",
+                                String(
+                                    "Fictional",
+                                ),
+                            ),
+                            (
+                                "description",
+                                Unknown(
+                                    Unknown {
+                                        reason: Environment(
+                                            Some(
+                                                "DESCRIPTION",
+                                            ),
+                                        ),
+                                        module: SourcePath(
+                                            "app/page.tsx",
+                                        ),
+                                        span: Some(
+                                            Span {
+                                                start: 570,
+                                                end: 593,
+                                            },
+                                        ),
+                                    },
+                                ),
+                            ),
+                        ],
+                        complete: true,
+                        unknown_properties: [],
+                    },
+                ),
+            },
+            ExportFact {
+                kind: Metadata,
+                name: Named(
+                    "viewport",
+                ),
+                span: Span {
+                    start: 610,
+                    end: 646,
+                },
+                value: Object(
+                    Object {
+                        entries: [
+                            (
+                                "width",
+                                String(
+                                    "device-width",
+                                ),
+                            ),
+                        ],
+                        complete: true,
+                        unknown_properties: [],
+                    },
+                ),
+            },
+            ExportFact {
+                kind: Generator,
+                name: Named(
+                    "generateStaticParams",
+                ),
+                span: Span {
+                    start: 655,
+                    end: 735,
+                },
+                value: Unknown(
+                    Unknown {
+                        reason: Function,
+                        module: SourcePath(
+                            "app/page.tsx",
+                        ),
+                        span: Some(
+                            Span {
+                                start: 670,
+                                end: 690,
+                            },
+                        ),
+                    },
+                ),
+            },
+            ExportFact {
+                kind: Generator,
+                name: Named(
+                    "generateMetadata",
+                ),
+                span: Span {
+                    start: 743,
+                    end: 803,
+                },
+                value: Unknown(
+                    Unknown {
+                        reason: Function,
+                        module: SourcePath(
+                            "app/page.tsx",
+                        ),
+                        span: Some(
+                            Span {
+                                start: 752,
+                                end: 768,
+                            },
+                        ),
+                    },
+                ),
+            },
+            ExportFact {
+                kind: Generator,
+                name: Named(
+                    "generateViewport",
+                ),
+                span: Span {
+                    start: 811,
+                    end: 853,
+                },
+                value: Unknown(
+                    Unknown {
+                        reason: Function,
+                        module: SourcePath(
+                            "app/page.tsx",
+                        ),
+                        span: Some(
+                            Span {
+                                start: 820,
+                                end: 836,
+                            },
+                        ),
+                    },
+                ),
+            },
+        ],
+        star_exports: [],
+        import_uses: [
+            ImportedUse {
+                span: Span {
+                    start: 994,
+                    end: 997,
+                },
+                reference: Span {
+                    start: 994,
+                    end: 997,
+                },
+                source: Span {
+                    start: 70,
+                    end: 84,
+                },
+                specifier: "next/headers",
+                imported: Named(
+                    "cookies",
+                ),
+                members: [],
+                kind: Reference,
+            },
+            ImportedUse {
+                span: Span {
+                    start: 1001,
+                    end: 1006,
+                },
+                reference: Span {
+                    start: 1001,
+                    end: 1004,
+                },
+                source: Span {
+                    start: 70,
+                    end: 84,
+                },
+                specifier: "next/headers",
+                imported: Named(
+                    "cookies",
+                ),
+                members: [],
+                kind: Call,
+            },
+            ImportedUse {
+                span: Span {
+                    start: 1010,
+                    end: 1021,
+                },
+                reference: Span {
+                    start: 1011,
+                    end: 1018,
+                },
+                source: Span {
+                    start: 70,
+                    end: 84,
+                },
+                specifier: "next/headers",
+                imported: Named(
+                    "headers",
+                ),
+                members: [],
+                kind: Call,
+            },
+            ImportedUse {
+                span: Span {
+                    start: 1025,
+                    end: 1049,
+                },
+                reference: Span {
+                    start: 1025,
+                    end: 1035,
+                },
+                source: Span {
+                    start: 114,
+                    end: 131,
+                },
+                specifier: "next/navigation",
+                imported: Namespace,
+                members: [
+                    Some(
+                        "usePathname",
+                    ),
+                ],
+                kind: Call,
+            },
+            ImportedUse {
+                span: Span {
+                    start: 1053,
+                    end: 1080,
+                },
+                reference: Span {
+                    start: 1053,
+                    end: 1063,
+                },
+                source: Span {
+                    start: 114,
+                    end: 131,
+                },
+                specifier: "next/navigation",
+                imported: Namespace,
+                members: [
+                    Some(
+                        "useRouter",
+                    ),
+                ],
+                kind: Call,
+            },
+            ImportedUse {
+                span: Span {
+                    start: 1084,
+                    end: 1101,
+                },
+                reference: Span {
+                    start: 1084,
+                    end: 1094,
+                },
+                source: Span {
+                    start: 114,
+                    end: 131,
+                },
+                specifier: "next/navigation",
+                imported: Namespace,
+                members: [
+                    None,
+                ],
+                kind: Call,
+            },
+            ImportedUse {
+                span: Span {
+                    start: 1105,
+                    end: 1111,
+                },
+                reference: Span {
+                    start: 1105,
+                    end: 1109,
+                },
+                source: Span {
+                    start: 213,
+                    end: 234,
+                },
+                specifier: "fictional-framework",
+                imported: Named(
+                    "headers",
+                ),
+                members: [],
+                kind: Call,
+            },
+            ImportedUse {
+                span: Span {
+                    start: 1122,
+                    end: 1137,
+                },
+                reference: Span {
+                    start: 1123,
+                    end: 1127,
+                },
+                source: Span {
+                    start: 17,
+                    end: 28,
+                },
+                specifier: "next/link",
+                imported: Default,
+                members: [],
+                kind: Render,
+            },
+            ImportedUse {
+                span: Span {
+                    start: 1137,
+                    end: 1143,
+                },
+                reference: Span {
+                    start: 1138,
+                    end: 1142,
+                },
+                source: Span {
+                    start: 17,
+                    end: 28,
+                },
+                specifier: "next/link",
+                imported: Default,
+                members: [],
+                kind: Render,
+            },
+        ],
+    },
+    FrameworkModuleFacts {
+        path: SourcePath(
+            "next.config.mjs",
+        ),
+        exports: [],
+        star_exports: [],
+        import_uses: [],
+    },
+]

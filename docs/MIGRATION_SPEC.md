@@ -79,6 +79,8 @@ Implemented (`D-074`, section 31 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). A p
 
 ### 5.2 Next.js configuration
 
+The fact API under `D-097` (IMPLEMENTATION.md section 47) now retains evaluated configuration, loading uncertainty, known properties, unknown property-set causes, and unmodeled webpack/Turbopack concerns. It assigns no migration status. The mappings in this section remain planned assessment/transformation rules.
+
 `next.config.js`, `.mjs`, and `.ts` are executable modules. Frameshift never executes them. The static evaluator extracts the exported configuration object where it is a literal or built from constants. Each recognized key has a mapping:
 
 | Key | Mapping | Status |

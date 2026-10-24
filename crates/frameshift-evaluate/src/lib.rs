@@ -90,7 +90,9 @@ impl Value {
             Self::Unknown(_) => false,
             Self::Array(items) => items.iter().all(Self::is_known),
             Self::Object(object) => {
-                object.complete && object.entries.iter().all(|(_, v)| v.is_known())
+                object.complete
+                    && object.unknown_properties.is_empty()
+                    && object.entries.iter().all(|(_, v)| v.is_known())
             }
             Self::Undefined
             | Self::Null

@@ -544,3 +544,46 @@ fn incomplete_property_evidence_obeys_value_and_work_limits() {
     );
     assert_eq!(reason(&value), &Reason::WorkLimit);
 }
+
+#[test]
+fn ambiguous_star_exports_and_type_only_exports_never_supply_a_value() {
+    let files = [
+        (
+            "next.config.mjs",
+            "export { config as default } from './barrel.mjs';",
+        ),
+        (
+            "barrel.mjs",
+            "export * from './a.mjs'; export * from './b.mjs';",
+        ),
+        ("a.mjs", "export const config = { output: 'export' };"),
+        ("b.mjs", "export const config = { output: 'export' };"),
+    ];
+    let value = config("ambiguous-stars", &files, "next.config.mjs");
+    assert_eq!(reason(&value), &Reason::Unsupported);
+    let files = [
+        (
+            "next.config.ts",
+            "export { config as default } from './barrel';",
+        ),
+        (
+            "barrel.ts",
+            "export type * from './a'; export * from './b';",
+        ),
+        ("a.ts", "export const config = { output: 'wrong' };"),
+        ("b.ts", "export const config = { output: 'export' };"),
+    ];
+    let value = config("erased-stars", &files, "next.config.ts");
+    assert_eq!(object(&value).get("output"), Some(&string("export")));
+    let files = [
+        (
+            "next.config.ts",
+            "export type { config as default } from './a';",
+        ),
+        ("a.ts", "export const config = { output: 'wrong' };"),
+    ];
+    assert_eq!(
+        reason(&config("erased-default", &files, "next.config.ts")),
+        &Reason::NotExported
+    );
+}
