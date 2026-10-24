@@ -48,6 +48,9 @@ pub struct Object {
     /// Whether every property is known: a spread of an unknown value, a
     /// computed key that is not known, or `__proto__` makes it incomplete.
     pub complete: bool,
+    /// Causes of unestablished property names or a nonliteral prototype,
+    /// in source evaluation order. They never stand for named properties.
+    pub unknown_properties: Vec<Unknown>,
 }
 
 impl Object {
@@ -87,7 +90,9 @@ impl Value {
             Self::Unknown(_) => false,
             Self::Array(items) => items.iter().all(Self::is_known),
             Self::Object(object) => {
-                object.complete && object.entries.iter().all(|(_, v)| v.is_known())
+                object.complete
+                    && object.unknown_properties.is_empty()
+                    && object.entries.iter().all(|(_, v)| v.is_known())
             }
             Self::Undefined
             | Self::Null
@@ -106,7 +111,10 @@ impl Value {
             match value {
                 Self::Unknown(unknown) => out.push(unknown),
                 Self::Array(items) => pending.extend(items.iter().rev()),
-                Self::Object(object) => pending.extend(object.entries.iter().rev().map(|(_, v)| v)),
+                Self::Object(object) => {
+                    out.extend(object.unknown_properties.iter());
+                    pending.extend(object.entries.iter().rev().map(|(_, v)| v));
+                }
                 Self::Undefined
                 | Self::Null
                 | Self::Bool(_)
@@ -124,6 +132,9 @@ impl Value {
 pub enum Reason {
     /// A syntax form outside the safe subset, such as `new` or assignment.
     Unsupported,
+    /// A nonliteral object prototype, set by a literal `__proto__` key. It
+    /// never adds an own property.
+    Prototype,
     /// A function or method call, with the callee's source spelling when it
     /// is a name or member chain.
     Call(Option<String>),

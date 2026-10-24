@@ -137,7 +137,11 @@ fn common_js_typescript_and_imports_resolve_through_local_modules() {
     let o = object(&value);
     // `require` is a call, so the spread leaves the object incomplete.
     assert!(!o.complete);
-    assert_eq!(o.get("trailingSlash"), Some(&Value::Bool(true)));
+    assert!(matches!(o.get("trailingSlash"), Some(Value::Unknown(_))));
+    assert_eq!(
+        o.unknown_properties[0].reason,
+        Reason::Call(Some("require".into()))
+    );
 }
 
 #[test]
@@ -400,6 +404,7 @@ fn external_config_evaluation() {
                     other @ (Reason::Unsupported
                     | Reason::Function
                     | Reason::RegExp
+                    | Reason::Prototype
                     | Reason::Dynamic
                     | Reason::Mutable
                     | Reason::Unresolved(None)
@@ -458,4 +463,152 @@ fn node10_configuration_imports_use_typed_alias_and_directory_targets() {
     assert!(value.is_known(), "{value:?}");
     assert_eq!(object(&value).get("base"), Some(&string("/typed")));
     assert_eq!(object(&value).get("flag"), Some(&Value::Bool(true)));
+}
+
+#[test]
+fn uncertain_property_names_invalidate_only_values_written_before_them() {
+    let cases = [
+        ("{ first: 1, ...plugin, last: 2 }", true, Some(2.0)),
+        ("{ ...plugin, first: 1, last: 2 }", false, Some(2.0)),
+        ("{ first: 1, [key]: 3, last: 2 }", true, Some(2.0)),
+        ("{ first: 1, [key]() {}, last: 2 }", true, Some(2.0)),
+        ("{ first: 1, ...{ ...plugin, last: 2 } }", true, Some(2.0)),
+        ("{ first: 1, ...{ last: 2, ...plugin } }", true, None),
+        ("{ first: 1, __proto__: plugin, last: 2 }", false, Some(2.0)),
+        (
+            "{ first: 1, ...plugin, first: 4, ...other, last: 2 }",
+            true,
+            Some(2.0),
+        ),
+    ];
+    for (i, (expression, first_unknown, last)) in cases.iter().enumerate() {
+        let text = format!("export default {expression};");
+        let value = config(
+            &format!("uncertain-keys-{i}"),
+            &[("next.config.mjs", &text)],
+            "next.config.mjs",
+        );
+        let object = object(&value);
+        assert!(!object.complete, "{expression}");
+        assert!(!object.unknown_properties.is_empty(), "{expression}");
+        assert!(!value.unknowns().is_empty(), "{expression}");
+        assert_eq!(
+            matches!(object.get("first"), Some(Value::Unknown(_))),
+            *first_unknown,
+            "{expression}: {value:?}"
+        );
+        if let Some(last) = last {
+            assert_eq!(object.get("last"), Some(&number(*last)), "{expression}");
+        } else {
+            assert!(matches!(object.get("last"), Some(Value::Unknown(_))));
+        }
+    }
+    let value = config(
+        "spread-without-named-properties",
+        &[(
+            "next.config.mjs",
+            "export default { ...process.env.CONFIG };",
+        )],
+        "next.config.mjs",
+    );
+    assert_eq!(
+        value.unknowns()[0].reason,
+        Reason::Environment(Some("CONFIG".into()))
+    );
+    assert_eq!(
+        value.unknowns()[0].span,
+        object(&value).unknown_properties[0].span
+    );
+}
+
+#[test]
+fn incomplete_property_evidence_obeys_value_and_work_limits() {
+    let text = "export default { ...a, ...b, ...c, ...d };";
+    let value = config_with(
+        "unknown-property-value-bound",
+        &[("next.config.mjs", text)],
+        "next.config.mjs",
+        EvaluateLimits {
+            max_value_size: 3,
+            ..EvaluateLimits::default()
+        },
+    );
+    assert_eq!(reason(&value), &Reason::ValueLimit);
+    let value = config_with(
+        "unknown-property-work-bound",
+        &[("next.config.mjs", text)],
+        "next.config.mjs",
+        EvaluateLimits {
+            max_work: 3,
+            ..EvaluateLimits::default()
+        },
+    );
+    assert_eq!(reason(&value), &Reason::WorkLimit);
+}
+
+#[test]
+fn prototype_uncertainty_never_hides_own_keys_of_a_spread() {
+    let value = config(
+        "prototype-spread",
+        &[(
+            "next.config.mjs",
+            "const plugin = process.env.PLUGIN;\nexport default { pageExtensions: ['tsx'], images: { unoptimized: true }, ...{ __proto__: plugin } };\n",
+        )],
+        "next.config.mjs",
+    );
+    let o = object(&value);
+    assert!(o.complete, "{o:#?}");
+    assert_eq!(
+        o.get("pageExtensions"),
+        Some(&Value::Array(vec![string("tsx")]))
+    );
+    assert_eq!(o.get("images").map(object).map(|i| i.complete), Some(true));
+    assert!(
+        o.unknown_properties.is_empty(),
+        "{:#?}",
+        o.unknown_properties
+    );
+}
+
+#[test]
+fn ambiguous_star_exports_and_type_only_exports_never_supply_a_value() {
+    let files = [
+        (
+            "next.config.mjs",
+            "export { config as default } from './barrel.mjs';",
+        ),
+        (
+            "barrel.mjs",
+            "export * from './a.mjs'; export * from './b.mjs';",
+        ),
+        ("a.mjs", "export const config = { output: 'export' };"),
+        ("b.mjs", "export const config = { output: 'export' };"),
+    ];
+    let value = config("ambiguous-stars", &files, "next.config.mjs");
+    assert_eq!(reason(&value), &Reason::Unsupported);
+    let files = [
+        (
+            "next.config.ts",
+            "export { config as default } from './barrel';",
+        ),
+        (
+            "barrel.ts",
+            "export type * from './a'; export * from './b';",
+        ),
+        ("a.ts", "export const config = { output: 'wrong' };"),
+        ("b.ts", "export const config = { output: 'export' };"),
+    ];
+    let value = config("erased-stars", &files, "next.config.ts");
+    assert_eq!(object(&value).get("output"), Some(&string("export")));
+    let files = [
+        (
+            "next.config.ts",
+            "export type { config as default } from './a';",
+        ),
+        ("a.ts", "export const config = { output: 'wrong' };"),
+    ];
+    assert_eq!(
+        reason(&config("erased-default", &files, "next.config.ts")),
+        &Reason::NotExported
+    );
 }

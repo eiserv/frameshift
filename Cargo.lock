@@ -163,6 +163,7 @@ version = "0.1.0"
 dependencies = [
  "frameshift-bindings",
  "frameshift-core",
+ "frameshift-evaluate",
  "frameshift-input",
  "frameshift-modules",
  "frameshift-package",
