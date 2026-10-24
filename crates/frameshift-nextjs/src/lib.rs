@@ -22,6 +22,7 @@ mod components;
 mod contexts;
 mod detect;
 mod environment;
+mod facts;
 mod routes;
 
 #[cfg(test)]
@@ -42,6 +43,11 @@ pub use environment::{
     ApiKind, ApiUse, BROWSER_GLOBALS, EnvironmentAnalysis, EnvironmentSummary, ModuleEnvironment,
     NODE_BUILTINS, NODE_GLOBALS, PUBLIC_PREFIX, Runtime, VariableAccess, VariableUse,
     classify_environment, summarize_environment,
+};
+pub use facts::{
+    AppFacts, BundlerSetting, ConfigProperty, ConfigurationFacts, ExportFact, FacetKind, FactError,
+    FactLimits, FrameworkModuleFacts, ImportedUse, ImportedUseKind, PageExtensions,
+    analyze_app_facts, analyze_app_facts_with,
 };
 pub use routes::{
     AppRoute, AppRoutes, Convention, ConventionFile, Interception, Metadata, RouteError,

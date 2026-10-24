@@ -24,3 +24,4 @@ LICENSE text eol=lf
 crates/frameshift-engine/tests/golden/project.txt text eol=lf
 crates/frameshift-engine/tests/golden/components.txt text eol=lf
 crates/frameshift-engine/tests/golden/environment.txt text eol=lf
+crates/frameshift-engine/tests/golden/nextjs-facts.txt text eol=lf

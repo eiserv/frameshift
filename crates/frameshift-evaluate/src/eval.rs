@@ -96,13 +96,16 @@ fn measure(value: &Value) -> (usize, usize) {
             let (s, d) = measure(v);
             (size.saturating_add(s), depth.max(d + 1))
         }),
-        Value::Object(object) => object.entries.iter().fold((1, 1), |(size, depth), (k, v)| {
-            let (s, d) = measure(v);
-            (
-                size.saturating_add(s).saturating_add(k.len()),
-                depth.max(d + 1),
-            )
-        }),
+        Value::Object(object) => object.entries.iter().fold(
+            (1 + object.unknown_properties.len(), 1),
+            |(size, depth), (k, v)| {
+                let (s, d) = measure(v);
+                (
+                    size.saturating_add(s).saturating_add(k.len()),
+                    depth.max(d + 1),
+                )
+            },
+        ),
         Value::Undefined | Value::Null | Value::Bool(_) | Value::Number(_) | Value::Unknown(_) => {
             (1, 0)
         }
@@ -207,20 +210,46 @@ fn array_index(key: &str) -> Option<u32> {
 struct Entries {
     entries: Vec<(String, Value)>,
     index: BTreeMap<String, usize>,
+    written: Vec<usize>,
+    uncertainty: Option<(usize, Unknown)>,
 }
 
 impl Entries {
     fn insert(&mut self, key: String, value: Value) {
         if let Some(&i) = self.index.get(&key) {
             self.entries[i].1 = value;
+            self.written[i] = self.generation();
         } else {
             self.index.insert(key.clone(), self.entries.len());
             self.entries.push((key, value));
+            self.written.push(self.generation());
         }
     }
 
     fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    fn generation(&self) -> usize {
+        self.uncertainty
+            .as_ref()
+            .map_or(0, |(generation, _)| *generation)
+    }
+
+    fn invalidate(&mut self, unknown: Unknown) {
+        // Defer invalidation so alternating keys and unknown spreads stay linear.
+        self.uncertainty = Some((self.generation() + 1, unknown));
+    }
+
+    fn finish(mut self) -> Vec<(String, Value)> {
+        if let Some((generation, unknown)) = self.uncertainty {
+            for ((_, value), written) in self.entries.iter_mut().zip(self.written) {
+                if written < generation {
+                    *value = Value::Unknown(unknown.clone());
+                }
+            }
+        }
+        order(self.entries)
     }
 }
 
@@ -254,8 +283,9 @@ fn json_value(doc: &JsonDocument<'_>, id: JsonId) -> Value {
                 entries.insert(member.key().to_owned(), json_value(doc, member.value()));
             }
             Value::Object(Object {
-                entries: order(entries.entries),
+                entries: entries.finish(),
                 complete: true,
+                unknown_properties: Vec::new(),
             })
         }
     }
@@ -549,7 +579,13 @@ impl<'s> Evaluator<'s> {
         m: &mut Module<'_, '_>,
         name: &ExportName,
     ) -> Result<Value, EvaluateError> {
-        let exports = m.bindings.exports().to_vec();
+        let exports: Vec<_> = m
+            .bindings
+            .exports()
+            .iter()
+            .filter(|export| !export.type_only)
+            .cloned()
+            .collect();
         if let Some(export) = exports.iter().find(|e| e.name == *name) {
             return match &export.kind {
                 ExportKind::Local(Target::Binding(b)) => self.binding(m, *b),
@@ -566,21 +602,26 @@ impl<'s> Evaluator<'s> {
         if *name == ExportName::Assignment {
             return self.common_js(m);
         }
-        if let ExportName::Named(_) = name {
+        if let ExportName::Named(n) = name {
+            let mut found = None;
             for export in exports.iter().filter(|e| e.name == ExportName::Star) {
                 if let ExportKind::ReExport { source, .. } = &export.kind {
-                    let ExportName::Named(n) = name else { continue };
                     let value = self.reexport(m, *source, &ImportedName::Named(n.clone()))?;
-                    if !matches!(
-                        &value,
-                        Value::Unknown(Unknown {
-                            reason: Reason::NotExported,
-                            ..
-                        })
-                    ) {
+                    if let Value::Unknown(unknown) = &value {
+                        if unknown.reason == Reason::NotExported {
+                            continue;
+                        }
                         return Ok(value);
                     }
+                    if found.is_some() {
+                        // Equal values do not establish identical binding provenance.
+                        return Ok(self.unknown(m, export.node, Reason::Unsupported));
+                    }
+                    found = Some(value);
                 }
+            }
+            if let Some(value) = found {
+                return Ok(value);
             }
         }
         Ok(self.unknown_at(m.path, None, Reason::NotExported))
@@ -1269,7 +1310,11 @@ impl<'s> Evaluator<'s> {
     ) -> Result<Value, EvaluateError> {
         let mut entries = Entries::default();
         let mut complete = true;
+        let mut unknown_properties = Vec::new();
         for &p in properties {
+            if !self.charge(1) {
+                return Ok(self.unknown(m, p, Reason::WorkLimit));
+            }
             let kind = m.kind(p);
             if let N::Property {
                 key,
@@ -1277,14 +1322,37 @@ impl<'s> Evaluator<'s> {
                 computed,
             } = kind
             {
-                let key = if computed {
-                    property_key(&self.expr(m, key, depth + 1)?)
+                let evaluated_key = if computed {
+                    Some(self.expr(m, key, depth + 1)?)
+                } else {
+                    None
+                };
+                let key = if let Some(value) = &evaluated_key {
+                    property_key(value)
                 } else {
                     self.static_key(m, key)
                 };
-                // A literal `__proto__` key sets the prototype instead.
-                let Some(key) = key.filter(|k| computed || k != "__proto__") else {
+                // A literal `__proto__` sets the prototype, not another own key.
+                let prototype = !computed && key.as_deref() == Some("__proto__");
+                let Some(key) = key.filter(|_| !prototype) else {
                     complete = false;
+                    let unknown = if let Some(Value::Unknown(unknown)) = evaluated_key {
+                        unknown
+                    } else {
+                        Unknown {
+                            reason: if prototype {
+                                Reason::Prototype
+                            } else {
+                                Reason::Unsupported
+                            },
+                            module: m.path.clone(),
+                            span: Some(m.span(p)),
+                        }
+                    };
+                    if !prototype {
+                        entries.invalidate(unknown.clone());
+                    }
+                    unknown_properties.push(unknown);
                     continue;
                 };
                 let value = self.expr(m, value, depth + 1)?;
@@ -1307,6 +1375,13 @@ impl<'s> Evaluator<'s> {
                 };
                 let Some(key) = key else {
                     complete = false;
+                    let unknown = Unknown {
+                        reason: Reason::Unsupported,
+                        module: m.path.clone(),
+                        span: Some(m.span(p)),
+                    };
+                    entries.invalidate(unknown.clone());
+                    unknown_properties.push(unknown);
                     continue;
                 };
                 let reason = if matches!(method, MethodKind::Getter | MethodKind::Setter) {
@@ -1319,7 +1394,30 @@ impl<'s> Evaluator<'s> {
             } else if let N::Spread { argument } = kind {
                 match self.expr(m, argument, depth + 1)? {
                     Value::Object(other) => {
-                        complete &= other.complete;
+                        // A spread copies own enumerable properties only; a
+                        // source prototype never reaches the destination, so
+                        // prototype uncertainty does not hide its keys.
+                        let mut own_unknowns = Vec::new();
+                        let mut prototype_unknown = false;
+                        for unknown in other.unknown_properties {
+                            if matches!(unknown.reason, Reason::Prototype) {
+                                prototype_unknown = true;
+                            } else {
+                                own_unknowns.push(unknown);
+                            }
+                        }
+                        let own_complete =
+                            other.complete || (prototype_unknown && own_unknowns.is_empty());
+                        complete &= own_complete;
+                        if !own_complete {
+                            let unknown = own_unknowns.first().cloned().unwrap_or(Unknown {
+                                reason: Reason::Unsupported,
+                                module: m.path.clone(),
+                                span: Some(m.span(p)),
+                            });
+                            entries.invalidate(unknown);
+                        }
+                        unknown_properties.extend(own_unknowns);
                         for (k, v) in other.entries {
                             entries.insert(k, v);
                         }
@@ -1346,15 +1444,27 @@ impl<'s> Evaluator<'s> {
                     | Value::Bool(_)
                     | Value::Number(_)
                     | Value::BigInt(_) => {}
-                    Value::Unknown(_) => complete = false,
+                    Value::Unknown(unknown) => {
+                        complete = false;
+                        entries.invalidate(unknown.clone());
+                        unknown_properties.push(unknown);
+                    }
                 }
             } else {
                 complete = false;
+                let unknown = Unknown {
+                    reason: Reason::Unsupported,
+                    module: m.path.clone(),
+                    span: Some(m.span(p)),
+                };
+                entries.invalidate(unknown.clone());
+                unknown_properties.push(unknown);
             }
         }
         Ok(Value::Object(Object {
-            entries: order(entries.entries),
+            entries: entries.finish(),
             complete,
+            unknown_properties,
         }))
     }
 
