@@ -489,3 +489,71 @@ fn strict_tree_visitor_runs_once_and_propagates_failure() {
         frameshift_engine::bindings::Target::Binding(_)
     ));
 }
+
+#[test]
+fn method_render_owners_and_computed_keys_keep_lexical_context() {
+    let limits = Limits::default();
+    let text = "class Card { render() { return <CardBody/>; } }\nfunction Outer() { class Inner { show() { return <InnerBody/>; } } const obj = { draw() { return <ObjectBody/>; }, get child() { return <GetterBody/>; }, [<Key/>]() { return <ComputedBody/>; } }; return obj; }\nconst obj = { [<TopKey/>]() { return <TopBody/>; } };";
+    let snap = open("methods", &[("app/page.tsx", text)], &limits);
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let sites = &model.semantics()[0].renders;
+    assert_eq!(sites.len(), 8);
+    for (name, prefix) in [
+        ("CardBody", "render()"),
+        ("InnerBody", "show()"),
+        ("ObjectBody", "draw()"),
+        ("GetterBody", "get child()"),
+        ("Key", "function Outer()"),
+        ("ComputedBody", "[<Key/>]()"),
+        ("TopBody", "[<TopKey/>]()"),
+    ] {
+        let owner = sites
+            .iter()
+            .find(|site| site.spelling == name)
+            .unwrap()
+            .owner
+            .unwrap();
+        assert!(
+            text[owner.start()..owner.end()].starts_with(prefix),
+            "{name}: {:?}",
+            &text[owner.start()..owner.end()]
+        );
+    }
+    assert!(
+        sites
+            .iter()
+            .find(|site| site.spelling == "TopKey")
+            .unwrap()
+            .owner
+            .is_none()
+    );
+}
+
+#[test]
+fn runtime_declaration_targets_keep_parse_failures_without_traversal() {
+    let limits = Limits::default();
+    let snap = open(
+        "declaration-target",
+        &[
+            (
+                "app/page.tsx",
+                "import '../lib/broken'; import '../lib/types'; export default () => null;",
+            ),
+            ("lib/broken.d.ts", "export declare const = ;"),
+            ("lib/types.d.ts", "export { T } from './unreached';"),
+            ("lib/unreached.ts", "export const T = 1;"),
+        ],
+        &limits,
+    );
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let closure = model.route_dependencies(0).unwrap();
+    assert_eq!(closure.unparsed, [&path("lib/broken.d.ts")]);
+    assert!(closure.files.contains(&&path("lib/types.d.ts")));
+    assert!(!closure.files.contains(&&path("lib/unreached.ts")));
+    assert!(
+        closure
+            .edges
+            .iter()
+            .all(|edge| edge.importer == &path("app/page.tsx"))
+    );
+}

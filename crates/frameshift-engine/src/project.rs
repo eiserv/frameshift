@@ -171,8 +171,8 @@ fn inside(path: &SourcePath, package: Option<&SourcePath>) -> bool {
 pub struct RenderSite {
     /// Exact opening-tag span.
     pub span: Span,
-    /// Enclosing function or arrow, absent at module level. Class methods
-    /// remain inside their parser function node when one is present.
+    /// Enclosing function, arrow, or method, absent at module level.
+    /// Computed method keys retain their enclosing callable's owner.
     pub owner: Option<Span>,
     /// Original tag name, including any namespace or member suffix.
     pub spelling: String,
@@ -225,9 +225,13 @@ fn module_facts(path: &SourcePath, tree: &SyntaxTree<'_>, bindings: &Bindings) -
     let mut pending = vec![(tree.root(), None, None)];
     while let Some((id, owner, parent)) = pending.pop() {
         let node = tree.node(id).expect("parser-owned node");
+        let inherited_owner = owner;
         let owner = if matches!(
             node.kind(),
-            N::FunctionDeclaration { .. } | N::FunctionExpression { .. } | N::ArrowFunction { .. }
+            N::FunctionDeclaration { .. }
+                | N::FunctionExpression { .. }
+                | N::ArrowFunction { .. }
+                | N::MethodDefinition { .. }
         ) {
             Some(node.span())
         } else {
@@ -287,7 +291,13 @@ fn module_facts(path: &SourcePath, tree: &SyntaxTree<'_>, bindings: &Bindings) -
         pending.extend(
             tree.child_nodes(id)
                 .expect("parser-owned children")
-                .map(|child| (child, owner, Some(id))),
+                .map(|child| {
+                    // Computed method keys execute outside the method body.
+                    let child_owner = if matches!(node.kind(), N::MethodDefinition { key, computed: true, .. } if key == child) {
+                        inherited_owner
+                    } else { owner };
+                    (child, child_owner, Some(id))
+                }),
         );
     }
     environment.sort_by_key(|usage| usage.span.start());
@@ -399,10 +409,10 @@ impl Project {
             let Some(node) = self.app.graph.node(path) else {
                 continue;
             };
+            visited.insert(&node.path);
             if node.kind == FileKind::Declaration {
                 continue;
             }
-            visited.insert(&node.path);
             for edge in &node.edges {
                 charge()?;
                 if !edge.type_only
@@ -418,6 +428,9 @@ impl Project {
             let node = self.app.graph.node(path).expect("graph-owned path");
             if node.state != ModuleState::Parsed {
                 unparsed.push(path);
+            }
+            if node.kind == FileKind::Declaration {
+                continue;
             }
             edges.extend(
                 node.edges
