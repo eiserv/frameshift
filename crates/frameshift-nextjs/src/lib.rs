@@ -26,8 +26,9 @@ mod tests;
 
 pub use app::{AppAnalysis, AppError, FileExports, analyze_app, analyze_app_with};
 pub use components::{
-    ComponentError, ComponentGraph, ComponentSummary, Definition, DefinitionKind, Entry, Rendered,
-    Resolved, Site, SsrOption, UnknownReason, Wrapper, link_components, summarize_components,
+    BrowserImport, ComponentError, ComponentGraph, ComponentSummary, Definition, DefinitionKind,
+    Entry, Rendered, Resolved, Site, SsrOption, UnknownReason, Wrapper, link_components,
+    summarize_components,
 };
 pub use contexts::{Boundary, ContextIssue, ModuleContext, RenderContexts, render_contexts};
 pub use detect::{

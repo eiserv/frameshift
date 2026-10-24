@@ -315,6 +315,18 @@ fn recognizes_lazy_and_dynamic_loaders_by_import_provenance() {
         definition_name(graph, &chart.resolved).as_deref(),
         Some("ChartImpl")
     );
+    let chart_source = text(SOURCE, "components/chart.tsx");
+    assert_eq!(
+        graph
+            .browser_imports
+            .iter()
+            .map(|i| (i.path.as_str(), i.span.start()))
+            .collect::<Vec<_>>(),
+        [(
+            "components/chart.tsx",
+            chart_source.find("'./chart-impl'").unwrap()
+        )]
+    );
     let heavy = site(graph, page, "<Heavy");
     assert_eq!(heavy.resolved.wrappers, [Wrapper::Lazy]);
     let index = match heavy.resolved.rendered {
@@ -351,6 +363,7 @@ fn recognizes_lazy_and_dynamic_loaders_by_import_provenance() {
              const K = React.forwardRef(remember(() => null));\n\
              const L = dynamic(() => import('fictional-widgets').then((m) => m.Widget));\n\
              const M = lazy(load);\nfunction load() { return import('./target'); }\n\
+             const N = dynamic(() => import('./unrendered'), { ssr: false });\n\
              export default function Page() { return <><A /><B /><C /><D /><E /><F /><G /><H /><I /><J /><K /><L /><M /></>; }\n",
         ),
         (
@@ -358,6 +371,7 @@ fn recognizes_lazy_and_dynamic_loaders_by_import_provenance() {
             "export default function Target() { return null; }\nexport function Named() { return null; }\n",
         ),
         ("app/fake.ts", "export const lazy = (f) => f;\n"),
+        ("app/unrendered.tsx", "export default () => null;\n"),
     ];
     let model = build("loader-variants", variants);
     let graph = model.components();
@@ -425,6 +439,16 @@ fn recognizes_lazy_and_dynamic_loaders_by_import_provenance() {
         }
     );
     assert_eq!(reason(&get("<M ").resolved), &UnknownReason::Loader);
+    // Only literal `ssr: false` makes an import browser-only, rendered or not.
+    let browser: Vec<_> = graph
+        .browser_imports
+        .iter()
+        .map(|i| (i.path.as_str(), i.span.start()))
+        .collect();
+    assert_eq!(
+        browser,
+        [("app/page.tsx", source.find("'./unrendered'").unwrap())]
+    );
 
     // A `react` specifier that the configuration maps to a local file does
     // not import React's `memo`; the call stays a higher-order component.
@@ -753,6 +777,15 @@ fn graph_snapshot() -> String {
             site.owner,
             site.resolved.wrappers,
             site.resolved.rendered
+        )
+        .unwrap();
+    }
+    for import in &graph.browser_imports {
+        writeln!(
+            out,
+            "browser-import {:?} {:?}",
+            import.path.as_str(),
+            slice(import.path.as_str(), import.span.start(), import.span.end())
         )
         .unwrap();
     }
