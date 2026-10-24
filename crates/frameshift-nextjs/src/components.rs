@@ -1486,9 +1486,14 @@ impl Linker<'_> {
     /// The runtime edge whose specifier span is `source`.
     fn edge(&self, module: usize, source: Span) -> EdgeTarget {
         let path = &self.summaries[module].path;
+        // Edges are in source order, so a binary search finds the span.
         let edge = self.graph.node(path).and_then(|node| {
-            node.edges
+            let first = node
+                .edges
+                .partition_point(|e| e.span.start() < source.start());
+            node.edges[first..]
                 .iter()
+                .take_while(|e| e.span.start() == source.start())
                 .find(|edge| edge.span == source && !edge.type_only)
         });
         let Some(edge) = edge else {
