@@ -1,0 +1,39 @@
+module "app/layout.tsx" parsed=true build=true browser=false Some(Build)
+  variable "process.env.ROOT_DIR" Some("ROOT_DIR") Direct deferred=false public=Some(false)
+  api "'node:fs'" NodeModule "node:fs" deferred=false typeof=false
+  api "'path'" NodeModule "path" deferred=false typeof=false
+  api "__dirname" NodeGlobal "__dirname" deferred=true typeof=false
+module "app/page.tsx" parsed=true build=true browser=false Some(Build)
+  variable "NEXT_PUBLIC_SITE" Some("NEXT_PUBLIC_SITE") Destructured deferred=false public=Some(true)
+  variable "SECRET: secret = 'x'" Some("SECRET") Destructured deferred=false public=Some(false)
+  variable "...rest" None Whole deferred=false public=None
+  variable "process.env" None Whole deferred=false public=None
+  variable "env.API_URL" Some("API_URL") Alias deferred=true public=Some(false)
+  variable "process.env[key]" None Direct deferred=true public=None
+  variable "(process.env as any).CAST" Some("CAST") Direct deferred=true public=Some(false)
+  variable "process['env']['QUOTED']" Some("QUOTED") Direct deferred=true public=Some(false)
+  api "process" NodeGlobal "process" deferred=false typeof=false
+module "components/chart.tsx" parsed=true build=false browser=true Some(Browser)
+  api "localStorage" BrowserGlobal "localStorage" deferred=true typeof=false
+module "components/panel.tsx" parsed=true build=true browser=true Some(Shared)
+module "components/widget.tsx" parsed=true build=true browser=true Some(Shared)
+  api "window" BrowserGlobal "window" deferred=false typeof=false
+  api "window" BrowserGlobal "window" deferred=true typeof=true
+  api "window" BrowserGlobal "window" deferred=true typeof=false
+module "lib/alias.ts" parsed=true build=true browser=false Some(Build)
+  variable "A" Some("A") Destructured deferred=false public=Some(false)
+  variable "e2.B" Some("B") Alias deferred=false public=Some(false)
+  variable "w = process.env" None Whole deferred=false public=None
+module "lib/broken.ts" parsed=false build=false browser=false None
+module "lib/server.ts" parsed=true build=true browser=false Some(Build)
+  api "'fs/promises'" NodeModule "fs/promises" deferred=false typeof=false
+  api "require" NodeGlobal "require" deferred=false typeof=false
+  api "'os'" NodeModule "os" deferred=false typeof=false
+  api "'node:crypto'" NodeModule "node:crypto" deferred=true typeof=false
+  api "Buffer" NodeGlobal "Buffer" deferred=true typeof=false
+module "lib/shadow.ts" parsed=true build=true browser=false Some(Build)
+module "lib/shared.ts" parsed=true build=true browser=true Some(Shared)
+  variable "process.env.NEXT_PUBLIC_FLAG" Some("NEXT_PUBLIC_FLAG") Direct deferred=true public=Some(true)
+module "lib/types.ts" parsed=true build=true browser=false Some(Build)
+module "lib/unused.ts" parsed=true build=false browser=false None
+  api "document" BrowserGlobal "document" deferred=false typeof=false

@@ -1,14 +1,14 @@
 //! Scope and binding analysis of every tree that parses, and the component
-//! summary that builds on it (`D-096`).
+//! and environment summaries that build on it (`D-096`).
 
 use frameshift_engine::bindings::{Target as Resolution, analyze};
 use frameshift_engine::foundation::{PathLimits, SourcePath, SourceText, TextLimits};
-use frameshift_engine::nextjs::summarize_components;
+use frameshift_engine::nextjs::{summarize_components, summarize_environment};
 use frameshift_engine::syntax::{ParseLimits, SyntaxNodeKind as N, parse_js_program};
 
 /// Checks repetition, reference and declaration nodes, resolved targets,
 /// acyclic scopes in creation order, the declaration index, and repeatable
-/// component summaries without panics.
+/// component and environment summaries without panics.
 pub fn run(input: &[u8]) -> Result<(), String> {
     let Some(text) = crate::targets::text(input)? else {
         return Ok(());
@@ -29,6 +29,11 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                 != summarize_components(&path, &tree, &first)
             {
                 return Err("component summary changed on repetition".to_owned());
+            }
+            if summarize_environment(&path, &tree, &first)
+                != summarize_environment(&path, &tree, &first)
+            {
+                return Err("environment summary changed on repetition".to_owned());
             }
             for (index, scope) in first.scopes().iter().enumerate() {
                 if scope.parent.is_some_and(|p| p.index() >= index)

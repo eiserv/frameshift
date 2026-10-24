@@ -12,8 +12,9 @@ use frameshift_core::{SourcePath, Span};
 use frameshift_input::{EntryKind, Snapshot};
 use frameshift_modules::{Edge, FileKind, GraphLimits, ModuleGraph, ModuleState, Resolution};
 use frameshift_nextjs::{
-    AppAnalysis, AppError, ComponentError, ComponentGraph, Convention, analyze_app_with,
-    link_components, summarize_components,
+    AppAnalysis, AppError, ComponentError, ComponentGraph, Convention, EnvironmentAnalysis,
+    analyze_app_with, classify_environment, link_components, summarize_components,
+    summarize_environment,
 };
 use frameshift_syntax::{NodeId, SyntaxNodeKind as N, SyntaxTree, TypeScriptKind};
 
@@ -50,6 +51,7 @@ pub struct Project {
     app: AppAnalysis,
     semantics: Vec<ModuleFacts>,
     components: ComponentGraph,
+    environment: EnvironmentAnalysis,
     max_dependency_work: u64,
 }
 
@@ -102,6 +104,7 @@ pub fn build(
     }
     let mut semantics = Vec::new();
     let mut summaries = Vec::new();
+    let mut environments = Vec::new();
     let app = analyze_app_with(
         snapshot,
         package,
@@ -117,6 +120,7 @@ pub fn build(
         &mut |path, tree, bindings| {
             semantics.push(module_facts(path, tree, bindings));
             summaries.push(summarize_components(path, tree, bindings));
+            environments.push(summarize_environment(path, tree, bindings));
             Ok(())
         },
     )
@@ -125,6 +129,7 @@ pub fn build(
         .map_err(|e| match e {
             ComponentError::WorkLimit => ProjectError::WorkLimit,
         })?;
+    let environment = classify_environment(&app.graph, &app.contexts, &components, &environments);
     let inventory = snapshot.inventory();
     let mut files: Vec<_> = inventory
         .files()
@@ -165,6 +170,7 @@ pub fn build(
         app,
         semantics,
         components,
+        environment,
         max_dependency_work: limits.modules.max_work,
     })
 }
@@ -387,6 +393,14 @@ impl Project {
     /// with the rendered defaults of App Router conventions (`D-096`).
     pub fn components(&self) -> &ComponentGraph {
         &self.components
+    }
+
+    /// Where each module is evaluated, from render contexts and browser-only
+    /// imports, with its environment-variable reads, including aliases and
+    /// destructuring, and its Node.js and browser API uses (`D-096`).
+    /// `ModuleFacts::environment` keeps the direct reads alone.
+    pub fn environment(&self) -> &EnvironmentAnalysis {
+        &self.environment
     }
 
     /// The shared module graph, without a copy per route.
