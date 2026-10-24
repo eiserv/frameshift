@@ -43,13 +43,15 @@ impl Target {
 ///
 /// Only the fields that the pinned bundler lookup reads for local code are
 /// retained: `name`, `typings`, `types`, `main`, `typesVersions`, `exports`,
-/// and `imports`. Dependency declarations are the package model's concern.
+/// and `imports`, and the `tsconfig` field that configuration inheritance
+/// reads (`D-098`). Dependency declarations are the package model's concern.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PackageManifest {
     pub(crate) name: Option<String>,
     pub(crate) typings: Option<String>,
     pub(crate) types: Option<String>,
     pub(crate) main: Option<String>,
+    pub(crate) tsconfig: Option<String>,
     pub(crate) types_versions: bool,
     pub(crate) exports: Option<Target>,
     pub(crate) imports: Option<Target>,
@@ -82,6 +84,7 @@ impl PackageManifest {
             typings: path("typings"),
             types: path("types"),
             main: path("main"),
+            tsconfig: path("tsconfig"),
             types_versions: root.get("typesVersions").is_some_and(|id| {
                 matches!(
                     doc.value(id),
@@ -200,13 +203,15 @@ fn compare_pattern_keys(a: &str, b: &str) -> std::cmp::Ordering {
     units(b).cmp(&units(a))
 }
 
-/// Extension classes, as the reference's `Extensions` flags.
+/// Extension classes, as the reference's `Extensions` flags, and whether the
+/// lookup is the reference's configuration lookup (`isConfigLookup`).
 #[derive(Clone, Copy)]
 pub(crate) struct Extensions {
     ts: bool,
     js: bool,
     declaration: bool,
     json: bool,
+    config: bool,
 }
 
 pub(crate) const ALL: Extensions = Extensions {
@@ -214,6 +219,7 @@ pub(crate) const ALL: Extensions = Extensions {
     js: true,
     declaration: true,
     json: true,
+    config: false,
 };
 
 pub(crate) const TYPED: Extensions = Extensions {
@@ -221,12 +227,22 @@ pub(crate) const TYPED: Extensions = Extensions {
     js: false,
     declaration: true,
     json: false,
+    config: false,
 };
 pub(crate) const UNTYPED: Extensions = Extensions {
     ts: false,
     js: true,
     declaration: false,
     json: true,
+    config: false,
+};
+/// JSON in a configuration lookup, as `getExtendsConfigPath` requests it.
+pub(crate) const CONFIG: Extensions = Extensions {
+    ts: false,
+    js: false,
+    declaration: false,
+    json: true,
+    config: true,
 };
 
 impl Extensions {
@@ -264,7 +280,7 @@ enum Scope {
     Found(String, Arc<PackageManifest>),
 }
 
-fn extension_is(path: &str, extension: &str) -> bool {
+pub(crate) fn extension_is(path: &str, extension: &str) -> bool {
     path.len() > extension.len() && path.ends_with(extension)
 }
 
@@ -310,6 +326,7 @@ fn adding(base: &str, original: &str, e: Extensions, out: &mut Vec<String>) {
             push(e.ts, &[".ts", ".tsx"]);
             push(e.declaration, &[".d.ts"]);
             push(e.js, &[".js", ".jsx"]);
+            push(e.config, &[".json"]);
         }
         other => {
             let name = format!("{base}{other}");
@@ -341,14 +358,15 @@ fn substituted(candidate: &str, e: Extensions, out: &mut Vec<String>) {
 }
 
 /// `loadModuleFromFile`: substitution, then appended implicit extensions.
-fn from_file(candidate: &str, e: Extensions, out: &mut Vec<String>) {
+pub(crate) fn from_file(candidate: &str, e: Extensions, out: &mut Vec<String>) {
     substituted(candidate, e, out);
     adding(candidate, "", e, out);
 }
 
-/// `loadFileNameFromPackageJsonField`: an explicit TypeScript surface keeps
-/// its reported filename; other names substitute their extension.
-fn field_candidates(candidate: &str, e: Extensions, out: &mut Vec<String>) -> bool {
+/// `loadFileNameFromPackageJsonField`: an explicit TypeScript surface, or
+/// JSON in a configuration lookup, keeps its reported filename; other names
+/// substitute their extension.
+pub(crate) fn field_candidates(candidate: &str, e: Extensions, out: &mut Vec<String>) -> bool {
     let exact = e.ts
         && [".ts", ".tsx", ".mts", ".cts"]
             .iter()
@@ -356,7 +374,8 @@ fn field_candidates(candidate: &str, e: Extensions, out: &mut Vec<String>) -> bo
         || e.declaration
             && [".d.ts", ".d.cts", ".d.mts"]
                 .iter()
-                .any(|ext| extension_is(candidate, ext));
+                .any(|ext| extension_is(candidate, ext))
+        || e.config && extension_is(candidate, ".json");
     if exact {
         out.push(candidate.to_owned());
     } else {
@@ -365,7 +384,7 @@ fn field_candidates(candidate: &str, e: Extensions, out: &mut Vec<String>) -> bo
     exact
 }
 
-fn child(directory: &str, name: &str) -> String {
+pub(crate) fn child(directory: &str, name: &str) -> String {
     if directory.is_empty() {
         name.to_owned()
     } else {
@@ -374,7 +393,7 @@ fn child(directory: &str, name: &str) -> String {
 }
 
 /// The reference's `getEncodedRootLength` is nonzero.
-fn rooted(path: &str) -> bool {
+pub(crate) fn rooted(path: &str) -> bool {
     let path = path.replace('\\', "/");
     let bytes = path.as_bytes();
     path.starts_with('/')
@@ -389,7 +408,7 @@ fn rooted(path: &str) -> bool {
 /// reference's `normalizePath`: separators unify, empty and `.` components
 /// vanish, and `..` pops. `None` when the path leaves the run root or is
 /// rooted. The flag records a trailing separator.
-fn normalize(base: &str, relative: &str) -> Option<(String, bool)> {
+pub(crate) fn normalize(base: &str, relative: &str) -> Option<(String, bool)> {
     let relative = relative.replace('\\', "/");
     if rooted(&relative) {
         return None;
@@ -409,7 +428,7 @@ fn normalize(base: &str, relative: &str) -> Option<(String, bool)> {
 
 /// Path components after the root, as `getPathComponents` returns them for
 /// a path without a root: a trailing empty component is dropped.
-fn components(path: &str) -> Vec<&str> {
+pub(crate) fn components(path: &str) -> Vec<&str> {
     let mut parts: Vec<&str> = path.split('/').collect();
     if parts.last() == Some(&"") {
         parts.pop();
@@ -420,7 +439,7 @@ fn components(path: &str) -> Vec<&str> {
 /// JavaScript `String.prototype.replace(/\*/g, replacement)`, including the
 /// `$` substitution patterns. `before` is `None` when the text preceding a
 /// match is not known in root-relative form; `$\`` then fails.
-fn replace_stars(text: &str, replacement: &str, before: Option<&str>) -> Option<String> {
+pub(crate) fn replace_stars(text: &str, replacement: &str, before: Option<&str>) -> Option<String> {
     let mut out = String::new();
     let mut star = 0;
     for (index, piece) in text.split('*').enumerate() {
@@ -567,20 +586,7 @@ impl Resolver {
             if self.config.allows_js() && !format!("/{directory}").contains("/node_modules/") {
                 &[ALL]
             } else {
-                &[
-                    Extensions {
-                        ts: true,
-                        js: false,
-                        declaration: true,
-                        json: false,
-                    },
-                    Extensions {
-                        ts: false,
-                        js: true,
-                        declaration: false,
-                        json: true,
-                    },
-                ]
+                &[TYPED, UNTYPED]
             };
         for &extensions in passes {
             let step = self.exports(exports, &subpath, &scope, extensions, mode)?;

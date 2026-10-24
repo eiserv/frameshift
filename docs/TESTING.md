@@ -243,3 +243,5 @@ The implemented CI, Release, and Package workflows and their current limits are 
 
 
 The Node10 profile (`D-093`, IMPLEMENTATION.md section 42) reuses the fictional resolver projects with separate `external_typescript_node10_oracle` and `external_typescript_node10_package_oracle` tests, using `FRAMESHIFT_TYPESCRIPT_MODULE` and the pinned TypeScript 6.0.3 installation. Ordinary regressions exercise cross-alternative typed precedence, inherited profiles, directory field passes, disabled maps, excluded targets, and evaluator imports. Bundler oracle tests remain independent.
+
+Configuration inheritance from linked workspace packages (`D-098`, IMPLEMENTATION.md section 48) has facade contracts in `crates/frameshift-engine/tests/workspace_extends.rs` for the `workspace:` link rules and refusals, complete workspaces, the member lookup, chains, cycles, and excluded files. The opt-in `external_typescript_workspace_extends_oracle` uses `FRAMESHIFT_TYPESCRIPT_MODULE` and compares generated fictional workspaces with the pinned TypeScript 6.0.3 `extends` resolution over an in-memory host with `node_modules` links.

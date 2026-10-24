@@ -21,7 +21,7 @@ function Assert-CargoPolicy {
         'frameshift-syntax' = @('frameshift-core')
         'frameshift-input' = @('frameshift-core')
         'frameshift-package' = @('frameshift-core', 'frameshift-syntax', 'frameshift-input')
-        'frameshift-modules' = @('frameshift-core', 'frameshift-syntax', 'frameshift-input')
+        'frameshift-modules' = @('frameshift-core', 'frameshift-syntax', 'frameshift-input', 'frameshift-package')
         'frameshift-bindings' = @('frameshift-syntax')
         'frameshift-evaluate' = @('frameshift-core', 'frameshift-input', 'frameshift-syntax', 'frameshift-modules', 'frameshift-bindings')
         'frameshift-nextjs' = @('frameshift-core', 'frameshift-input', 'frameshift-package', 'frameshift-modules', 'frameshift-bindings', 'frameshift-syntax', 'frameshift-evaluate')

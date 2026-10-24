@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use frameshift_bindings::{Bindings, Reference, Target};
 use frameshift_core::{SourcePath, Span};
 use frameshift_input::{EntryKind, Snapshot};
-use frameshift_modules::{Edge, FileKind, GraphLimits, ModuleGraph, ModuleState, Resolution};
+use frameshift_modules::{Edge, FileKind, ModuleGraph, ModuleState, Resolution};
 use frameshift_nextjs::{
     AppAnalysis, AppError, ComponentError, ComponentGraph, Convention, EnvironmentAnalysis,
     analyze_app_with, classify_environment, link_components, summarize_components,
@@ -110,13 +110,7 @@ pub fn build(
         package,
         app,
         extensions,
-        GraphLimits {
-            modules: limits.modules,
-            text: limits.text,
-            parse: limits.parse,
-            json: limits.json,
-            path: limits.path,
-        },
+        limits.modules(),
         &mut |path, tree, bindings| {
             semantics.push(module_facts(path, tree, bindings));
             summaries.push(summarize_components(path, tree, bindings));
