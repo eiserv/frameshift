@@ -48,6 +48,9 @@ pub struct Object {
     /// Whether every property is known: a spread of an unknown value, a
     /// computed key that is not known, or `__proto__` makes it incomplete.
     pub complete: bool,
+    /// Causes of unestablished property names or a nonliteral prototype,
+    /// in source evaluation order. They never stand for named properties.
+    pub unknown_properties: Vec<Unknown>,
 }
 
 impl Object {
@@ -106,7 +109,10 @@ impl Value {
             match value {
                 Self::Unknown(unknown) => out.push(unknown),
                 Self::Array(items) => pending.extend(items.iter().rev()),
-                Self::Object(object) => pending.extend(object.entries.iter().rev().map(|(_, v)| v)),
+                Self::Object(object) => {
+                    out.extend(object.unknown_properties.iter());
+                    pending.extend(object.entries.iter().rev().map(|(_, v)| v));
+                }
                 Self::Undefined
                 | Self::Null
                 | Self::Bool(_)
