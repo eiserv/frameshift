@@ -1,8 +1,8 @@
 //! Snapshot-only module resolution and source-spanned dependency graphs.
 //!
-//! The explicit profile follows TypeScript 6.0.3 bundler source lookup for
+//! Explicit profiles follow TypeScript 6.0.3 bundler and Node10 source lookup for
 //! local files, package `imports`, self-references through `exports`, and
-//! local directory entry points. Installed package contents, custom bundler
+//! local directory entry points. Node10 ignores package maps and self-references. Installed package contents, custom bundler
 //! configuration, and binding analysis are outside this contract. Resolution never establishes that an
 //! import can execute, that a dependency is declared, or that migration is safe.
 
@@ -13,7 +13,7 @@ mod resolve;
 
 use std::fmt;
 
-pub use config::{ConfigIssue, ConfigProblem, ResolutionConfig};
+pub use config::{ConfigIssue, ConfigProblem, ResolutionConfig, ResolutionProfile};
 pub use graph::{
     Directive, Edge, EdgeKind, GraphLimits, ModuleGraph, ModuleNode, ModuleState,
     build_module_graph, build_module_graph_with, collect_dependencies, snapshot_resolver,

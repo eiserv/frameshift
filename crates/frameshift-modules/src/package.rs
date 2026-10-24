@@ -202,19 +202,49 @@ fn compare_pattern_keys(a: &str, b: &str) -> std::cmp::Ordering {
 
 /// Extension classes, as the reference's `Extensions` flags.
 #[derive(Clone, Copy)]
-struct Extensions {
+pub(crate) struct Extensions {
     ts: bool,
     js: bool,
     declaration: bool,
     json: bool,
 }
 
-const ALL: Extensions = Extensions {
+pub(crate) const ALL: Extensions = Extensions {
     ts: true,
     js: true,
     declaration: true,
     json: true,
 };
+
+pub(crate) const TYPED: Extensions = Extensions {
+    ts: true,
+    js: false,
+    declaration: true,
+    json: false,
+};
+pub(crate) const UNTYPED: Extensions = Extensions {
+    ts: false,
+    js: true,
+    declaration: false,
+    json: true,
+};
+
+impl Extensions {
+    pub(crate) fn accepts(self, path: &str) -> bool {
+        if declaration_name(base_name(path)) {
+            self.declaration
+        } else if [".ts", ".tsx", ".mts", ".cts"]
+            .iter()
+            .any(|ext| path.ends_with(ext))
+        {
+            self.ts
+        } else if path.ends_with(".json") {
+            self.json
+        } else {
+            self.js
+        }
+    }
+}
 
 /// The outcome of one package-map step. `Continue` lets the caller try the
 /// next condition, array element, or lookup stage, as an absent result does
@@ -766,6 +796,7 @@ impl Resolver {
         &mut self,
         directory: &str,
         manifest: &str,
+        extensions: Extensions,
     ) -> Result<Option<Resolution>, ModuleError> {
         let manifest = match self.manifests.get(manifest) {
             None => return Ok(Some(Resolution::Unresolved(U::DirectoryPackage))),
@@ -776,12 +807,11 @@ impl Resolver {
             return Ok(Some(Resolution::Unresolved(U::DirectoryPackage)));
         }
         let mut candidates = Vec::new();
-        if let Some(field) = manifest
-            .typings
-            .as_ref()
-            .or(manifest.types.as_ref())
-            .or(manifest.main.as_ref())
-        {
+        let types = extensions
+            .declaration
+            .then(|| manifest.typings.as_ref().or(manifest.types.as_ref()))
+            .flatten();
+        if let Some(field) = types.or(manifest.main.as_ref()) {
             let Some((path, trailing)) = normalize(directory, field) else {
                 return Ok(Some(Resolution::Unresolved(U::OutsideRoot)));
             };
@@ -794,13 +824,13 @@ impl Resolver {
             } else {
                 path.clone()
             };
-            field_candidates(&candidate, ALL, &mut candidates);
+            field_candidates(&candidate, extensions, &mut candidates);
             if !trailing {
-                from_file(&path, ALL, &mut candidates);
+                from_file(&path, extensions, &mut candidates);
             }
-            from_file(&child(&path, "index"), ALL, &mut candidates);
+            from_file(&child(&path, "index"), extensions, &mut candidates);
         }
-        from_file(&child(directory, "index"), ALL, &mut candidates);
+        from_file(&child(directory, "index"), extensions, &mut candidates);
         for candidate in candidates {
             if let Some(result) = self.probe(&candidate)? {
                 return Ok(Some(result));

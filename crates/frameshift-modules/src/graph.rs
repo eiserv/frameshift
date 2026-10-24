@@ -55,7 +55,8 @@ pub struct Edge {
     pub specifier: Option<String>,
     /// True only for explicitly type-only syntax or declaration files.
     pub type_only: bool,
-    /// The mode whose `import` or `require` conditions package maps use.
+    /// Source/emitted import form. Bundler package maps use its conditions;
+    /// Node10 records it without changing target lookup.
     pub mode: ResolutionMode,
     /// Established target or explicit unresolved evidence.
     pub resolution: Resolution,

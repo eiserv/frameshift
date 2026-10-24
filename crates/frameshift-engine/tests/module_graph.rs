@@ -19,6 +19,16 @@ mod support;
 #[test]
 #[ignore = "requires an external TypeScript 6.0.3 installation"]
 fn external_typescript_bundler_oracle() {
+    typescript_file_oracle("bundler");
+}
+
+#[test]
+#[ignore = "requires an external TypeScript 6.0.3 installation"]
+fn external_typescript_node10_oracle() {
+    typescript_file_oracle("node10");
+}
+
+fn typescript_file_oracle(profile: &str) {
     use std::io::Write;
     use std::process::{Command, Stdio};
     let module = std::env::var("FRAMESHIFT_TYPESCRIPT_MODULE")
@@ -31,7 +41,7 @@ const files = new Set(filenames.split('\n').map(p => '/project/' + p));
 const host = { fileExists: p => files.has(p), readFile: () => undefined,
  directoryExists: p => [...files].some(f => f.startsWith(p.replace(/\/$/, '') + '/')),
  getCurrentDirectory: () => '/project', realpath: p => p };
-const options = { moduleResolution: ts.ModuleResolutionKind.Bundler,
+const options = { moduleResolution: ts.ModuleResolutionKind[process.argv[2] === "node10" ? "Node10" : "Bundler"],
  module: ts.ModuleKind.ESNext, allowJs: true, resolveJsonModule: true,
  ...JSON.parse(config) };
 for (const specifier of requests.split('\n')) {
@@ -122,7 +132,30 @@ for (const specifier of requests.split('\n')) {
         .iter()
         .map(|s| (*s).to_owned()),
     );
-    let profiles = [
+    if profile == "node10" {
+        for mask in 1..64 {
+            for (bit, suffix) in [
+                "first.js",
+                "first/index.ts",
+                "second.ts",
+                "second/index.d.ts",
+                "base.d.ts",
+                "first.json",
+            ]
+            .iter()
+            .enumerate()
+            {
+                if mask & (1 << bit) != 0 {
+                    files.push(format!("src/pass{mask}/{suffix}"));
+                }
+            }
+            for name in ["first", "second", "base"] {
+                requests.push(format!("./pass{mask}/{name}"));
+            }
+            requests.push(format!("phase/{mask}"));
+        }
+    }
+    let mut profiles = vec![
         (
             r#"{"baseUrl":"/project"}"#,
             r#"{"compilerOptions":{"baseUrl":"./"}}"#,
@@ -149,11 +182,14 @@ for (const specifier of requests.split('\n')) {
             r#"{"compilerOptions":{"baseUrl":"src","paths":{"alias/*":["absent/*","*"]}}}"#,
         ),
     ];
+    if profile == "node10" {
+        profiles.push((r#"{"baseUrl":"/project/src","paths":{"phase/*":["pass*/first","pass*/second","pass*/base"]}}"#, r#"{"compilerOptions":{"baseUrl":"src","paths":{"phase/*":["pass*/first","pass*/second","pass*/base"]}}}"#));
+    }
     let mut total = 0;
     let mut differences = Vec::new();
     for (reference_config, own_config) in profiles {
         let mut child = Command::new("node")
-            .args(["-e", script, &module])
+            .args(["-e", script, &module, profile])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -178,7 +214,22 @@ for (const specifier of requests.split('\n')) {
         let mut resolver = Resolver::new(
             files.iter().map(|p| path(p)).collect(),
             None,
-            config(own_config, "tsconfig.json"),
+            config(
+                &if profile == "node10" {
+                    if own_config == "{}" {
+                        r#"{"compilerOptions":{"moduleResolution":"node10"}}"#.to_owned()
+                    } else {
+                        own_config.replacen(
+                            r#""compilerOptions":{"#,
+                            r#""compilerOptions":{"moduleResolution":"node10","#,
+                            1,
+                        )
+                    }
+                } else {
+                    own_config.to_owned()
+                },
+                "tsconfig.json",
+            ),
             ModuleLimits::default(),
         )
         .unwrap();
@@ -208,7 +259,7 @@ for (const specifier of requests.split('\n')) {
             .collect::<Vec<_>>()
             .join("\n")
     );
-    eprintln!("TypeScript 6.0.3 bundler oracle: {total} cases");
+    eprintln!("TypeScript 6.0.3 {profile} file oracle: {total} cases");
 }
 
 fn path(s: &str) -> SourcePath {
@@ -1109,4 +1160,173 @@ fn inherited_configuration_candidate_precedence_matches_typescript() {
             assert_eq!(edge.resolution, Resolution::Unresolved(U::Configuration));
         }
     }
+}
+
+#[test]
+fn node10_profiles_apply_typed_passes_across_paths_base_url_and_directories() {
+    use frameshift_engine::modules::ResolutionProfile;
+    for mode in ["node", "node10", "NoDe10"] {
+        let c = config(
+            &format!(
+                r#"{{"compilerOptions":{{"moduleResolution":"{mode}","baseUrl":"src","paths":{{"alias":["first","second"],"base":["first"]}}}}}}"#
+            ),
+            "tsconfig.json",
+        );
+        assert_eq!(c.profile(), ResolutionProfile::Node10);
+        assert!(c.issues().is_empty());
+        let mut r = resolver(
+            &[
+                "src/main.ts",
+                "src/first.js",
+                "src/second.ts",
+                "src/base.d.ts",
+                "src/dir.js",
+                "src/dir/index.ts",
+                "src/sheet.d.css.ts",
+                "src/sheet.css",
+                "src/script.cjs",
+                "src/script.cts",
+            ],
+            c,
+        );
+        local(&mut r, "alias", "src/second.ts");
+        local(&mut r, "base", "src/base.d.ts");
+        local(&mut r, "./dir", "src/dir/index.ts");
+        local(&mut r, "./sheet.css", "src/sheet.d.css.ts");
+        local(&mut r, "./script.cjs", "src/script.cts");
+        local(&mut r, "first", "src/first.js");
+    }
+    let mut bundler = resolver(
+        &["src/main.ts", "src/first.js", "src/second.ts"],
+        config(
+            r#"{"compilerOptions":{"paths":{"alias":["src/first","src/second"]}}}"#,
+            "tsconfig.json",
+        ),
+    );
+    local(&mut bundler, "alias", "src/first.js");
+}
+
+#[test]
+fn node10_inheritance_overrides_profiles_without_losing_option_origins() {
+    for (child, target) in [
+        ("node10", "config/typed.ts"),
+        ("bundler", "config/plain.js"),
+        ("inherited", "config/typed.ts"),
+    ] {
+        let g = graph(
+            &format!("node10-inherit-{child}"),
+            &[
+                (
+                    "config/base.json",
+                    r#"{"compilerOptions":{"moduleResolution":"node","paths":{"choice":["plain","typed"]}}}"#,
+                ),
+                (
+                    "tsconfig.json",
+                    &if child == "inherited" {
+                        r#"{"extends":"./config/base.json"}"#.to_owned()
+                    } else {
+                        format!(
+                            r#"{{"extends":"./config/base.json","compilerOptions":{{"moduleResolution":"{child}"}}}}"#
+                        )
+                    },
+                ),
+                ("entry.ts", "import 'choice';"),
+                ("config/plain.js", ""),
+                ("config/typed.ts", ""),
+            ],
+        );
+        assert!(g.configuration_issues().is_empty());
+        assert!(
+            matches!(&g.node(&path("entry.ts")).unwrap().edges[0].resolution, Resolution::Local { path, .. } if path.as_str() == target)
+        );
+    }
+    for module in [
+        "commonjs", "amd", "umd", "system", "none", "esnext", "preserve",
+    ] {
+        assert!(
+            config(
+                &format!(
+                    r#"{{"compilerOptions":{{"module":"{module}","moduleResolution":"node10"}}}}"#
+                ),
+                "tsconfig.json"
+            )
+            .issues()
+            .is_empty()
+        );
+    }
+    for module in ["node16", "node18", "node20", "nodenext"] {
+        assert!(
+            !config(
+                &format!(
+                    r#"{{"compilerOptions":{{"module":"{module}","moduleResolution":"node10"}}}}"#
+                ),
+                "tsconfig.json"
+            )
+            .issues()
+            .is_empty()
+        );
+    }
+}
+
+#[test]
+fn node10_excluded_typed_candidates_never_select_javascript() {
+    let g = graph(
+        "node10-excluded",
+        &[
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions":{"moduleResolution":"node10"}}"#,
+            ),
+            (".gitignore", "dep.ts\n"),
+            ("entry.ts", "import './dep';"),
+            ("dep.ts", ""),
+            ("dep.js", ""),
+        ],
+    );
+    assert_eq!(
+        g.node(&path("entry.ts")).unwrap().edges[0].resolution,
+        Resolution::Unresolved(U::Excluded)
+    );
+}
+
+#[test]
+fn node10_second_pass_work_is_cumulative_and_has_an_inclusive_boundary() {
+    let c = config(
+        r#"{"compilerOptions":{"moduleResolution":"node10","paths":{"chosen":["absent","src/a.js"]}}}"#,
+        "tsconfig.json",
+    );
+    let files = vec![path("src/main.ts"), path("src/a.js")];
+    let attempt = |max_work| {
+        Resolver::new(
+            files.clone(),
+            None,
+            c.clone(),
+            ModuleLimits {
+                max_work,
+                ..ModuleLimits::default()
+            },
+        )
+        .and_then(|mut r| r.resolve(&path("src/main.ts"), "chosen"))
+    };
+    let expected = Resolution::Local {
+        path: path("src/a.js"),
+        kind: FileKind::Module,
+    };
+    let (mut low, mut high) = (0, ModuleLimits::default().max_work);
+    while low < high {
+        let mid = low + (high - low) / 2;
+        match attempt(mid) {
+            Ok(result) => {
+                assert_eq!(result, expected);
+                high = mid;
+            }
+            Err(error) => {
+                assert_eq!(error, ModuleError::WorkLimit);
+                low = mid + 1;
+            }
+        }
+    }
+    assert!(low > 0);
+    assert_eq!(attempt(low), Ok(expected));
+    assert_eq!(attempt(low - 1), Err(ModuleError::WorkLimit));
 }

@@ -44,15 +44,27 @@ pub(crate) enum ModuleFormat {
     CommonJs,
     Esm,
     Preserve,
+    Classic,
 }
 
-/// Parsed local-resolution settings for the explicit bundler profile.
+/// Explicit source-lookup semantics, independent of a reference's import mode.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ResolutionProfile {
+    /// TypeScript 6.0.3 bundler lookup, including package maps.
+    #[default]
+    Bundler,
+    /// TypeScript 6.0.3 legacy Node10 lookup, without package maps.
+    Node10,
+}
+
+/// Parsed local-resolution settings for the selected profile.
 ///
 /// Unknown configuration suppresses resolution rather than falling back to
 /// defaults. Other compiler options are preserved by their original snapshot;
 /// they are not interpreted as migration instructions.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ResolutionConfig {
+    pub(crate) profile: Option<ResolutionProfile>,
     pub(crate) base: Option<String>,
     pub(crate) paths: Option<(String, Vec<Mapping>)>,
     pub(crate) issues: Vec<ConfigIssue>,
@@ -97,9 +109,17 @@ impl ResolutionConfig {
     // derive file formats from package scopes; they are rejected only after
     // inheritance has combined every file's options.
     fn finish(&mut self) {
-        if let Some(origin) = self.unsupported_module.take() {
+        if let Some(origin) = self.unsupported_module.take()
+            && !(self.profile() == ResolutionProfile::Node10
+                && self.module == Some(ModuleFormat::Classic))
+        {
             self.issue(&origin, ConfigProblem::Unsupported);
         }
+    }
+
+    /// The selected profile. An absent setting retains the bundler default.
+    pub fn profile(&self) -> ResolutionProfile {
+        self.profile.unwrap_or_default()
     }
 
     /// Problems that prevent this configuration from authorizing resolution.
@@ -160,10 +180,15 @@ fn parse(
                 config.issue(path, ConfigProblem::Unsupported);
             }
         }
-        if let Some(id) = options.get("moduleResolution")
-            && !doc.value(id)?.as_str()?.eq_ignore_ascii_case("bundler")
-        {
-            config.issue(path, ConfigProblem::Unsupported);
+        if let Some(id) = options.get("moduleResolution") {
+            config.profile = match doc.value(id)?.as_str()?.to_ascii_lowercase().as_str() {
+                "bundler" => Some(ResolutionProfile::Bundler),
+                "node" | "node10" => Some(ResolutionProfile::Node10),
+                _ => {
+                    config.issue(path, ConfigProblem::Unsupported);
+                    None
+                }
+            };
         }
         if let Some(id) = options.get("module") {
             // Option values are case-insensitive in the reference.
@@ -171,7 +196,11 @@ fn parse(
                 "commonjs" => Some(ModuleFormat::CommonJs),
                 "es6" | "es2015" | "es2020" | "es2022" | "esnext" => Some(ModuleFormat::Esm),
                 "preserve" => Some(ModuleFormat::Preserve),
-                "none" | "amd" | "system" | "umd" | "node16" | "node18" | "node20" | "nodenext" => {
+                "none" | "amd" | "system" | "umd" => {
+                    config.unsupported_module = Some(path.clone());
+                    Some(ModuleFormat::Classic)
+                }
+                "node16" | "node18" | "node20" | "nodenext" => {
                     config.unsupported_module = Some(path.clone());
                     None
                 }
@@ -324,6 +353,7 @@ impl ResolutionConfig {
     // Later configurations override each option separately; issues and
     // unsupported kinds accumulate.
     fn inherit(&mut self, later: Self) {
+        self.profile = later.profile.or(self.profile);
         if later.base.is_some() {
             self.base = later.base;
         }
