@@ -88,6 +88,8 @@ Composite fixtures combine many features into realistic fictional sites (portfol
 - A change to a rule's output requires a rule version increment (section 12 of [ARCHITECTURE.md](ARCHITECTURE.md)).
 - Golden files include the plan document, the manifest, and the report (excluding the `run` section), not just generated source files.
 
+The assembled source model has facade contracts and a deterministic golden snapshot (`D-095`, IMPLEMENTATION.md section 44). Its golden updates only through `cargo test -p frameshift-engine --offline --locked --test project -- --ignored update_project_golden`; it records source evidence, not assessment labels or migration output.
+
 ### 3.6 Classification fixtures
 
 Fixtures carry human-assigned labels for every unit: the status a careful expert would assign. Test runs compare Frameshift's classification with the labels:

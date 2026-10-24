@@ -34,6 +34,7 @@ pub use frameshift_evaluate as evaluate;
 mod document;
 pub mod inspect;
 pub mod limits;
+pub mod project;
 pub mod version;
 
 /// Framework-independent text, paths, identifiers, findings, SHA-256, limits,

@@ -240,6 +240,8 @@ erDiagram
 
 Model entities name concepts in framework-neutral terms where the concept is genuinely shared: route, layout, component, module, stylesheet, asset, configuration concern, dependency, render context, and hydration need. Information that only makes sense for one framework is stored in namespaced *facets*. For example, `nextjs.segmentConfig` stores `dynamic`, `revalidate`, and `dynamicParams`. Target-specific planning data never enters the source model.
 
+The implemented assembly API (`D-095`, IMPLEMENTATION.md section 44) now owns the selected-package file inventory, shared App Router/module analysis, per-module bindings and JSX render sites, and direct environment-access facts. It exposes bounded route closures rooted in pages and their convention chains. This supplies source evidence; counting-unit partitioning, full component-value inference, feature assessment, and target planning remain separate work. Configuration values retain the evaluator API. The diagram above describes the intended assessment model, not a claim that every entity is already classified.
+
 ### 10.2 Why not a universal IR first
 
 - The V1 model uses neutral concepts and namespaced framework facets, with documented extension boundaries for V2. A universal IR requires evidence that its semantics preserve the execution models of additional frameworks (`P-004`, `D-033`).
