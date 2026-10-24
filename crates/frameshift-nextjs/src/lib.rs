@@ -5,7 +5,11 @@
 //! The App Router analysis (`D-092`) adds the route tree from the
 //! inventory, the exports of every convention file, and render contexts
 //! propagated over the module graph; it reads files only through the
-//! snapshot and evaluates nothing.
+//! snapshot and evaluates nothing. The component graph (`D-096`) resolves
+//! JSX render sites through bindings and module edges to the definitions,
+//! packages, or explicit reasons they render, and environment
+//! classification records where each module is evaluated and which
+//! environment variables and runtime APIs it uses.
 //!
 //! Detection combines evidence, as section 7 of ARCHITECTURE.md requires:
 //! a `next` dependency and at least one structural signal, a
@@ -14,18 +18,30 @@
 //! knowledge lives here, not in the package or input crates.
 
 mod app;
+mod components;
 mod contexts;
 mod detect;
+mod environment;
 mod routes;
 
 #[cfg(test)]
 mod tests;
 
 pub use app::{AppAnalysis, AppError, FileExports, analyze_app, analyze_app_with};
+pub use components::{
+    BrowserImport, ComponentError, ComponentGraph, ComponentSummary, Definition, DefinitionKind,
+    Entry, Rendered, Resolved, Site, SsrOption, UnknownReason, Wrapper, link_components,
+    summarize_components,
+};
 pub use contexts::{Boundary, ContextIssue, ModuleContext, RenderContexts, render_contexts};
 pub use detect::{
     ConfigFile, ConfigLoad, DetectError, Detection, NextDependency, Router, RouterDirectory,
     RouterState, VALIDATED_MAJORS, Verdict, VersionEvidence, detect,
+};
+pub use environment::{
+    ApiKind, ApiUse, BROWSER_GLOBALS, EnvironmentAnalysis, EnvironmentSummary, ModuleEnvironment,
+    NODE_BUILTINS, NODE_GLOBALS, PUBLIC_PREFIX, Runtime, VariableAccess, VariableUse,
+    classify_environment, summarize_environment,
 };
 pub use routes::{
     AppRoute, AppRoutes, Convention, ConventionFile, Interception, Metadata, RouteError,

@@ -22,3 +22,5 @@ LICENSE text eol=lf
 
 # Project-model snapshots are canonical LF text on every platform.
 crates/frameshift-engine/tests/golden/project.txt text eol=lf
+crates/frameshift-engine/tests/golden/components.txt text eol=lf
+crates/frameshift-engine/tests/golden/environment.txt text eol=lf

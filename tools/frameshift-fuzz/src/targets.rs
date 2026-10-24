@@ -65,7 +65,8 @@ pub enum Target {
     Sass,
     /// Snapshot-only module references and JSONC resolver settings.
     Modules,
-    /// Scopes, bindings, and references of every tree that parses.
+    /// Scopes, bindings, references, and component and environment summaries
+    /// of every tree that parses.
     Bindings,
     /// Static evaluation of the exports of every tree that parses.
     Evaluate,
@@ -209,7 +210,7 @@ impl Target {
                 "static evaluation of exports: repetition, request-order independence, the value depth bound, unknown parts, and small work limits"
             }
             Self::Bindings => {
-                "scope and binding analysis: repetition, scope tree order, reference nodes, names and meanings, and the declaration index"
+                "scope and binding analysis: repetition, scope tree order, reference nodes, names and meanings, the declaration index, and repeatable component and environment summaries"
             }
             Self::Sass => {
                 "SCSS and indented Sass: grammar, spans, arena reachability, deterministic errors and resource bounds"

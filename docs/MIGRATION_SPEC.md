@@ -123,7 +123,7 @@ Path aliases keep their keys and are retargeted to the moved code (section 16.1)
 
 ### 5.5 Environment variables
 
-Environment files are never read and never copied (see [SECURITY.md](SECURITY.md)). Analysis uses only references in code.
+Environment files are never read and never copied (see [SECURITY.md](SECURITY.md)). Analysis uses only references in code. The implemented environment classification (`D-096`, section 46 of [IMPLEMENTATION.md](IMPLEMENTATION.md)) records these references, including aliases and destructuring of `process.env`, and whether each module runs during the build, in the browser, or both; the mappings below remain planned.
 
 | Source reference | Mapping | Status |
 | --- | --- | --- |
@@ -221,7 +221,7 @@ Steps 1 and 2 are both behavior-preserving for static rendering. Step 2 exists s
 
 ### 9.2 Render contexts
 
-Analysis computes each component's render contexts (section 9 of [ARCHITECTURE.md](ARCHITECTURE.md)). Module-level contexts are implemented (`D-092`, section 40 of [IMPLEMENTATION.md](IMPLEMENTATION.md)); per-component contexts follow with the component graph:
+Analysis computes each component's render contexts (section 9 of [ARCHITECTURE.md](ARCHITECTURE.md)). Module-level contexts are implemented (`D-092`, section 40 of [IMPLEMENTATION.md](IMPLEMENTATION.md)), and the component graph that relates render sites to definitions exists (`D-096`, section 45); per-component contexts follow in M5 from both:
 
 - **Server only:** a candidate for step 1.
 - **Client** (inside a `'use client'` module, or reachable from one through imports): step 3 if the component is a topmost client boundary rendered from server context, otherwise part of an island's internal tree.
