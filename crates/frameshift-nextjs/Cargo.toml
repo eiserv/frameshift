@@ -13,5 +13,7 @@ frameshift-package = { path = "../frameshift-package" }
 frameshift-modules = { path = "../frameshift-modules" }
 frameshift-bindings = { path = "../frameshift-bindings" }
 
+frameshift-syntax = { path = "../frameshift-syntax" }
+
 [lints]
 workspace = true

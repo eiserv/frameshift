@@ -3,10 +3,11 @@
 
 use std::collections::BTreeSet;
 
-use frameshift_bindings::{BindingError, ExportKind, ExportName, analyze};
+use frameshift_bindings::{BindingError, Bindings, ExportKind, ExportName, analyze};
 use frameshift_core::SourcePath;
 use frameshift_input::Snapshot;
 use frameshift_modules::{GraphLimits, ModuleError, ModuleGraph, build_module_graph_with};
+use frameshift_syntax::SyntaxTree;
 
 use crate::contexts::{RenderContexts, render_contexts};
 use crate::routes::{AppRoutes, RouteError, app_routes};
@@ -85,19 +86,42 @@ pub fn analyze_app(
     extensions: &[&str],
     limits: GraphLimits,
 ) -> Result<AppAnalysis, AppError> {
+    analyze_app_with(
+        snapshot,
+        package,
+        app,
+        extensions,
+        limits,
+        &mut |_, _, _| Ok(()),
+    )
+}
+
+/// As `analyze_app`, also exposing each strict tree and its binding analysis
+/// while it is alive. The visitor runs once per successfully parsed module,
+/// in path order, including non-convention files. No erroneous tree is exposed.
+/// A visitor failure stops construction without a partial analysis.
+pub fn analyze_app_with(
+    snapshot: &Snapshot,
+    package: Option<&SourcePath>,
+    app: &SourcePath,
+    extensions: &[&str],
+    limits: GraphLimits,
+    visit: &mut dyn FnMut(&SourcePath, &SyntaxTree<'_>, &Bindings) -> Result<(), ModuleError>,
+) -> Result<AppAnalysis, AppError> {
     let routes =
         app_routes(snapshot.inventory(), package, app, extensions).map_err(AppError::Routes)?;
     let conventions: BTreeSet<&SourcePath> = routes.files.iter().map(|f| &f.path).collect();
     let mut exports = Vec::new();
     let graph = build_module_graph_with(snapshot, package, limits, &mut |path, tree| {
-        if !conventions.contains(path) {
-            return Ok(());
-        }
         let bindings = analyze(tree).map_err(|e| match e {
             BindingError::AllocationFailed | BindingError::TooLarge => {
                 ModuleError::AllocationFailed
             }
         })?;
+        visit(path, tree, &bindings)?;
+        if !conventions.contains(path) {
+            return Ok(());
+        }
         let mut names = Vec::new();
         let mut star = false;
         let mut default_expression = false;

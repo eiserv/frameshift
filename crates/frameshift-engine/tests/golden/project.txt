@@ -1,0 +1,91 @@
+file ".gitignore" Admitted Some(Asset) None
+file "app" Other(Directory) None None
+file "app/error.tsx" Admitted Some(Module) Some(Error)
+file "app/favicon.ico" Admitted Some(Asset) Some(Metadata(Favicon))
+file "app/layout.tsx" Admitted Some(Module) Some(Layout)
+file "app/other" Other(Directory) None None
+file "app/other/loading.tsx" Admitted Some(Module) Some(Loading)
+file "app/other/page.tsx" Admitted Some(Module) Some(Page)
+file "app/page.tsx" Admitted Some(Module) Some(Page)
+file "hidden" Other(Ignored { reason: Gitignore, directory: true }) None None
+file "lib" Other(Directory) None None
+file "lib/a.ts" Admitted Some(Module) None
+file "lib/b.ts" Admitted Some(Module) None
+file "lib/broken.ts" Admitted Some(Module) None
+file "lib/data.json" Admitted Some(Json) None
+file "lib/error.ts" Admitted Some(Module) None
+file "lib/layout.ts" Admitted Some(Module) None
+file "lib/loading.ts" Admitted Some(Module) None
+file "lib/types.ts" Admitted Some(Module) None
+file "notes.txt" Admitted Some(Asset) None
+file "public" Other(Directory) None None
+file "public/picture.svg" Admitted Some(Asset) None
+file "styles" Other(Directory) None None
+file "styles/root.css" Admitted Some(Stylesheet) None
+route "/favicon.ico" Metadata(Favicon) "app/favicon.ico"
+  dependency "app/favicon.ico"
+route "/other" Page "app/other/page.tsx"
+  chain Layout "app/layout.tsx"
+  chain Error "app/error.tsx"
+  chain Loading "app/other/loading.tsx"
+  dependency "app/error.tsx"
+  dependency "app/layout.tsx"
+  dependency "app/other/loading.tsx"
+  dependency "app/other/page.tsx"
+  dependency "lib/error.ts"
+  dependency "lib/layout.ts"
+  dependency "lib/loading.ts"
+  dependency "styles/root.css"
+  edge "app/error.tsx" Import Local { path: SourcePath("lib/error.ts"), kind: Module }
+  edge "app/layout.tsx" Import Local { path: SourcePath("styles/root.css"), kind: Stylesheet }
+  edge "app/layout.tsx" Import Local { path: SourcePath("lib/layout.ts"), kind: Module }
+  edge "app/other/loading.tsx" Import Local { path: SourcePath("lib/loading.ts"), kind: Module }
+route "/" Page "app/page.tsx"
+  chain Layout "app/layout.tsx"
+  chain Error "app/error.tsx"
+  dependency "app/error.tsx"
+  dependency "app/layout.tsx"
+  dependency "app/page.tsx"
+  dependency "lib/a.ts"
+  dependency "lib/b.ts"
+  dependency "lib/broken.ts"
+  dependency "lib/data.json"
+  dependency "lib/error.ts"
+  dependency "lib/layout.ts"
+  dependency "public/picture.svg"
+  dependency "styles/root.css"
+  unparsed "lib/broken.ts"
+  edge "app/error.tsx" Import Local { path: SourcePath("lib/error.ts"), kind: Module }
+  edge "app/layout.tsx" Import Local { path: SourcePath("styles/root.css"), kind: Stylesheet }
+  edge "app/layout.tsx" Import Local { path: SourcePath("lib/layout.ts"), kind: Module }
+  edge "app/page.tsx" Import Local { path: SourcePath("lib/a.ts"), kind: Module }
+  edge "app/page.tsx" Import External { package: "fictional-ui" }
+  edge "app/page.tsx" Import NodeBuiltin
+  edge "app/page.tsx" Import Unresolved(NotFound)
+  edge "lib/a.ts" Import Local { path: SourcePath("lib/b.ts"), kind: Module }
+  edge "lib/a.ts" Import Local { path: SourcePath("lib/data.json"), kind: Json }
+  edge "lib/a.ts" Import Local { path: SourcePath("public/picture.svg"), kind: Asset }
+  edge "lib/b.ts" Import Local { path: SourcePath("lib/a.ts"), kind: Module }
+  edge "lib/b.ts" Import Local { path: SourcePath("lib/broken.ts"), kind: Module }
+semantics "app/error.tsx": 0 bindings, 0 render sites, 0 environment uses
+semantics "app/layout.tsx": 1 bindings, 0 render sites, 0 environment uses
+semantics "app/other/loading.tsx": 0 bindings, 0 render sites, 0 environment uses
+semantics "app/other/page.tsx": 0 bindings, 0 render sites, 0 environment uses
+semantics "app/page.tsx": 1 bindings, 0 render sites, 0 environment uses
+semantics "lib/a.ts": 0 bindings, 0 render sites, 0 environment uses
+semantics "lib/b.ts": 0 bindings, 0 render sites, 0 environment uses
+semantics "lib/error.ts": 1 bindings, 0 render sites, 0 environment uses
+semantics "lib/layout.ts": 1 bindings, 0 render sites, 0 environment uses
+semantics "lib/loading.ts": 1 bindings, 0 render sites, 0 environment uses
+semantics "lib/types.ts": 1 bindings, 0 render sites, 0 environment uses
+context "app/error.tsx": server=true client=false
+context "app/layout.tsx": server=true client=false
+context "app/other/loading.tsx": server=true client=false
+context "app/other/page.tsx": server=true client=false
+context "app/page.tsx": server=true client=false
+context "lib/a.ts": server=true client=false
+context "lib/b.ts": server=true client=false
+context "lib/broken.ts": server=true client=false
+context "lib/error.ts": server=true client=false
+context "lib/layout.ts": server=true client=false
+context "lib/loading.ts": server=true client=false
