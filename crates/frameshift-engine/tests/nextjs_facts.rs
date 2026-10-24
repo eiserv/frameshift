@@ -607,3 +607,37 @@ export default function Page() {
     assert_eq!(uses[2].kind, ImportedUseKind::Render);
     assert_eq!(uses[3].kind, ImportedUseKind::Render);
 }
+
+#[test]
+fn framework_spelling_mapped_to_local_or_unresolved_code_is_not_api_provenance() {
+    let source = "import { cookies } from 'next/headers'; export default function Page() { return cookies(); }";
+    let files = [
+        ("app/page.tsx", source),
+        (
+            "tsconfig.json",
+            r#"{"compilerOptions":{"baseUrl":".","paths":{"next/headers":["local.ts"]}}}"#,
+        ),
+        ("local.ts", "export function cookies() { return null; }"),
+    ];
+    let facts = analyze("framework-alias-local", &files, None);
+    let page = module(&facts, "app/page.tsx");
+    assert_eq!(page.import_uses.len(), 1);
+    assert!(
+        matches!(&page.import_uses[0].resolution, Some(frameshift_engine::modules::Resolution::Local { path: target, .. }) if target == &path("local.ts"))
+    );
+    assert_eq!(page.api_uses().count(), 0);
+    let files = [
+        ("app/page.tsx", source),
+        (
+            "tsconfig.json",
+            r#"{"compilerOptions":{"moduleResolution":"nodenext"}}"#,
+        ),
+    ];
+    let facts = analyze("framework-unresolved", &files, None);
+    let page = module(&facts, "app/page.tsx");
+    assert!(matches!(
+        page.import_uses[0].resolution,
+        Some(frameshift_engine::modules::Resolution::Unresolved(_))
+    ));
+    assert_eq!(page.api_uses().count(), 0);
+}

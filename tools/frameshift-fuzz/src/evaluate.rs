@@ -72,6 +72,9 @@ pub fn run(input: &[u8]) -> Result<(), String> {
                     if depth(value) > 128 {
                         return Err("a value exceeds the depth bound".to_owned());
                     }
+                    if !value.is_known() && value.unknowns().is_empty() {
+                        return Err("unknown values lost their reasons".to_owned());
+                    }
                     if value.is_known() && !value.unknowns().is_empty() {
                         return Err("known values disagree with their unknown parts".to_owned());
                     }

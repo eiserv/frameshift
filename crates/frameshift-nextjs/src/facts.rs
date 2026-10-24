@@ -8,7 +8,7 @@ use frameshift_evaluate::{
     EvaluateError, EvaluateLimits, Evaluator, Object, Reason, Unknown, Value,
 };
 use frameshift_input::Snapshot;
-use frameshift_modules::{GraphLimits, ModuleError, ModuleState};
+use frameshift_modules::{GraphLimits, ModuleError, ModuleState, Resolution};
 use frameshift_syntax::{NodeId, SyntaxNodeKind as N, SyntaxTree, TypeScriptKind as T};
 
 use crate::{
@@ -249,6 +249,9 @@ pub struct ImportedUse {
     pub reference: Span,
     /// Original import specifier span.
     pub source: Span,
+    /// The graph edge's established target or unresolved evidence. Absent
+    /// only if no corresponding import edge exists; never guessed from text.
+    pub resolution: Option<Resolution>,
     /// Decoded import source, including external configuration wrappers.
     pub specifier: String,
     /// Export selected by the import, independent of its local spelling.
@@ -280,7 +283,10 @@ impl FrameworkModuleFacts {
     pub fn api_uses(&self) -> impl Iterator<Item = &ImportedUse> {
         self.import_uses
             .iter()
-            .filter(|usage| usage.specifier == "next" || usage.specifier.starts_with("next/"))
+            .filter(|usage| {
+                (usage.specifier == "next" || usage.specifier.starts_with("next/"))
+                    && matches!(&usage.resolution, Some(Resolution::External { package }) if package == "next")
+            })
     }
 }
 
@@ -442,6 +448,7 @@ fn import_uses(
             span: span(node),
             reference: span(reference.node),
             source: span(import.source),
+            resolution: None,
             specifier: specifier.clone(),
             imported: import.imported.clone(),
             members,
@@ -578,6 +585,31 @@ pub fn analyze_app_facts_with(
         return Err(error);
     }
     let app = analysis.map_err(FactError::App)?;
+    for module in &mut modules {
+        let Some(node) = app.graph.node(&module.path) else {
+            continue;
+        };
+        for usage in &mut module.import_uses {
+            work.charge(1)
+                .map_err(|error| FactError::App(AppError::Modules(error)))?;
+            if let Ok(index) = node
+                .edges
+                .binary_search_by_key(&(usage.source.start(), usage.source.end()), |edge| {
+                    (edge.span.start(), edge.span.end())
+                })
+            {
+                let resolution = &node.edges[index].resolution;
+                let bytes = match resolution {
+                    Resolution::Local { path, .. } => path.as_str().len(),
+                    Resolution::External { package } => package.len(),
+                    Resolution::NodeBuiltin | Resolution::Unresolved(_) => 1,
+                };
+                work.charge(bytes)
+                    .map_err(|error| FactError::App(AppError::Modules(error)))?;
+                usage.resolution = Some(resolution.clone());
+            }
+        }
+    }
     let value = match config {
         None => Some(Value::Object(Object {
             entries: Vec::new(),
