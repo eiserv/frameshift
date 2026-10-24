@@ -83,6 +83,7 @@ pub struct ResolutionConfig {
     pub(crate) module_suffixes: Option<Vec<String>>,
     pub(crate) output_directory: bool,
     pub(crate) unsupported_module: Option<SourcePath>,
+    pub(crate) unsupported_resolution: Option<SourcePath>,
 }
 
 impl ResolutionConfig {
@@ -113,9 +114,14 @@ impl ResolutionConfig {
     }
 
     // Unsupported module kinds select classic or Node.js resolution, or
-    // derive file formats from package scopes; they are rejected only after
-    // inheritance has combined every file's options.
+    // derive file formats from package scopes; they and unmodeled
+    // `moduleResolution` values are rejected only after inheritance has
+    // combined every file's options, because the reference uses only the
+    // combined values.
     fn finish(&mut self) {
+        if let Some(origin) = self.unsupported_resolution.take() {
+            self.issue(&origin, ConfigProblem::Unsupported);
+        }
         if let Some(origin) = self.unsupported_module.take()
             && !(self.profile() == ResolutionProfile::Node10
                 && self.module == Some(ModuleFormat::Classic))
@@ -210,10 +216,11 @@ fn parse(
             config.profile = match doc.value(id)?.as_str()?.to_ascii_lowercase().as_str() {
                 "bundler" => Some(ResolutionProfile::Bundler),
                 "node" | "node10" => Some(ResolutionProfile::Node10),
-                _ => {
-                    config.issue(path, ConfigProblem::Unsupported);
+                "classic" | "node16" | "nodenext" => {
+                    config.unsupported_resolution = Some(path.clone());
                     None
                 }
+                _ => return None,
             };
         }
         if let Some(id) = options.get("module") {
@@ -389,11 +396,14 @@ pub(crate) fn load(
 }
 
 impl ResolutionConfig {
-    // Later configurations override each option separately; issues and
-    // unsupported kinds accumulate.
+    // Later configurations override each option separately, unmodeled
+    // values included; issues accumulate.
     fn inherit(&mut self, later: Self) {
         self.files.extend(later.files);
-        self.profile = later.profile.or(self.profile);
+        if later.profile.is_some() || later.unsupported_resolution.is_some() {
+            self.profile = later.profile;
+            self.unsupported_resolution = later.unsupported_resolution;
+        }
         if later.base.is_some() {
             self.base = later.base;
         }
