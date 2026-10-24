@@ -346,9 +346,9 @@ fn from_file(candidate: &str, e: Extensions, out: &mut Vec<String>) {
     adding(candidate, "", e, out);
 }
 
-/// `loadFileNameFromPackageJsonField`: an explicit TypeScript surface is
-/// probed exactly; other names only substitute their extension.
-fn field_candidates(candidate: &str, e: Extensions, out: &mut Vec<String>) {
+/// `loadFileNameFromPackageJsonField`: an explicit TypeScript surface keeps
+/// its reported filename; other names substitute their extension.
+fn field_candidates(candidate: &str, e: Extensions, out: &mut Vec<String>) -> bool {
     let exact = e.ts
         && [".ts", ".tsx", ".mts", ".cts"]
             .iter()
@@ -362,6 +362,7 @@ fn field_candidates(candidate: &str, e: Extensions, out: &mut Vec<String>) {
     } else {
         substituted(candidate, e, out);
     }
+    exact
 }
 
 fn child(directory: &str, name: &str) -> String {
@@ -769,9 +770,9 @@ impl Resolver {
             return Ok(Step::Stop(U::OutsideRoot));
         };
         let mut candidates = Vec::new();
-        field_candidates(&path, extensions, &mut candidates);
+        let exact = field_candidates(&path, extensions, &mut candidates);
         for candidate in candidates {
-            if let Some(result) = self.probe(&candidate)? {
+            if let Some(result) = self.probe_source(&candidate, exact)? {
                 return Ok(match result {
                     Resolution::Unresolved(reason) => Step::Stop(reason),
                     found @ (Resolution::Local { .. }
@@ -811,6 +812,7 @@ impl Resolver {
             .declaration
             .then(|| manifest.typings.as_ref().or(manifest.types.as_ref()))
             .flatten();
+        let mut exact_field = false;
         if let Some(field) = types.or(manifest.main.as_ref()) {
             let Some((path, trailing)) = normalize(directory, field) else {
                 return Ok(Some(Resolution::Unresolved(U::OutsideRoot)));
@@ -824,7 +826,7 @@ impl Resolver {
             } else {
                 path.clone()
             };
-            field_candidates(&candidate, extensions, &mut candidates);
+            exact_field = field_candidates(&candidate, extensions, &mut candidates);
             if !trailing {
                 from_file(&path, extensions, &mut candidates);
             }
@@ -832,7 +834,9 @@ impl Resolver {
         }
         from_file(&child(directory, "index"), extensions, &mut candidates);
         for candidate in candidates {
-            if let Some(result) = self.probe(&candidate)? {
+            let result = self.probe_source(&candidate, exact_field)?;
+            exact_field = false;
+            if let Some(result) = result {
                 return Ok(Some(result));
             }
         }
