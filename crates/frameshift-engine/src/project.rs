@@ -11,7 +11,11 @@ use frameshift_bindings::{Bindings, Reference, Target};
 use frameshift_core::{SourcePath, Span};
 use frameshift_input::{EntryKind, Snapshot};
 use frameshift_modules::{Edge, FileKind, ModuleGraph, ModuleState, Resolution};
-use frameshift_nextjs::{AppAnalysis, AppError, Convention, analyze_app_with};
+use frameshift_nextjs::{
+    AppAnalysis, AppError, ComponentError, ComponentGraph, Convention, EnvironmentAnalysis,
+    analyze_app_with, classify_environment, link_components, summarize_components,
+    summarize_environment,
+};
 use frameshift_syntax::{NodeId, SyntaxNodeKind as N, SyntaxTree, TypeScriptKind};
 
 use crate::limits::Limits;
@@ -46,6 +50,8 @@ pub struct Project {
     files: Vec<ProjectFile>,
     app: AppAnalysis,
     semantics: Vec<ModuleFacts>,
+    components: ComponentGraph,
+    environment: EnvironmentAnalysis,
     max_dependency_work: u64,
 }
 
@@ -60,7 +66,7 @@ pub enum ProjectError {
     App(AppError),
     /// A route index does not belong to this model.
     InvalidRoute,
-    /// The dependency query exhausted `modules.max-work`.
+    /// Component linking or a dependency query exhausted `modules.max-work`.
     WorkLimit,
 }
 
@@ -83,6 +89,8 @@ impl std::error::Error for ProjectError {}
 /// not guess configuration or framework identity. Source files are parsed
 /// once by `analyze_app`; files outside its graph are inventoried, not read.
 /// Incomplete discovery and invalid roots fail without a partial model.
+/// Component linking charges a fresh `modules.max-work` budget; its
+/// exhaustion also returns no model.
 pub fn build(
     snapshot: &Snapshot,
     package: Option<&SourcePath>,
@@ -95,6 +103,8 @@ pub fn build(
         return Err(ProjectError::OutsidePackage);
     }
     let mut semantics = Vec::new();
+    let mut summaries = Vec::new();
+    let mut environments = Vec::new();
     let app = analyze_app_with(
         snapshot,
         package,
@@ -103,10 +113,17 @@ pub fn build(
         limits.modules(),
         &mut |path, tree, bindings| {
             semantics.push(module_facts(path, tree, bindings));
+            summaries.push(summarize_components(path, tree, bindings));
+            environments.push(summarize_environment(path, tree, bindings));
             Ok(())
         },
     )
     .map_err(ProjectError::App)?;
+    let components = link_components(&app.graph, &app.routes, &summaries, limits.modules.max_work)
+        .map_err(|e| match e {
+            ComponentError::WorkLimit => ProjectError::WorkLimit,
+        })?;
+    let environment = classify_environment(&app.graph, &app.contexts, &components, &environments);
     let inventory = snapshot.inventory();
     let mut files: Vec<_> = inventory
         .files()
@@ -146,6 +163,8 @@ pub fn build(
         files,
         app,
         semantics,
+        components,
+        environment,
         max_dependency_work: limits.modules.max_work,
     })
 }
@@ -361,6 +380,21 @@ impl Project {
     /// Files without a strict parse have no facts entry; inspect graph state.
     pub fn semantics(&self) -> &[ModuleFacts] {
         &self.semantics
+    }
+
+    /// JSX render sites resolved through bindings, imports, re-exports, and
+    /// recognized wrappers to definitions, packages, or explicit reasons,
+    /// with the rendered defaults of App Router conventions (`D-096`).
+    pub fn components(&self) -> &ComponentGraph {
+        &self.components
+    }
+
+    /// Where each module is evaluated, from render contexts and browser-only
+    /// imports, with its environment-variable reads, including aliases and
+    /// destructuring, and its Node.js and browser API uses (`D-096`).
+    /// `ModuleFacts::environment` keeps the direct reads alone.
+    pub fn environment(&self) -> &EnvironmentAnalysis {
+        &self.environment
     }
 
     /// The shared module graph, without a copy per route.

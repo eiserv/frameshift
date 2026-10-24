@@ -1,15 +1,19 @@
-//! Scope and binding analysis of every tree that parses.
+//! Scope and binding analysis of every tree that parses, and the component
+//! and environment summaries that build on it (`D-096`).
 
 use frameshift_engine::bindings::{Target as Resolution, analyze};
-use frameshift_engine::foundation::{SourceText, TextLimits};
+use frameshift_engine::foundation::{PathLimits, SourcePath, SourceText, TextLimits};
+use frameshift_engine::nextjs::{summarize_components, summarize_environment};
 use frameshift_engine::syntax::{ParseLimits, SyntaxNodeKind as N, parse_js_program};
 
 /// Checks repetition, reference and declaration nodes, resolved targets,
-/// acyclic scopes in creation order, and the declaration index.
+/// acyclic scopes in creation order, the declaration index, and repeatable
+/// component and environment summaries without panics.
 pub fn run(input: &[u8]) -> Result<(), String> {
     let Some(text) = crate::targets::text(input)? else {
         return Ok(());
     };
+    let path = SourcePath::new("fuzz.tsx", PathLimits::default()).map_err(|e| e.to_string())?;
     let source =
         SourceText::new(text.to_owned(), TextLimits::default()).map_err(|e| e.to_string())?;
     for goal in crate::targets::GOALS {
@@ -20,6 +24,16 @@ pub fn run(input: &[u8]) -> Result<(), String> {
             let first = analyze(&tree).map_err(|e| e.to_string())?;
             if first != analyze(&tree).map_err(|e| e.to_string())? {
                 return Err("binding analysis changed on repetition".to_owned());
+            }
+            if summarize_components(&path, &tree, &first)
+                != summarize_components(&path, &tree, &first)
+            {
+                return Err("component summary changed on repetition".to_owned());
+            }
+            if summarize_environment(&path, &tree, &first)
+                != summarize_environment(&path, &tree, &first)
+            {
+                return Err("environment summary changed on repetition".to_owned());
             }
             for (index, scope) in first.scopes().iter().enumerate() {
                 if scope.parent.is_some_and(|p| p.index() >= index)

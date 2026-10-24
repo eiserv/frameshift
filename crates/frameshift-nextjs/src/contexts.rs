@@ -116,7 +116,7 @@ impl RenderContexts {
     }
 }
 
-fn has(directives: &[Directive], value: &str) -> bool {
+pub(crate) fn has(directives: &[Directive], value: &str) -> bool {
     directives
         .iter()
         .any(|d| !d.escaped && d.value.as_deref() == Some(value))
