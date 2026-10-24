@@ -246,6 +246,60 @@ fn directory_entry_points_prefer_types_then_main_then_index() {
 }
 
 #[test]
+fn module_suffixes_apply_to_package_targets_but_not_manifest_names() {
+    let files = [
+        ("src/main.ts", None),
+        (
+            "package.json",
+            Some(
+                r##"{"name":"fictional-self","imports":{"#x":"./src/x.js","#t":"./src/t.d.ts"},"exports":"./src/x.js"}"##,
+            ),
+        ),
+        ("src/x.native.ts", None),
+        ("src/t.native.d.ts", None),
+        ("dir/package.json", Some(r#"{"main":"entry.js"}"#)),
+        ("dir/entry.native.ts", None),
+        ("typed/package.json", Some(r#"{"types":"entry.d.ts"}"#)),
+        ("typed/entry.native.d.ts", None),
+        ("index/package.json", Some("{}")),
+        ("index/index.native.ts", None),
+    ];
+    for profile in ["bundler", "node10"] {
+        let mut r = resolver(
+            &files,
+            config(&format!(
+                r#"{{"compilerOptions":{{"moduleResolution":"{profile}","moduleSuffixes":[".native",""]}}}}"#
+            )),
+        );
+        for (request, target) in [
+            ("../dir", "dir/entry.native.ts"),
+            ("../index", "index/index.native.ts"),
+        ] {
+            assert_eq!(
+                get(&mut r, "src/main.ts", request, M::Import),
+                local(target)
+            );
+        }
+        assert_eq!(
+            get(&mut r, "src/main.ts", "../typed", M::Import),
+            Resolution::Unresolved(U::Configuration)
+        );
+        if profile == "bundler" {
+            for request in ["#x", "fictional-self"] {
+                assert_eq!(
+                    get(&mut r, "src/main.ts", request, M::Import),
+                    local("src/x.native.ts")
+                );
+            }
+            assert_eq!(
+                get(&mut r, "src/main.ts", "#t", M::Import),
+                Resolution::Unresolved(U::Configuration)
+            );
+        }
+    }
+}
+
+#[test]
 fn modes_follow_extensions_edge_kinds_and_emitted_format() {
     let r = resolver(
         &[
@@ -486,6 +540,17 @@ for (const [importer, specifier, kind] of input.requests) {
             }
         }
     }
+    files.extend(files.clone().into_iter().filter_map(|(file, _)| {
+        [
+            ".d.ts", ".d.mts", ".d.cts", ".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs",
+            ".cjs",
+        ]
+        .iter()
+        .find_map(|ext| {
+            file.strip_suffix(ext)
+                .map(|stem| (format!("{stem}.native{ext}"), None))
+        })
+    }));
     let profiles = [
         r#"{"allowJs":true,"module":"esnext"}"#,
         r#"{"module":"esnext"}"#,
@@ -493,6 +558,8 @@ for (const [importer, specifier, kind] of input.requests) {
         r#"{"target":"es5"}"#,
         r#"{"allowJs":true,"module":"preserve"}"#,
         r#"{"checkJs":true,"target":"es2022"}"#,
+        r#"{"moduleSuffixes":[".native",""],"module":"esnext"}"#,
+        r#"{"moduleSuffixes":[".absent"],"module":"esnext"}"#,
     ];
     let mut total = 0;
     let (mut locals, mut required) = (0, 0);

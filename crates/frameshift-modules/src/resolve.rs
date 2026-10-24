@@ -418,6 +418,43 @@ impl Resolver {
         }))
     }
 
+    // TypeScript applies suffixes to file probes, never to manifest discovery
+    // or the exact asset fallback. Keep extension priority outside this loop.
+    pub(crate) fn probe_source(
+        &mut self,
+        path: &str,
+        exact_field: bool,
+    ) -> Result<Option<Resolution>, ModuleError> {
+        let count = self.config.module_suffixes.as_ref().map_or(0, Vec::len);
+        if count == 0 {
+            return self.probe(path);
+        }
+        let extension = [
+            ".d.ts", ".d.mts", ".d.cts", ".mjs", ".mts", ".cjs", ".cts", ".ts", ".tsx", ".js",
+            ".jsx", ".json",
+        ]
+        .into_iter()
+        .find(|ext| path.ends_with(ext))
+        .unwrap_or("");
+        let stem = &path[..path.len() - extension.len()];
+        for index in 0..count {
+            let suffix = &self.config.module_suffixes.as_ref().unwrap()[index];
+            self.work.charge(path.len() + suffix.len() + 1)?;
+            let candidate = format!("{stem}{suffix}{extension}");
+            if let Some(result) = self.probe(&candidate)? {
+                if exact_field && matches!(result, Resolution::Local { .. }) {
+                    // The reference reports the original explicit TS field,
+                    // even if only a suffixed file exists. Never invent that file.
+                    return Ok(Some(self.probe(path)?.unwrap_or(Resolution::Unresolved(
+                        UnresolvedReason::Configuration,
+                    ))));
+                }
+                return Ok(Some(result));
+            }
+        }
+        Ok(None)
+    }
+
     fn lookup(
         &mut self,
         path: &str,
@@ -425,6 +462,7 @@ impl Resolver {
         extensions: Extensions,
     ) -> Result<Option<Resolution>, ModuleError> {
         let mut candidates = Vec::new();
+        let mut substituted = false;
         if !directory_only {
             let families: &[(&[&str], &[&str])] = &[
                 (&[".d.mts", ".mts", ".mjs"], &["mts", "d.mts", "mjs"]),
@@ -436,7 +474,6 @@ impl Resolver {
                 ),
                 (&[".json"], &["d.json.ts", "json"]),
             ];
-            let mut substituted = false;
             for (suffixes, replacements) in families {
                 if let Some(stem) = suffixes.iter().find_map(|suffix| path.strip_suffix(suffix)) {
                     for ext in *replacements {
@@ -464,7 +501,11 @@ impl Resolver {
         }
         for candidate in candidates {
             if extensions.accepts(&candidate)
-                && let Some(result) = self.probe(&candidate)?
+                && let Some(result) = if candidate == path && !substituted {
+                    self.probe(&candidate)?
+                } else {
+                    self.probe_source(&candidate, false)?
+                }
             {
                 return Ok(Some(result));
             }
@@ -485,7 +526,7 @@ impl Resolver {
         for ext in ["ts", "tsx", "d.ts", "js", "jsx"] {
             let candidate = format!("{directory}index.{ext}");
             if extensions.accepts(&candidate)
-                && let Some(result) = self.probe(&candidate)?
+                && let Some(result) = self.probe_source(&candidate, false)?
             {
                 return Ok(Some(result));
             }

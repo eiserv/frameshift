@@ -182,6 +182,31 @@ for (const specifier of requests.split('\n')) {
             r#"{"compilerOptions":{"baseUrl":"src","paths":{"alias/*":["absent/*","*"]}}}"#,
         ),
     ];
+    files.extend(files.clone().into_iter().filter_map(|file| {
+        [
+            ".d.ts", ".d.mts", ".d.cts", ".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs",
+            ".cjs", ".json",
+        ]
+        .iter()
+        .find_map(|ext| {
+            file.strip_suffix(ext)
+                .map(|stem| format!("{stem}.native{ext}"))
+        })
+    }));
+    profiles.extend([
+        (
+            r#"{"moduleSuffixes":[".native",""]}"#,
+            r#"{"compilerOptions":{"moduleSuffixes":[".native",""]}}"#,
+        ),
+        (
+            r#"{"moduleSuffixes":[".absent"]}"#,
+            r#"{"compilerOptions":{"moduleSuffixes":[".absent"]}}"#,
+        ),
+        (
+            r#"{"moduleSuffixes":[]}"#,
+            r#"{"compilerOptions":{"moduleSuffixes":[]}}"#,
+        ),
+    ]);
     if profile == "node10" {
         profiles.push((r#"{"baseUrl":"/project/src","paths":{"phase/*":["pass*/first","pass*/second","pass*/base"]}}"#, r#"{"compilerOptions":{"baseUrl":"src","paths":{"phase/*":["pass*/first","pass*/second","pass*/base"]}}}"#));
     }
@@ -240,7 +265,16 @@ for (const specifier of requests.split('\n')) {
             } else {
                 "-"
             };
-            if actual != expected {
+            // Exact assets extend TypeScript's code-only lookup.
+            let asset = expected == "-"
+                && matches!(
+                    &resolved,
+                    Resolution::Local {
+                        kind: FileKind::Stylesheet | FileKind::Asset,
+                        ..
+                    }
+                );
+            if actual != expected && !asset {
                 differences.push(format!(
                     "{reference_config}, {specifier}: {actual:?} != {expected:?}"
                 ));
@@ -270,6 +304,140 @@ fn text(s: &str) -> SourceText {
 }
 fn config(s: &str, file: &str) -> ResolutionConfig {
     ResolutionConfig::parse(&text(s), &path(file), JsonLimits::default())
+}
+
+#[test]
+fn module_suffixes_preserve_extension_priority_and_explicit_fallbacks() {
+    for profile in ["bundler", "node10"] {
+        let files = [
+            "src/main.ts",
+            "src/a.ts",
+            "src/a.native.tsx",
+            "src/b.native.d.ts",
+            "src/c.native.mts",
+            "src/d.native.cts",
+            "src/e.native.json",
+            "src/style.css",
+            "src/dir/index.native.ts",
+            "src/a.native.ts",
+        ];
+        for (suffixes, expected) in [
+            (r#"[".native",""]"#, "src/a.native.ts"),
+            (r#"["",".native"]"#, "src/a.ts"),
+            ("[]", "src/a.ts"),
+        ] {
+            let c = config(
+                &format!(
+                    r#"{{"compilerOptions":{{"moduleResolution":"{profile}","moduleSuffixes":{suffixes}}}}}"#
+                ),
+                "tsconfig.json",
+            );
+            assert!(c.issues().is_empty());
+            let mut r = resolver(&files, c);
+            local(&mut r, "./a.js", expected);
+        }
+        let c = config(
+            &format!(
+                r#"{{"compilerOptions":{{"moduleResolution":"{profile}","moduleSuffixes":[".native",""]}}}}"#
+            ),
+            "tsconfig.json",
+        );
+        let mut r = resolver(&files[..files.len() - 1], c);
+        local(&mut r, "./a", "src/a.ts");
+        for (request, target) in [
+            ("./b", "src/b.native.d.ts"),
+            ("./c.mjs", "src/c.native.mts"),
+            ("./d.cjs", "src/d.native.cts"),
+            ("./e.json", "src/e.native.json"),
+            ("./dir/", "src/dir/index.native.ts"),
+            ("./style.css", "src/style.css"),
+        ] {
+            local(&mut r, request, target);
+        }
+        let mut r = resolver(
+            &files,
+            config(
+                r#"{"compilerOptions":{"moduleSuffixes":[".absent"]}}"#,
+                "tsconfig.json",
+            ),
+        );
+        assert_eq!(
+            r.resolve(&path("src/main.ts"), "./a").unwrap(),
+            Resolution::Unresolved(U::NotFound)
+        );
+    }
+    for suffixes in ["null", "1", r#"".native""#, "[true]"] {
+        assert_eq!(
+            config(
+                &format!(r#"{{"compilerOptions":{{"moduleSuffixes":{suffixes}}}}}"#),
+                "tsconfig.json"
+            )
+            .issues()[0]
+                .problem,
+            ConfigProblem::Invalid
+        );
+    }
+    for suffix in ["../native", "a/b", "a\\\\b", "a:b", "\\u0000"] {
+        assert_eq!(
+            config(
+                &format!(r#"{{"compilerOptions":{{"moduleSuffixes":["{suffix}"]}}}}"#),
+                "tsconfig.json"
+            )
+            .issues()[0]
+                .problem,
+            ConfigProblem::Unsupported
+        );
+    }
+}
+
+#[test]
+fn module_suffixes_inherit_replace_and_refuse_excluded_preferred_files() {
+    for (name, own, expected) in [
+        ("inherit", "{}", "src/dep.native.ts"),
+        ("reset", r#"{"moduleSuffixes":[]}"#, "src/dep.ts"),
+    ] {
+        let g = graph(
+            &format!("suffix-{name}"),
+            &[
+                (
+                    "tsconfig.json",
+                    &format!(r#"{{"extends":"./base","compilerOptions":{own}}}"#),
+                ),
+                (
+                    "base.json",
+                    r#"{"compilerOptions":{"moduleSuffixes":[".native",""]}}"#,
+                ),
+                ("src/main.ts", "import './dep';"),
+                ("src/dep.ts", ""),
+                ("src/dep.native.ts", ""),
+            ],
+        );
+        assert!(g.configuration_issues().is_empty());
+        assert_eq!(
+            g.node(&path("src/main.ts")).unwrap().edges[0].resolution,
+            Resolution::Local {
+                path: path(expected),
+                kind: FileKind::Module
+            }
+        );
+    }
+    let g = graph(
+        "suffix-excluded",
+        &[
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions":{"moduleSuffixes":[".native",""]}}"#,
+            ),
+            (".gitignore", "dep.native.ts\n"),
+            ("src/main.ts", "import './dep';"),
+            ("src/dep.ts", ""),
+            ("src/dep.native.ts", ""),
+        ],
+    );
+    assert_eq!(
+        g.node(&path("src/main.ts")).unwrap().edges[0].resolution,
+        Resolution::Unresolved(U::Excluded)
+    );
 }
 fn resolver(files: &[&str], config: ResolutionConfig) -> Resolver {
     Resolver::new(
@@ -1292,7 +1460,7 @@ fn node10_excluded_typed_candidates_never_select_javascript() {
 #[test]
 fn node10_second_pass_work_is_cumulative_and_has_an_inclusive_boundary() {
     let c = config(
-        r#"{"compilerOptions":{"moduleResolution":"node10","paths":{"chosen":["absent","src/a.js"]}}}"#,
+        r#"{"compilerOptions":{"moduleResolution":"node10","moduleSuffixes":[".absent",""],"paths":{"chosen":["absent","src/a.js"]}}}"#,
         "tsconfig.json",
     );
     let files = vec![path("src/main.ts"), path("src/a.js")];

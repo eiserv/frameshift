@@ -1077,6 +1077,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Implementation:** The separate `ResolutionProfile::Node10` is implemented in the continuation of 2026-10-24, before M5. Both spellings select it through inherited configuration. Typed candidates are tried across the complete lookup before JavaScript/JSON candidates, directory fields are selected per pass, and package maps and self-references are skipped. Section 42 of IMPLEMENTATION.md records the contract and validation.
 - **Rationale and evolution (`D-033`):** A second explicit profile keeps the resolver's fail-closed rule (no guessed semantics) while recovering the local graph of a common real-world setup. Profiles stay separate units, so later profiles, such as custom bundler rules, can be added the same way.
 
+### D-094: Support ordered module filename suffixes
+
+- **Status:** Accepted (2026-10-24), confirmed by the owner through the Codex App question interface.
+- **Decision:** Keep this development increment small: implement `compilerOptions.moduleSuffixes` in the existing bundler and Node10 profiles, with tests and synchronized documentation. Preserve TypeScript 6.0.3's suffix order within extension candidates and whole-array inheritance; retain explicit unsupported evidence for suffixes requiring path normalization.
+- **Implementation:** Shared source-file probes now apply the configured suffixes to local files, aliases, directory entry points, and package targets. Manifest discovery and asset fallback remain exact. Missing reported targets of explicit TypeScript package fields remain unresolved. Contracts and validation are in IMPLEMENTATION.md section 43.
+- **Rationale and evolution (`D-033`):** Extending the existing lookup recovers local graph evidence for platform-specific filenames without a new profile, dependency, or bundler configuration interpreter. Custom bundler rules remain later M4 work.
+- **Integration:** Open and monitor a pull request; leave merging to the owner. The limited merge authorization of `D-092` does not apply to this increment.
+
 ## Technique proposals and related accepted decisions
 
 ### P-001: Go as the single implementation language, CGO disabled

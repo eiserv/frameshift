@@ -74,6 +74,7 @@ pub struct ResolutionConfig {
     pub(crate) es5_target: Option<bool>,
     pub(crate) allow_js: Option<bool>,
     pub(crate) check_js: Option<bool>,
+    pub(crate) module_suffixes: Option<Vec<String>>,
     pub(crate) output_directory: bool,
     pub(crate) unsupported_module: Option<SourcePath>,
 }
@@ -170,7 +171,6 @@ fn parse(
         // rejects them rather than approximating another compiler/bundler.
         for name in [
             "rootDirs",
-            "moduleSuffixes",
             "customConditions",
             "noResolve",
             "resolvePackageJsonImports",
@@ -179,6 +179,17 @@ fn parse(
             if options.get(name).is_some() {
                 config.issue(path, ConfigProblem::Unsupported);
             }
+        }
+        if let Some(id) = options.get("moduleSuffixes") {
+            let mut suffixes = Vec::new();
+            for id in doc.value(id)?.as_array()?.iter() {
+                let suffix = doc.value(id)?.as_str()?;
+                if suffix.contains(['/', '\\', ':', '\0']) {
+                    config.issue(path, ConfigProblem::Unsupported);
+                }
+                suffixes.push(suffix.to_owned());
+            }
+            config.module_suffixes = Some(suffixes);
         }
         if let Some(id) = options.get("moduleResolution") {
             config.profile = match doc.value(id)?.as_str()?.to_ascii_lowercase().as_str() {
@@ -367,6 +378,9 @@ impl ResolutionConfig {
         self.es5_target = later.es5_target.or(self.es5_target);
         self.allow_js = later.allow_js.or(self.allow_js);
         self.check_js = later.check_js.or(self.check_js);
+        if later.module_suffixes.is_some() {
+            self.module_suffixes = later.module_suffixes;
+        }
         self.output_directory |= later.output_directory;
         self.issues.extend(later.issues);
     }
