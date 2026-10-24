@@ -361,9 +361,9 @@ fn recognizes_lazy_and_dynamic_loaders_by_import_provenance() {
     ];
     let model = build("loader-variants", variants);
     let graph = model.components();
-    let text = text(variants, "app/page.tsx");
+    let source = text(variants, "app/page.tsx");
     let get = |tag: &str| {
-        let start = text.find(tag).unwrap();
+        let start = source.find(tag).unwrap();
         graph
             .sites
             .iter()
@@ -425,6 +425,35 @@ fn recognizes_lazy_and_dynamic_loaders_by_import_provenance() {
         }
     );
     assert_eq!(reason(&get("<M ").resolved), &UnknownReason::Loader);
+
+    // A `react` specifier that the configuration maps to a local file does
+    // not import React's `memo`; the call stays a higher-order component.
+    let shimmed: &[(&str, &str)] = &[
+        (
+            "tsconfig.json",
+            "{ \"compilerOptions\": { \"baseUrl\": \".\", \"paths\": { \"react\": [\"./shim/react.ts\"] } } }",
+        ),
+        ("shim/react.ts", "export const memo = (c) => c;\n"),
+        (
+            "app/page.tsx",
+            "import { memo } from 'react';\nconst Inner = () => null;\nconst Outer = memo(Inner);\n\
+             export default function Page() { return <Outer />; }\n",
+        ),
+    ];
+    let model = build("shimmed-react", shimmed);
+    let graph = model.components();
+    let page = text(shimmed, "app/page.tsx");
+    let outer = graph
+        .sites
+        .iter()
+        .find(|s| s.span.start() == page.find("<Outer").unwrap())
+        .unwrap();
+    assert!(outer.resolved.wrappers.is_empty());
+    assert!(matches!(
+        &outer.resolved.rendered,
+        Rendered::Unknown { reason: UnknownReason::Call(Some(callee)), span: Some(span), .. }
+            if callee == "memo" && span.start() == page.find("memo(Inner)").unwrap()
+    ));
 }
 
 #[test]

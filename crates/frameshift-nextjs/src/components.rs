@@ -5,8 +5,9 @@
 //! Linking then follows bindings, imports, re-exports, and `export *`
 //! through the module graph's own edges, never by name. React's `memo`,
 //! `forwardRef`, and `lazy` and the default export of `next/dynamic` are
-//! wrappers only when binding provenance proves their import; every other
-//! call is a higher-order component or factory with an explicit reason.
+//! wrappers only when binding provenance proves their import and the
+//! import's edge reaches the package; every other call is a higher-order
+//! component or factory with an explicit reason.
 //! Nothing is evaluated, and no value is guessed from its spelling.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -234,15 +235,26 @@ impl std::error::Error for ComponentError {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComponentSummary {
     path: SourcePath,
-    sites: Vec<(Span, Value)>,
+    sites: Vec<(Span, Leaf)>,
     values: BTreeMap<BindingId, Value>,
     exports: Vec<ExportSummary>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Value {
-    wrappers: Vec<Wrapper>,
+    wrappers: Vec<Applied>,
     leaf: Leaf,
+}
+
+/// A wrapper call whose callee binding imports a recognized name. Linking
+/// confirms that the import's edge reaches the expected package; otherwise
+/// the call is a higher-order component like any other.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Applied {
+    wrapper: Wrapper,
+    import: Span,
+    call: Span,
+    callee: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -328,8 +340,8 @@ pub fn summarize_components(
     let mut nodes = vec![tree.root()];
     while let Some(id) = nodes.pop() {
         if let N::JsxOpeningElement { name, .. } = summarizer.kind(id) {
-            let value = summarizer.tag(name);
-            sites.push((summarizer.span(id), value));
+            let leaf = summarizer.tag(name);
+            sites.push((summarizer.span(id), leaf));
         }
         nodes.extend(tree.child_nodes(id).expect("parser-owned node"));
     }
@@ -445,7 +457,7 @@ impl Summarizer<'_, '_> {
 
     /// A JSX tag name. Intrinsic and namespaced names have no reference;
     /// member tags reference their leftmost name.
-    fn tag(&mut self, mut name: NodeId) -> Value {
+    fn tag(&mut self, mut name: NodeId) -> Leaf {
         if let N::TypeScript {
             kind: T::Instantiation,
             ..
@@ -462,11 +474,11 @@ impl Summarizer<'_, '_> {
         }
         members.reverse();
         if self.bindings.reference(root).is_some() {
-            Value::leaf(self.reference(root, members))
+            self.reference(root, members)
         } else if members.is_empty() {
-            Value::leaf(Leaf::Intrinsic)
+            Leaf::Intrinsic
         } else {
-            self.unknown(UnknownReason::This, root)
+            self.unknown_leaf(UnknownReason::This, root)
         }
     }
 
@@ -670,25 +682,32 @@ impl Summarizer<'_, '_> {
                     .first()
                     .copied()
                     .filter(|&a| !matches!(self.kind(a), N::Spread { .. }));
-                let Some(wrapper) = self.wrapper(callee) else {
-                    let callee = self.spelling(callee);
-                    break self.unknown_leaf(UnknownReason::Call(callee), node);
+                let spelling = self.spelling(callee);
+                let Some((wrapper, import)) = self.wrapper(callee) else {
+                    break self.unknown_leaf(UnknownReason::Call(spelling), node);
                 };
                 let Some(first) = first else {
                     break self.unknown_leaf(UnknownReason::Value, node);
                 };
+                let mut applied = Applied {
+                    wrapper,
+                    import,
+                    call: self.span(node),
+                    callee: spelling,
+                };
                 match wrapper {
                     Wrapper::Memo | Wrapper::ForwardRef => {
-                        wrappers.push(wrapper);
+                        wrappers.push(applied);
                         inferred = None;
                         node = first;
                     }
                     Wrapper::Lazy => {
-                        wrappers.push(Wrapper::Lazy);
+                        wrappers.push(applied);
                         break self.loader(first, true);
                     }
                     Wrapper::Dynamic(_) => {
-                        wrappers.push(Wrapper::Dynamic(self.ssr(arguments.get(1).copied())));
+                        applied.wrapper = Wrapper::Dynamic(self.ssr(arguments.get(1).copied()));
+                        wrappers.push(applied);
                         break self.loader(first, false);
                     }
                 }
@@ -729,8 +748,9 @@ impl Summarizer<'_, '_> {
         }
     }
 
-    /// A recognized wrapper callee, by the binding provenance of its import.
-    fn wrapper(&self, callee: NodeId) -> Option<Wrapper> {
+    /// A recognized wrapper callee, by the binding provenance of its import,
+    /// with the import's specifier span for linking to confirm.
+    fn wrapper(&self, callee: NodeId) -> Option<(Wrapper, Span)> {
         let callee = self.unwrap(callee);
         let (binding, name) = if let N::Identifier { .. } = self.kind(callee) {
             (self.import_binding(callee)?, None)
@@ -762,14 +782,15 @@ impl Summarizer<'_, '_> {
             "lazy" => Some(Wrapper::Lazy),
             _ => None,
         };
-        match (import.specifier.as_deref()?, &import.imported, name) {
+        let wrapper = match (import.specifier.as_deref()?, &import.imported, name) {
             ("react", ImportedName::Named(imported), None) => react(imported),
             ("react", ImportedName::Default | ImportedName::Namespace, Some(name)) => react(&name),
             ("next/dynamic", ImportedName::Default, None) => {
                 Some(Wrapper::Dynamic(SsrOption::Absent))
             }
             _ => None,
-        }
+        }?;
+        Some((wrapper, self.span(import.source)))
     }
 
     fn import_binding(&self, identifier: NodeId) -> Option<BindingId> {
@@ -1075,9 +1096,8 @@ pub fn link_components(
     };
     let mut sites = Vec::new();
     for (module, summary) in summaries.iter().enumerate() {
-        for (span, value) in &summary.sites {
-            let resolved =
-                linker.resolve(module, Step::Leaf(value.leaf.clone()), &value.wrappers)?;
+        for (span, leaf) in &summary.sites {
+            let resolved = linker.resolve(module, Step::Leaf(leaf.clone()))?;
             sites.push((module, *span, resolved));
         }
     }
@@ -1087,7 +1107,7 @@ pub fn link_components(
             continue;
         }
         let resolved = match linker.module(&file.path) {
-            Some(module) => linker.resolve(module, Step::Export(ExportName::Default), &[])?,
+            Some(module) => linker.resolve(module, Step::Export(ExportName::Default))?,
             None => (
                 Vec::new(),
                 Linked::Final(Rendered::Unknown {
@@ -1221,16 +1241,44 @@ impl Linker<'_> {
         })
     }
 
-    /// Follows one value to its rendered target iteratively, starting with
-    /// its outermost wrappers. Member names wait in `members` until a module
-    /// namespace consumes them.
+    /// Confirms each wrapper's import edge, outermost first, and appends the
+    /// confirmed ones. The first unconfirmed wrapper ends resolution as the
+    /// call it is: its import does not reach the expected package.
+    fn apply(
+        &self,
+        module: usize,
+        applied: &[Applied],
+        wrappers: &mut Vec<Wrapper>,
+    ) -> Option<Linked> {
+        for a in applied {
+            let (specifier, expected) = match a.wrapper {
+                Wrapper::Memo | Wrapper::ForwardRef | Wrapper::Lazy => ("react", "react"),
+                Wrapper::Dynamic(_) => ("next/dynamic", "next"),
+            };
+            let confirmed = matches!(
+                self.edge(module, a.import),
+                EdgeTarget::Package(s, p) if s == specifier && p == expected
+            );
+            if !confirmed {
+                return Some(self.unknown(
+                    module,
+                    UnknownReason::Call(a.callee.clone()),
+                    Some(a.call),
+                ));
+            }
+            wrappers.push(a.wrapper);
+        }
+        None
+    }
+
+    /// Follows one value to its rendered target iteratively. Member names
+    /// wait in `members` until a module namespace consumes them.
     fn resolve(
         &mut self,
         mut module: usize,
         mut step: Step,
-        outer: &[Wrapper],
     ) -> Result<(Vec<Wrapper>, Linked), ComponentError> {
-        let mut wrappers = outer.to_vec();
+        let mut wrappers = Vec::new();
         let mut members: VecDeque<String> = VecDeque::new();
         // Cacheable states with the number of wrappers outside them.
         let mut chain: Vec<(Key, usize)> = Vec::new();
@@ -1295,7 +1343,9 @@ impl Linker<'_> {
                     if !members.is_empty() && !value.wrappers.is_empty() {
                         break self.unknown(module, UnknownReason::Member, None);
                     }
-                    wrappers.extend(value.wrappers.iter().copied());
+                    if let Some(linked) = self.apply(module, &value.wrappers, &mut wrappers) {
+                        break linked;
+                    }
                     step = Step::Leaf(value.leaf.clone());
                 }
                 Step::Leaf(Leaf::Import { source, imported }) => match self.edge(module, source) {
@@ -1359,7 +1409,11 @@ impl Linker<'_> {
                                 if !members.is_empty() && !value.wrappers.is_empty() {
                                     break self.unknown(module, UnknownReason::Member, None);
                                 }
-                                wrappers.extend(value.wrappers.iter().copied());
+                                if let Some(linked) =
+                                    self.apply(module, &value.wrappers, &mut wrappers)
+                                {
+                                    break linked;
+                                }
                                 step = Step::Leaf(value.leaf.clone());
                             }
                             ExportTarget::ReExport { source, imported } => {
