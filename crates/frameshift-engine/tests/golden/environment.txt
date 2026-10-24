@@ -24,6 +24,7 @@ module "lib/alias.ts" parsed=true build=true browser=false Some(Build)
   variable "A" Some("A") Destructured deferred=false public=Some(false)
   variable "e2.B" Some("B") Alias deferred=false public=Some(false)
   variable "w = process.env" None Whole deferred=false public=None
+  variable "exposed = process.env" None Whole deferred=false public=None
 module "lib/broken.ts" parsed=false build=false browser=false None
 module "lib/server.ts" parsed=true build=true browser=false Some(Build)
   api "'fs/promises'" NodeModule "fs/promises" deferred=false typeof=false

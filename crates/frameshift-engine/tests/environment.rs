@@ -94,7 +94,7 @@ const SOURCE: &[(&str, &str)] = &[
     (
         "lib/alias.ts",
         "const e = process.env;\nconst e2 = e;\nconst { A } = e2;\nexport const B = e2.B;\n\
-         let w = process.env;\nw = {};\n",
+         let w = process.env;\nw = {};\nexport const exposed = process.env;\n",
     ),
     (
         "lib/shadow.ts",
@@ -254,6 +254,7 @@ fn records_direct_aliased_and_destructured_variables() {
             ("A", Some("A"), VariableAccess::Destructured),
             ("e2.B", Some("B"), VariableAccess::Alias),
             ("w = process.env", None, VariableAccess::Whole),
+            ("exposed = process.env", None, VariableAccess::Whole),
         ]
     );
     let shared = module(&model, "lib/shared.ts");

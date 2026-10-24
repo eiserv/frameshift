@@ -12,7 +12,7 @@
 
 use std::collections::BTreeSet;
 
-use frameshift_bindings::{BindingId, Bindings, DeclarationKind as K, Meaning, Target};
+use frameshift_bindings::{BindingId, Bindings, DeclarationKind as K, ExportKind, Meaning, Target};
 use frameshift_core::{SourcePath, Span};
 use frameshift_modules::{EdgeKind, FileKind, ModuleGraph, ModuleState, Resolution};
 use frameshift_syntax::{
@@ -380,9 +380,20 @@ pub fn summarize_environment(
             written[b.index()] |= reference.write;
         }
     }
+    let exported = bindings
+        .exports()
+        .iter()
+        .filter_map(|export| match export.kind {
+            ExportKind::Local(Target::Binding(binding)) => Some(binding),
+            ExportKind::Local(Target::Global | Target::Dynamic)
+            | ExportKind::Expression(_)
+            | ExportKind::ReExport { .. } => None,
+        })
+        .collect();
     let mut summary = Summary {
         tree,
         bindings,
+        exported,
         parents,
         deferred,
         references,
@@ -436,6 +447,8 @@ pub fn summarize_environment(
 struct Summary<'a, 't> {
     tree: &'a SyntaxTree<'t>,
     bindings: &'a Bindings,
+    // Bindings that other modules can read through an export.
+    exported: BTreeSet<BindingId>,
     parents: Vec<Option<NodeId>>,
     deferred: Vec<bool>,
     references: Vec<Vec<NodeId>>,
@@ -606,6 +619,10 @@ impl Summary<'_, '_> {
                 match self.alias(pattern) {
                     Some(binding) => {
                         if self.aliases.insert(binding) {
+                            // An exported alias escapes to its importers.
+                            if self.exported.contains(&binding) {
+                                self.push(self.span(parent), None, VariableAccess::Whole, parent);
+                            }
                             for &reference in &self.references[binding.index()] {
                                 pending.push((reference, VariableAccess::Alias));
                             }
