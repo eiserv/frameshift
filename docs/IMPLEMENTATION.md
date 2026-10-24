@@ -1652,3 +1652,5 @@ cargo test -p frameshift-engine --offline --locked --test project -- --ignored u
 ```
 
 The model is an in-memory engine API, not a new CLI command or a public JSON document. Configuration values remain available through the existing evaluator; detection, workspace selection, custom bundler semantics, full component-value inference, counting units, feature assessment, weights, and analysis reporting are not inferred by assembly. M4 remains in progress.
+
+**Local checks (2026-10-24).** Offline locked workspace tests, the nine facade model contracts plus the private inclusive-work contract, all-target workspace Clippy with warnings denied, formatting, E1's 3,000 generated corpus contracts, E2's three goldens, documentation links, and diff whitespace checks pass on Linux x86_64. The visitor regression also checks generic JSX root provenance and failure propagation without a partial analysis. Native release tests, repository PowerShell policy checks, cross-platform determinism, and six-target packaging run in PR CI; no new fuzz budget or real-world model evaluation is claimed.

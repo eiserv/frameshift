@@ -431,3 +431,61 @@ fn update_project_golden() {
     )
     .unwrap();
 }
+
+#[test]
+fn strict_tree_visitor_runs_once_and_propagates_failure() {
+    use frameshift_engine::modules::{GraphLimits, ModuleError};
+    use frameshift_engine::nextjs::{AppError, analyze_app_with};
+    let limits = Limits::default();
+    let snap = open(
+        "visitor",
+        &[
+            (
+                "app/page.tsx",
+                "import Widget from 'fictional-ui'; export default () => <Widget<number>/>;",
+            ),
+            ("lib/broken.ts", "export const = ;"),
+            ("lib/helper.ts", "export const value = 1;"),
+        ],
+        &limits,
+    );
+    let graph = GraphLimits {
+        modules: limits.modules,
+        text: limits.text,
+        parse: limits.parse,
+        json: limits.json,
+        path: limits.path,
+    };
+    let mut visited = Vec::new();
+    analyze_app_with(
+        &snap,
+        None,
+        &path("app"),
+        EXTENSIONS,
+        graph,
+        &mut |path, tree, bindings| {
+            visited.push(path.clone());
+            assert!(!tree.nodes().is_empty());
+            assert!(!bindings.exports().is_empty());
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(visited, [path("app/page.tsx"), path("lib/helper.ts")]);
+    let result = analyze_app_with(
+        &snap,
+        None,
+        &path("app"),
+        EXTENSIONS,
+        graph,
+        &mut |_, _, _| Err(ModuleError::WorkLimit),
+    );
+    assert_eq!(result, Err(AppError::Modules(ModuleError::WorkLimit)));
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let site = &model.semantics()[0].renders[0];
+    assert_eq!(site.spelling, "Widget<number>");
+    assert!(matches!(
+        site.reference.as_ref().unwrap().target,
+        frameshift_engine::bindings::Target::Binding(_)
+    ));
+}
