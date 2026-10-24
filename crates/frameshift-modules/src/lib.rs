@@ -2,11 +2,13 @@
 //!
 //! Explicit profiles follow TypeScript 6.0.3 bundler and Node10 source lookup for
 //! local files, package `imports`, self-references through `exports`, and
-//! local directory entry points. Node10 ignores package maps and self-references. Installed package contents, custom bundler
+//! local directory entry points. Node10 ignores package maps and self-references. Configuration
+//! inheritance also reads linked workspace members (`D-098`). Installed package contents, custom bundler
 //! configuration, and binding analysis are outside this contract. Resolution never establishes that an
 //! import can execute, that a dependency is declared, or that migration is safe.
 
 mod config;
+mod extends;
 mod graph;
 mod package;
 mod resolve;

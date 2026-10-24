@@ -4,6 +4,8 @@ use frameshift_core::{SourcePath, SourceText};
 use frameshift_input::{EntryKind, FileRead, Snapshot};
 use frameshift_syntax::{JsonDialect, JsonLimits, JsonValue, parse_json};
 
+use crate::extends::{Extended, Links, package_extends};
+use crate::package::rooted;
 use crate::{ModuleError, Work, join, parent};
 
 /// Why a configuration cannot establish local resolution semantics.
@@ -11,11 +13,14 @@ use crate::{ModuleError, Work, join, parent};
 pub enum ConfigProblem {
     /// Invalid JSONC, duplicate keys, or a setting of the wrong shape.
     Invalid,
-    /// A referenced configuration is absent from the admitted files.
+    /// A referenced configuration is absent from the admitted files, also
+    /// from a linked workspace member (`D-098`).
     Missing,
-    /// The file is unreadable or is not accepted UTF-8 text.
+    /// The file is unreadable or is not accepted UTF-8 text, or an excluded
+    /// entry may hide it.
     Unreadable,
-    /// A package-based inheritance or an unmodeled resolver option is present.
+    /// A package-based inheritance without a workspace link, or an unmodeled
+    /// resolver option, is present.
     Unsupported,
     /// Inheritance contains a cycle.
     Cycle,
@@ -64,6 +69,7 @@ pub enum ResolutionProfile {
 /// they are not interpreted as migration instructions.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ResolutionConfig {
+    pub(crate) files: Vec<SourcePath>,
     pub(crate) profile: Option<ResolutionProfile>,
     pub(crate) base: Option<String>,
     pub(crate) paths: Option<(String, Vec<Mapping>)>,
@@ -128,6 +134,12 @@ impl ResolutionConfig {
         &self.issues
     }
 
+    /// The configuration files that were read, in inheritance order: every
+    /// inherited file before the file that extends it.
+    pub fn files(&self) -> &[SourcePath] {
+        &self.files
+    }
+
     fn issue(&mut self, path: &SourcePath, problem: ConfigProblem) {
         self.issues.push(ConfigIssue {
             path: path.clone(),
@@ -141,7 +153,10 @@ fn parse(
     path: &SourcePath,
     limits: JsonLimits,
 ) -> (ResolutionConfig, Vec<String>) {
-    let mut config = ResolutionConfig::default();
+    let mut config = ResolutionConfig {
+        files: vec![path.clone()],
+        ..ResolutionConfig::default()
+    };
     let mut extends = Vec::new();
     let valid = (|| {
         let doc = parse_json(source, JsonDialect::Jsonc, limits).ok()?;
@@ -292,6 +307,7 @@ pub(crate) fn load(
     path: &SourcePath,
     limits: crate::GraphLimits,
     active: &mut Vec<SourcePath>,
+    links: &mut Links,
     work: &mut Work,
 ) -> Result<ResolutionConfig, ModuleError> {
     work.charge(1)?;
@@ -320,8 +336,20 @@ pub(crate) fn load(
     let (own, extends) = parse(&source, path, limits.json);
     active.push(path.clone());
     for reference in extends {
-        if !reference.starts_with("./") && !reference.starts_with("../") {
+        // The reference unifies separators before classifying the string.
+        let reference = reference.replace('\\', "/");
+        if rooted(&reference) {
             result.issue(path, ConfigProblem::Unsupported);
+            continue;
+        }
+        if !reference.starts_with("./") && !reference.starts_with("../") {
+            match package_extends(snapshot, path, &reference, limits, links, work)? {
+                Extended::Found(target) => {
+                    let inherited = load(snapshot, &target, limits, active, links, work)?;
+                    result.inherit(inherited);
+                }
+                Extended::Issue(at, problem) => result.issue(&at, problem),
+            }
             continue;
         }
         let Some(mut target) = join(parent(path.as_str()), &reference) else {
@@ -349,7 +377,7 @@ pub(crate) fn load(
             result.issue(path, ConfigProblem::Invalid);
             continue;
         };
-        let inherited = load(snapshot, &target, limits, active, work)?;
+        let inherited = load(snapshot, &target, limits, active, links, work)?;
         result.inherit(inherited);
     }
     active.pop();
@@ -364,6 +392,7 @@ impl ResolutionConfig {
     // Later configurations override each option separately; issues and
     // unsupported kinds accumulate.
     fn inherit(&mut self, later: Self) {
+        self.files.extend(later.files);
         self.profile = later.profile.or(self.profile);
         if later.base.is_some() {
             self.base = later.base;

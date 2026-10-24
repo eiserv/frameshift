@@ -154,6 +154,7 @@ version = "0.1.0"
 dependencies = [
  "frameshift-core",
  "frameshift-input",
+ "frameshift-package",
  "frameshift-syntax",
 ]
 

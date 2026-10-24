@@ -198,6 +198,8 @@ impl Limits {
             parse: self.parse,
             json: self.json,
             path: self.path,
+            package: self.package(),
+            finding: self.finding,
         }
     }
 
