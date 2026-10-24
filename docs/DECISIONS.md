@@ -102,6 +102,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-092 | Complete the M4 semantic blocks as stacked pull requests | Accepted |
 | D-093 | Model Node10 local lookup as a separate resolution profile | Accepted |
 | D-094 | Support ordered module filename suffixes | Accepted |
+| D-095 | Assemble the source project model before custom bundler rules | Accepted |
 | D-098 | Resolve package-based configuration inheritance from linked workspace members | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
@@ -1087,6 +1088,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale and evolution (`D-033`):** Extending the existing lookup recovers local graph evidence for platform-specific filenames without a new profile, dependency, or bundler configuration interpreter. Custom bundler rules remain later M4 work.
 - **Integration:** Open and monitor a pull request; leave merging to the owner. The limited merge authorization of `D-092` does not apply to this increment.
 
+### D-095: Assemble the source project model before custom bundler rules
+
+- **Status:** Accepted (2026-10-24), confirmed by the owner through the Codex App question interface.
+- **Decision:** Prioritize completing the assembled source project model and preparing its contract for M5 over implementing special bundler rules. Work in a substantial, tested block, open a draft PR early, push committed work immediately, and monitor checks and reviews. Leave the PR open for owner integration.
+- **Implementation choices:** `frameshift_engine::project` owns the existing App Router analysis, a selected-package inventory of admitted and excluded entries, per-module bindings with original node spans, binding-aware JSX render sites, and direct environment-access evidence. Route dependency queries include the route and its entire convention chain, preserve non-code targets and unknown edges, exclude explicit type-only edges, and use an iterative, bounded traversal. Facts do not assign migration or counting status. Package selection and page extensions are explicit inputs; framework detection and configuration evaluation retain their existing APIs.
+- **Rationale and evolution (`D-033`):** One graph plus on-demand closures avoids retaining a copy of shared dependencies per route. A strict-tree visitor shares parsing and binding analysis with the adapter rather than reparsing source. Binding provenance and lexical render ownership preserve the evidence M5 needs without guessing component identities or executing code. Framework facts stay namespaced behind the Next.js analysis; no target data enters the source model. There is no new runtime dependency or limit.
+- **Boundaries:** Custom bundler semantics, alias-based environment data flow, component-value inference through HOCs and factories, counting-unit partitioning, compatibility assessment, readiness, and the public analysis document are not established by this model. M4 remains open for its remaining semantic scope; this decision does not bypass any M5 acceptance gate.
+
 ### D-098: Resolve package-based configuration inheritance from linked workspace members
 
 - **Status:** Accepted (2026-10-24). Through the Claude Code question interface, the project owner chose the workspace model as the source of package links inside `frameshift-modules`, the `workspace:` protocol as the only link evidence, TypeScript's complete configuration lookup inside the linked member including `exports`, and owner merging after green CI. The remaining rules below are agent defaults within those choices, recorded here for review.
@@ -1098,7 +1107,7 @@ Statuses change through an edit to this file under the integration workflow in D
   - **Architecture:** `frameshift-modules` depends on `frameshift-package` for the workspace model, within the semantics layer. `GraphLimits` carries the package-loading and finding limits of the central set, so every analysis that loads configuration (module graph, static evaluator, App Router analysis, and source model) resolves the same inheritance.
 - **Validation:** an opt-in oracle compares generated fictional workspace layouts with the resolved `extends` paths of the pinned TypeScript 6.0.3 compiler over an in-memory host with `node_modules` links; facade regressions cover the link rules and refusals; the opt-in `D-043` sample measurement shows the effect on real projects.
 - **Rationale and evolution (`D-033`):** the `workspace:` protocol is the declaration that every package manager that supports it resolves to the member, so the lookup needs no guessed installation layout. Version ranges without the protocol depend on per-manager linking rules (npm and Yarn 1 link a satisfying member, pnpm by default does not), and can be added later as an explicit rule with that evidence. Reading the member's files through the workspace model keeps the resolver within the run root and the snapshot.
-- **Integration:** Open a draft pull request against `main` early, push each commit, and leave merging to the owner after green CI. The stacked pull requests of `D-095` to `D-097` construct `GraphLimits` literally and need the new fields when they are rebased.
+- **Integration:** Open a draft pull request against `main` early, push each commit, and leave merging to the owner after green CI. The source model of `D-095` and the stacked pull requests of `D-096` and `D-097` construct `GraphLimits` literally and supply the new fields from the central limit set.
 
 ## Technique proposals and related accepted decisions
 

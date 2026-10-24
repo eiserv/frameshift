@@ -21,7 +21,7 @@ mod routes;
 #[cfg(test)]
 mod tests;
 
-pub use app::{AppAnalysis, AppError, FileExports, analyze_app};
+pub use app::{AppAnalysis, AppError, FileExports, analyze_app, analyze_app_with};
 pub use contexts::{Boundary, ContextIssue, ModuleContext, RenderContexts, render_contexts};
 pub use detect::{
     ConfigFile, ConfigLoad, DetectError, Detection, NextDependency, Router, RouterDirectory,

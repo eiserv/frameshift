@@ -167,6 +167,7 @@ dependencies = [
  "frameshift-input",
  "frameshift-modules",
  "frameshift-package",
+ "frameshift-syntax",
 ]
 
 [[package]]
