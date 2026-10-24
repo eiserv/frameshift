@@ -123,7 +123,7 @@ Path aliases keep their keys and are retargeted to the moved code (section 16.1)
 
 ### 5.5 Environment variables
 
-Environment files are never read and never copied (see [SECURITY.md](SECURITY.md)). Analysis uses only references in code.
+Environment files are never read and never copied (see [SECURITY.md](SECURITY.md)). Analysis uses only references in code. The implemented environment classification (`D-096`, section 46 of [IMPLEMENTATION.md](IMPLEMENTATION.md)) records these references, including aliases and destructuring of `process.env`, and whether each module runs during the build, in the browser, or both; the mappings below remain planned.
 
 | Source reference | Mapping | Status |
 | --- | --- | --- |

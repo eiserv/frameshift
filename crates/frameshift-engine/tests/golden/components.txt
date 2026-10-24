@@ -59,6 +59,7 @@ site "components/heavy.tsx" "<section />" owner=Some(13) wrappers=[] Intrinsic
 site "components/shell.tsx" "<div>" owner=Some(14) wrappers=[] Intrinsic
 site "components/svg.jsx" "<svg:rect />" owner=None wrappers=[] Intrinsic
 site "components/ui.tsx" "<span />" owner=Some(15) wrappers=[] Intrinsic
+browser-import "components/chart.tsx" "'./chart-impl'"
 entry "app/error.tsx" Error wrappers=[] Definition(0)
 entry "app/layout.tsx" Layout wrappers=[] Definition(1)
 entry "app/loading.tsx" Loading wrappers=[] Definition(11)

@@ -202,6 +202,21 @@ pub struct ComponentGraph {
     pub sites: Vec<Site>,
     /// Defaults of rendered conventions, in path order.
     pub entries: Vec<Entry>,
+    /// Dynamic imports that only the browser loads, in path and source order.
+    pub browser_imports: Vec<BrowserImport>,
+}
+
+/// The `import()` of a `next/dynamic` loader with a literal `ssr: false`.
+/// Next.js neither prerenders the component nor loads the module on the
+/// server, so this edge does not carry the prerendering context. The call
+/// need not be rendered: the option decides where the import runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BrowserImport {
+    /// The module with the call.
+    pub path: SourcePath,
+    /// The specifier span of the loader's `import()`, which is the module
+    /// graph edge's span.
+    pub span: Span,
 }
 
 impl ComponentGraph {
@@ -238,6 +253,8 @@ pub struct ComponentSummary {
     sites: Vec<(Span, Leaf)>,
     values: BTreeMap<BindingId, Value>,
     exports: Vec<ExportSummary>,
+    // `next/dynamic` import and loader specifier spans of `ssr: false` calls.
+    browser_loaders: Vec<(Span, Span)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -337,15 +354,29 @@ pub fn summarize_components(
         pending: Vec::new(),
     };
     let mut sites = Vec::new();
+    let mut browser_loaders = Vec::new();
     let mut nodes = vec![tree.root()];
     while let Some(id) = nodes.pop() {
-        if let N::JsxOpeningElement { name, .. } = summarizer.kind(id) {
+        let kind = summarizer.kind(id);
+        if let N::JsxOpeningElement { name, .. } = kind {
             let leaf = summarizer.tag(name);
             sites.push((summarizer.span(id), leaf));
+        } else if let N::Call {
+            callee,
+            arguments,
+            optional: false,
+        } = kind
+            && let Some((Wrapper::Dynamic(_), import)) = summarizer.wrapper(callee)
+            && let [loader, options, ..] = summarizer.list(arguments)
+            && summarizer.ssr(Some(*options)) == SsrOption::Literal(false)
+            && let Leaf::Loaded { source, .. } = summarizer.loader(*loader, false)
+        {
+            browser_loaders.push((import, source));
         }
         nodes.extend(tree.child_nodes(id).expect("parser-owned node"));
     }
     sites.sort_by_key(|(span, _)| *span);
+    browser_loaders.sort();
     let mut exports = Vec::new();
     for export in bindings.exports() {
         let target = match &export.kind {
@@ -392,6 +423,7 @@ pub fn summarize_components(
         sites,
         values,
         exports,
+        browser_loaders,
     }
 }
 
@@ -1101,6 +1133,21 @@ pub fn link_components(
             sites.push((module, *span, resolved));
         }
     }
+    let mut browser_imports = Vec::new();
+    for (module, summary) in summaries.iter().enumerate() {
+        for &(import, source) in &summary.browser_loaders {
+            linker.charge()?;
+            if matches!(
+                linker.edge(module, import),
+                EdgeTarget::Package(s, p) if s == "next/dynamic" && p == "next"
+            ) {
+                browser_imports.push(BrowserImport {
+                    path: summary.path.clone(),
+                    span: source,
+                });
+            }
+        }
+    }
     let mut entries = Vec::new();
     for file in &routes.files {
         if !renders(file.convention) {
@@ -1141,6 +1188,7 @@ pub fn link_components(
         },
     };
     Ok(ComponentGraph {
+        browser_imports,
         sites: sites
             .into_iter()
             .zip(owners)
@@ -1438,9 +1486,14 @@ impl Linker<'_> {
     /// The runtime edge whose specifier span is `source`.
     fn edge(&self, module: usize, source: Span) -> EdgeTarget {
         let path = &self.summaries[module].path;
+        // Edges are in source order, so a binary search finds the span.
         let edge = self.graph.node(path).and_then(|node| {
-            node.edges
+            let first = node
+                .edges
+                .partition_point(|e| e.span.start() < source.start());
+            node.edges[first..]
                 .iter()
+                .take_while(|e| e.span.start() == source.start())
                 .find(|edge| edge.span == source && !edge.type_only)
         });
         let Some(edge) = edge else {
