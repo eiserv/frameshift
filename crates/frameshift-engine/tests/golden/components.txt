@@ -1,0 +1,66 @@
+definition 0 "app/error.tsx" Function Some("Error") "function Error() { return <p />; }"
+definition 1 "app/layout.tsx" Function Some("RootLayout") "function RootLayout({ children }) { retu"
+definition 2 "app/page.tsx" Function Some("Item") "function Item() { return <li />; }"
+definition 3 "app/page.tsx" Function Some("Local") "function Local() { const Button = () => "
+definition 4 "app/page.tsx" Arrow Some("Button") "() => <i />"
+definition 5 "app/page.tsx" Function Some("Page") "function Page() { const items = [1]; ret"
+definition 6 "app/unknown/page.tsx" Class Some("Legacy") "class Legacy { Comp = null; render() { r"
+definition 7 "app/unknown/page.tsx" Function Some("Slot") "function Slot({ Icon }) { return <Icon /"
+definition 8 "app/unknown/page.tsx" Function Some("Overloaded") "function Overloaded() { return null; }"
+definition 9 "app/unknown/page.tsx" Function Some("Page") "function Page() { return <><Guarded /><F"
+definition 10 "components/button.tsx" Function Some("Button") "function Button(props, ref) { return <bu"
+definition 11 "components/card.tsx" Arrow Some("default") "() => <div />"
+definition 12 "components/chart-impl.tsx" Function Some("ChartImpl") "function ChartImpl() { return <canvas />"
+definition 13 "components/heavy.tsx" Class Some("Heavy") "class Heavy { render() { return <section"
+definition 14 "components/shell.tsx" Function Some("Shell") "function Shell({ children }) { return <d"
+definition 15 "components/ui.tsx" Arrow None "() => <span />"
+site "app/error.tsx" "<p />" owner=Some(0) wrappers=[] Intrinsic
+site "app/layout.tsx" "<html>" owner=Some(1) wrappers=[] Intrinsic
+site "app/layout.tsx" "<body>" owner=Some(1) wrappers=[] Intrinsic
+site "app/layout.tsx" "<Shell>" owner=Some(1) wrappers=[] Definition(14)
+site "app/page.tsx" "<li />" owner=Some(2) wrappers=[] Intrinsic
+site "app/page.tsx" "<i />" owner=Some(4) wrappers=[] Intrinsic
+site "app/page.tsx" "<Button />" owner=Some(3) wrappers=[] Definition(4)
+site "app/page.tsx" "<main>" owner=Some(5) wrappers=[] Intrinsic
+site "app/page.tsx" "<Link href=\"/\">" owner=Some(5) wrappers=[] External { specifier: "next/link", package: "next", export: Default, members: [] }
+site "app/page.tsx" "<Button />" owner=Some(5) wrappers=[ForwardRef] Definition(10)
+site "app/page.tsx" "<Card />" owner=Some(5) wrappers=[] Definition(11)
+site "app/page.tsx" "<Ui.Badge />" owner=Some(5) wrappers=[Memo] Definition(15)
+site "app/page.tsx" "<Chart />" owner=Some(5) wrappers=[Dynamic(Literal(false))] Definition(12)
+site "app/page.tsx" "<Heavy />" owner=Some(5) wrappers=[Lazy] Definition(13)
+site "app/page.tsx" "<Local />" owner=Some(5) wrappers=[] Definition(3)
+site "app/page.tsx" "<Item key={i} />" owner=Some(5) wrappers=[] Definition(2)
+site "app/page.tsx" "<my-element />" owner=Some(5) wrappers=[] Intrinsic
+site "app/unknown/page.tsx" "<p />" owner=None wrappers=[] Intrinsic
+site "app/unknown/page.tsx" "<this.Comp />" owner=Some(6) wrappers=[] Unknown { reason: This, path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 653, end: 657 }) }
+site "app/unknown/page.tsx" "<Icon />" owner=Some(7) wrappers=[] Unknown { reason: Parameter, path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 685, end: 693 }) }
+site "app/unknown/page.tsx" "<Guarded />" owner=Some(9) wrappers=[] Unknown { reason: Call(Some("withAuth")), path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 396, end: 417 }) }
+site "app/unknown/page.tsx" "<Fancy />" owner=Some(9) wrappers=[] Unknown { reason: Call(Some("styled.div")), path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 433, end: 456 }) }
+site "app/unknown/page.tsx" "<Choice />" owner=Some(9) wrappers=[] Unknown { reason: Value, path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 473, end: 510 }) }
+site "app/unknown/page.tsx" "<Changing />" owner=Some(9) wrappers=[] Unknown { reason: Mutable, path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 516, end: 534 }) }
+site "app/unknown/page.tsx" "<Picked />" owner=Some(9) wrappers=[] Unknown { reason: Destructured, path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 560, end: 578 }) }
+site "app/unknown/page.tsx" "<A />" owner=Some(9) wrappers=[] Unknown { reason: Cycle, path: SourcePath("app/unknown/page.tsx"), span: None }
+site "app/unknown/page.tsx" "<Undeclared />" owner=Some(9) wrappers=[] Unknown { reason: Global("Undeclared"), path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 884, end: 894 }) }
+site "app/unknown/page.tsx" "<Missing />" owner=Some(9) wrappers=[] Unknown { reason: NotExported, path: SourcePath("components/index.ts"), span: None }
+site "app/unknown/page.tsx" "<Twice />" owner=Some(9) wrappers=[] Unknown { reason: AmbiguousStar, path: SourcePath("lib/ambiguous.ts"), span: None }
+site "app/unknown/page.tsx" "<Absent />" owner=Some(9) wrappers=[] Unknown { reason: Unresolved(NotFound), path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 242, end: 260 }) }
+site "app/unknown/page.tsx" "<Broken />" owner=Some(9) wrappers=[] Unknown { reason: Unparsed, path: SourcePath("lib/broken.ts"), span: None }
+site "app/unknown/page.tsx" "<Typed />" owner=Some(9) wrappers=[] Unknown { reason: Declaration, path: SourcePath("lib/typed.d.ts"), span: None }
+site "app/unknown/page.tsx" "<Icons.Home />" owner=Some(9) wrappers=[] External { specifier: "fictional-icons", package: "fictional-icons", export: Namespace, members: ["Home"] }
+site "app/unknown/page.tsx" "<Kind />" owner=Some(9) wrappers=[] Unknown { reason: TypeOnly, path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 108, end: 132 }) }
+site "app/unknown/page.tsx" "<Slot Icon={Guarded} />" owner=Some(9) wrappers=[] Definition(7)
+site "app/unknown/page.tsx" "<Legacy />" owner=Some(9) wrappers=[] Definition(6)
+site "app/unknown/page.tsx" "<Overloaded />" owner=Some(9) wrappers=[] Definition(8)
+site "app/unknown/page.tsx" "<Ui.Missing />" owner=Some(9) wrappers=[] Unknown { reason: Global("Ui"), path: SourcePath("app/unknown/page.tsx"), span: Some(Span { start: 1016, end: 1018 }) }
+site "components/button.tsx" "<button ref={ref} />" owner=Some(10) wrappers=[] Intrinsic
+site "components/card.tsx" "<div />" owner=Some(11) wrappers=[] Intrinsic
+site "components/chart-impl.tsx" "<canvas />" owner=Some(12) wrappers=[] Intrinsic
+site "components/heavy.tsx" "<section />" owner=Some(13) wrappers=[] Intrinsic
+site "components/shell.tsx" "<div>" owner=Some(14) wrappers=[] Intrinsic
+site "components/svg.jsx" "<svg:rect />" owner=None wrappers=[] Intrinsic
+site "components/ui.tsx" "<span />" owner=Some(15) wrappers=[] Intrinsic
+entry "app/error.tsx" Error wrappers=[] Definition(0)
+entry "app/layout.tsx" Layout wrappers=[] Definition(1)
+entry "app/loading.tsx" Loading wrappers=[] Definition(11)
+entry "app/page.tsx" Page wrappers=[Memo] Definition(5)
+entry "app/unknown/page.tsx" Page wrappers=[] Definition(9)
