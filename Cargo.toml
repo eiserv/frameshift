@@ -2,6 +2,7 @@
 members = [
     "crates/frameshift-cli",
     "crates/frameshift-core",
+    "crates/frameshift-catalog",
     "crates/frameshift-input",
     "crates/frameshift-package",
     "crates/frameshift-nextjs",

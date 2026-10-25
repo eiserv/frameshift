@@ -37,6 +37,9 @@ pub mod limits;
 pub mod project;
 pub mod version;
 
+/// The V1 feature catalog of the `nextjs-to-astro-preact` path (`D-099`).
+pub use frameshift_catalog as catalog;
+
 /// Framework-independent text, paths, identifiers, findings, SHA-256, limits,
 /// and deterministic collections.
 pub use frameshift_core as foundation;
