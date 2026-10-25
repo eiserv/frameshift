@@ -1307,6 +1307,83 @@ fn implicit_layout_rendering_participates_in_conversion_demotion() {
     );
 }
 #[test]
+fn link_literal_objects_preserve_mapping_and_base_path_assessments() {
+    for (attributes, expected) in [
+        ("href=\"/about\"", Status::Auto),
+        ("href={{pathname:'/about'}}", Status::Auto),
+        (
+            "href={(({pathname:'/about',query:{q:'a b',page:2,tag:['one','two']},hash:'section'}) as const)}",
+            Status::Auto,
+        ),
+        ("href={{pathname: destination}}", Status::Review),
+        ("href={{...destination}}", Status::Review),
+        ("href={{['pathname']:'/about'}}", Status::Review),
+        ("href={{get pathname(){return '/about'}}}", Status::Review),
+        ("href={{pathname: makePath()}}", Status::Review),
+        ("href={{pathname:'/about'}} {...props}", Status::Review),
+        (
+            "href={{pathname:'/about'}} prefetch={false}",
+            Status::Review,
+        ),
+        ("href={{pathname:'/about'}} replace", Status::Review),
+        ("href={{pathname:'/about'}} scroll={false}", Status::Review),
+        ("href={true}", Status::Review),
+    ] {
+        let source = format!(
+            "import Link from 'next/link';export default function Page(){{return <Link {attributes}>About</Link>}}"
+        );
+        let root = create(
+            "link-literal-object",
+            &[
+                ("app/page.tsx", &source),
+                ("next.config.mjs", "export default {basePath:'/docs'}"),
+            ],
+        );
+        let a = run(&root);
+        let occurrence = a
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| o.occurrence.feature.id == "nextjs.api.link")
+            .unwrap();
+        assert_eq!(occurrence.status, Some(expected), "{attributes}");
+        let owner = occurrence.unit.as_ref().unwrap();
+        assert_eq!(
+            a.assessment
+                .units
+                .iter()
+                .find(|u| u.id.as_str() == owner)
+                .unwrap()
+                .status,
+            expected,
+            "{attributes}"
+        );
+        assert_eq!(a.assessment.routes[0].status, expected, "{attributes}");
+        let base = a
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| o.occurrence.feature.id == "nextjs.config.base-path")
+            .unwrap();
+        let computed_href = attributes.contains("destination")
+            || attributes.contains("makePath")
+            || attributes.contains("['pathname']")
+            || attributes.contains("get pathname")
+            || attributes.contains("...props")
+            || attributes.contains("true");
+        assert_eq!(
+            base.status,
+            Some(if computed_href {
+                Status::Review
+            } else {
+                Status::Auto
+            }),
+            "{attributes}"
+        );
+        StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+    }
+}
+#[test]
 fn a_proven_next_link_mapping_does_not_block_async_astro_conversion() {
     let root = create(
         "async-link",

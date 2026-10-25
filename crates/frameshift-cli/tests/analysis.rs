@@ -39,6 +39,29 @@ fn call(root: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 #[test]
+fn literal_object_links_do_not_trigger_fail_on_review() {
+    let root = fixture("link-object");
+    fs::write(root.join("package-lock.json"), format!(
+        "{{\"lockfileVersion\":3,\"packages\":{{\"\":{{\"name\":\"fictional-site\",\"dependencies\":{{\"{0}\":\"16.2.0\"}}}},\"node_modules/{0}\":{{\"version\":\"16.2.0\"}}}}}}", "next"
+    )).unwrap();
+    for (attributes, code) in [
+        ("href={{pathname:'/about',query:{q:'hello',page:2}}}", 0),
+        ("href={{pathname: destination}}", 1),
+        ("href={{pathname:'/about'}} prefetch={false}", 1),
+    ] {
+        fs::write(root.join("app/page.tsx"), format!(
+            "import Link from 'next/link';export default function Page(){{return <Link {attributes}>About</Link>}}"
+        )).unwrap();
+        let output = call(&root, &["analyze", "--to=astro-preact", "--fail-on=review"]);
+        assert_eq!(
+            output.status.code(),
+            Some(code),
+            "{attributes}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+#[test]
 fn analysis_json_exit_conditions_and_stored_report_projections() {
     let root = fixture("streams");
     let original = fs::read(root.join("app/page.tsx")).unwrap();

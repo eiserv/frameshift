@@ -68,6 +68,7 @@ pub(crate) struct Function {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Tag {
     pub attrs: BTreeMap<String, Option<String>>,
+    pub literal_href: bool,
     pub spread: bool,
     pub jsx_props: bool,
     pub dynamic_props: bool,
@@ -104,6 +105,9 @@ impl Syntax {
                             .unwrap()
                             .to_owned();
                         let known = value.and_then(|v| literal(tree, v));
+                        if name == "href" {
+                            tag.literal_href = value.is_some_and(|v| literal_href(tree, v));
+                        }
                         let jsx = value.is_some_and(|v| jsx_value(tree, v));
                         tag.jsx_props |= name != "children" && jsx;
                         tag.dynamic_props |= value.is_some_and(|v| !serializable(tree, v)) && !jsx;
@@ -363,6 +367,16 @@ fn jsx_string(quoted: &str) -> Option<String> {
     }
     Some(out)
 }
+fn literal_href(tree: &SyntaxTree<'_>, id: NodeId) -> bool {
+    let id = unwrap(tree, id);
+    if matches!(
+        tree.node(id).unwrap().kind(),
+        N::StringLiteral | N::JsxStringLiteral
+    ) {
+        return literal(tree, id).is_some();
+    }
+    matches!(tree.node(id).unwrap().kind(), N::ObjectExpression { .. }) && serializable(tree, id)
+}
 fn serializable(tree: &SyntaxTree<'_>, id: NodeId) -> bool {
     let mut pending = vec![id];
     while let Some(id) = pending.pop() {
@@ -484,8 +498,8 @@ pub(crate) fn classify(
                 if name=="NODE_ENV" || m.browser {(Review,"Environment naming and deployment settings require review.")} else {(Auto,"A build-time environment reference maps to import.meta.env.")}
             }) }else {None},
         "nextjs.route.dynamic"|"nextjs.route.catch-all"=>Some((Review,"The exported parameter generator is retained for build-time evaluation; parameter composition needs review.")),
-        "nextjs.config.base-path"=>Some(if syntax.modules.values().flat_map(|m|m.tags.values()).any(|t|t.spread||t.attrs.get("href")==Some(&None)) {(Review,"Computed hrefs need review when adding the base prefix.")}else{(Auto,"No computed href is present in the analyzed render sites.")}),
-        "nextjs.api.link"=>tag.map(|tag| if !tag.spread && tag.attrs.get("href").is_some_and(Option::is_some) && !["prefetch","replace","scroll"].iter().any(|p|tag.attrs.contains_key(*p)) {(Auto,"The literal href maps to an anchor without dropped navigation props.")}else{(Review,"Computed hrefs, spread props, or dropped navigation props require review.")}),
+        "nextjs.config.base-path"=>Some(if syntax.modules.values().flat_map(|m|m.tags.values()).any(|t|t.spread||(t.attrs.contains_key("href") && !t.literal_href)) {(Review,"Computed hrefs need review when adding the base prefix.")}else{(Auto,"No computed href is present in the analyzed render sites.")}),
+        "nextjs.api.link"=>tag.map(|tag| if !tag.spread && tag.literal_href && !["prefetch","replace","scroll"].iter().any(|p|tag.attrs.contains_key(*p)) {(Auto,"The literal href maps to an anchor without dropped navigation props.")}else{(Review,"Computed hrefs, spread props, or dropped navigation props require review.")}),
         "nextjs.api.image"=>tag.map(|tag| if !tag.spread && !["fill","placeholder"].iter().any(|k|tag.attrs.contains_key(*k)) && tag.attrs.get("src").is_some_and(Option::is_some) && matches!(project.configuration().property(&["images","unoptimized"]),ConfigProperty::Value(frameshift_evaluate::Value::Bool(true))) && !matches!(&result.occurrence.detail,Detail::Api{specifier,..} if specifier=="next/legacy/image") {(Auto,"The source disables optimization and its literal image props can be preserved.")}else{(Review,"Image loading, optimization, legacy layout, or dynamic props require review.")}),
         "nextjs.api.script"=>tag.and_then(|tag| if tag.spread {None} else {match tag.attrs.get("strategy") {Some(Some(s)) if s=="worker"=>Some((Unsupported,"The worker script strategy has no V1 mapping.")),Some(None)=>None,Some(Some(s)) if !["afterInteractive","beforeInteractive","lazyOnload"].contains(&s.as_str())=>None,Some(Some(_))|None=>Some((Review,"Script placement and loading behavior require review."))}}),
         "react.server-component"=> if let Location::Text{path,span}=at {syntax.function(path,*span).map(|f|if f.asynchronous&&!f.astro {(Unsupported,"An async component outside the proven Astro subset cannot render through Preact.")}else{(Auto,"The component has an Astro or synchronous static Preact strategy.")})} else {None},
