@@ -486,7 +486,11 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         refs(unit, "findings", &finding_ids)?
     }
     refs(summary, "evidence", &finding_ids)?;
-    for occurrence in array(v, "occurrences")? {
+    let occurrences = array(v, "occurrences")?;
+    if occurrences.len() > limits.analysis.max_occurrences {
+        return Err(invalid());
+    }
+    for occurrence in occurrences {
         if let Some(s) = optional_text(occurrence, "status")?
             && !status(s)
         {
@@ -501,7 +505,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             return Err(invalid());
         }
     }
-    let detected: BTreeSet<_> = array(v, "occurrences")?
+    let detected: BTreeSet<_> = occurrences
         .iter()
         .filter(|o| o.get("status").is_some_and(|s| !matches!(s, Value::Null)))
         .map(|o| text(o, "feature"))

@@ -344,6 +344,19 @@ fn hostile_text_is_escaped_in_json_and_coordinates_are_original() {
     StoredReport::parse(document.into_bytes(), &Limits::default()).unwrap();
 }
 #[test]
+fn stored_reports_enforce_the_local_occurrence_bound() {
+    let root = create("stored-occurrence-limit", &[("app/page.tsx", PAGE)]);
+    let document = run(&root).document().unwrap();
+    let stored = StoredReport::parse(document.clone().into_bytes(), &Limits::default()).unwrap();
+    let count = stored.value().get("occurrences").unwrap().array().len();
+    assert!(count > 0);
+    let mut limits = Limits::default();
+    limits.analysis.max_occurrences = count;
+    StoredReport::parse(document.clone().into_bytes(), &limits).unwrap();
+    limits.analysis.max_occurrences = count - 1;
+    assert!(StoredReport::parse(document.into_bytes(), &limits).is_err());
+}
+#[test]
 fn stored_reports_reject_tampering_duplicate_keys_dangling_units_and_versions() {
     let root = create("reader", &[("app/page.tsx", PAGE)]);
     let original = run(&root).document().unwrap();
