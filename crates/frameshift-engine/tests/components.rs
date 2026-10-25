@@ -153,7 +153,7 @@ const SOURCE: &[(&str, &str)] = &[
 fn build(name: &str, files: &[(&str, &str)]) -> Project {
     let limits = Limits::default();
     let snap = open(name, files, &limits);
-    project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap()
+    project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap()
 }
 
 fn text<'a>(files: &[(&str, &'a str)], file: &str) -> &'a str {
@@ -732,8 +732,8 @@ fn linking_is_repeatable_and_its_work_boundary_inclusive() {
     tight.modules.max_work = 1;
     let snap = open("project-budget", SOURCE, &tight);
     assert!(matches!(
-        project::build(&snap, None, &path("app"), EXTENSIONS, &tight),
-        Err(ProjectError::App(_) | ProjectError::WorkLimit)
+        project::build(&snap, None, &path("app"), EXTENSIONS, None, &tight),
+        Err(ProjectError::App(_) | ProjectError::Evaluate(_) | ProjectError::WorkLimit)
     ));
 }
 

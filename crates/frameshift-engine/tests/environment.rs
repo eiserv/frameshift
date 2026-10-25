@@ -113,7 +113,7 @@ const SOURCE: &[(&str, &str)] = &[
 fn build(name: &str, files: &[(&str, &str)]) -> Project {
     let limits = Limits::default();
     let snap = open(name, files, &limits);
-    project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap()
+    project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap()
 }
 
 fn module<'a>(model: &'a Project, file: &str) -> &'a ModuleEnvironment {

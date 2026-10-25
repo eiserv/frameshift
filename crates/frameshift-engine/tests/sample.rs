@@ -66,13 +66,14 @@ fn external_model_sample() {
                 .strip_suffix('/')
                 .map(|p| SourcePath::new(p, PathLimits::default()).unwrap());
             let app = SourcePath::new(&app, PathLimits::default()).unwrap();
-            let model = match project::build(&snapshot, root.as_ref(), &app, EXTENSIONS, &limits) {
-                Ok(model) => model,
-                Err(e) => {
-                    count(format!("package error {e:?}"));
-                    continue;
-                }
-            };
+            let model =
+                match project::build(&snapshot, root.as_ref(), &app, EXTENSIONS, None, &limits) {
+                    Ok(model) => model,
+                    Err(e) => {
+                        count(format!("package error {e:?}"));
+                        continue;
+                    }
+                };
             count("package".to_owned());
             if std::env::var("FRAMESHIFT_MODEL_VERBOSE").is_ok() {
                 for node in model.modules().nodes() {

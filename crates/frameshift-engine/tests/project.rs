@@ -73,7 +73,7 @@ const SOURCE: &[(&str, &str)] = &[
 fn build(name: &str) -> (Snapshot, Project) {
     let limits = Limits::default();
     let snap = open(name, SOURCE, &limits);
-    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap();
     (snap, model)
 }
 
@@ -201,7 +201,7 @@ fn preserves_ambiguous_routes_and_context_issues() {
         ],
         &limits,
     );
-    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap();
     assert_eq!(model.nextjs().routes.routes.len(), 2);
     assert!(!model.nextjs().routes.issues.is_empty());
     assert!(!model.nextjs().contexts.issues.is_empty());
@@ -231,6 +231,7 @@ fn package_boundaries_preserve_root_coordinates() {
         Some(&package),
         &path("packages/web/app"),
         EXTENSIONS,
+        None,
         &limits,
     )
     .unwrap();
@@ -248,6 +249,7 @@ fn package_boundaries_preserve_root_coordinates() {
             Some(&package),
             &path("packages/web-other/app"),
             EXTENSIONS,
+            None,
             &limits
         ),
         Err(ProjectError::OutsidePackage)
@@ -260,10 +262,10 @@ fn rejects_incomplete_discovery_and_invalid_limits() {
     limits.run.max_files = 1;
     let snap = open("incomplete", SOURCE, &limits);
     assert!(!snap.inventory().is_complete());
-    assert!(project::build(&snap, None, &path("app"), EXTENSIONS, &limits).is_err());
+    assert!(project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).is_err());
     limits.run.max_file_bytes = limits.run.max_total_bytes + 1;
     assert!(matches!(
-        project::build(&snap, None, &path("app"), EXTENSIONS, &limits),
+        project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits),
         Err(ProjectError::Limits(_))
     ));
 }
@@ -275,11 +277,12 @@ fn repeatability_across_discovery_order() {
     reversed.reverse();
     let limits = Limits::default();
     let second_snap = open("repeat-second", &reversed, &limits);
-    let second = project::build(&second_snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let second =
+        project::build(&second_snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap();
     assert_eq!(first, second);
     assert_eq!(
         first,
-        project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap()
+        project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap()
     );
     for i in 0..first.nextjs().routes.routes.len() {
         assert_eq!(first.route_dependencies(i), second.route_dependencies(i));
@@ -292,7 +295,7 @@ fn binding_provenance_for_render_sites_and_environment_names() {
     let limits = Limits::default();
     let text = "import Widget from 'fictional-ui';\nconst Local = () => <Widget />;\nexport default function Page(Widget) { return <><Widget/><Local/><div/><UI.Item/></>; }\nconst a = process.env.NEXT_PUBLIC_LABEL;\nconst b = process['env']['SECRET'];\nconst c = process.env[key];\nconst d = process.env;\nfunction shadow(process) { return process.env.IGNORE; }\nconst e = pr\\u006fcess.e\\u006ev['NEXT_PUBLIC_ESCAPED'];\n";
     let snap = open("semantics", &[("app/page.tsx", text)], &limits);
-    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap();
     let facts = &model.semantics()[0];
     assert_eq!(facts.renders.len(), 5);
     let imported = facts.renders[0].reference.as_ref().unwrap();
@@ -475,7 +478,7 @@ fn strict_tree_visitor_runs_once_and_propagates_failure() {
         &mut |_, _, _| Err(ModuleError::WorkLimit),
     );
     assert_eq!(result, Err(AppError::Modules(ModuleError::WorkLimit)));
-    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap();
     let site = &model.semantics()[0].renders[0];
     assert_eq!(site.spelling, "Widget<number>");
     assert!(matches!(
@@ -489,7 +492,7 @@ fn method_render_owners_and_computed_keys_keep_lexical_context() {
     let limits = Limits::default();
     let text = "class Card { render() { return <CardBody/>; } }\nfunction Outer() { class Inner { show() { return <InnerBody/>; } } const obj = { draw() { return <ObjectBody/>; }, get child() { return <GetterBody/>; }, [<Key/>]() { return <ComputedBody/>; } }; return obj; }\nconst obj = { [<TopKey/>]() { return <TopBody/>; } };";
     let snap = open("methods", &[("app/page.tsx", text)], &limits);
-    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap();
     let sites = &model.semantics()[0].renders;
     assert_eq!(sites.len(), 8);
     for (name, prefix) in [
@@ -539,7 +542,7 @@ fn runtime_declaration_targets_keep_parse_failures_without_traversal() {
         ],
         &limits,
     );
-    let model = project::build(&snap, None, &path("app"), EXTENSIONS, &limits).unwrap();
+    let model = project::build(&snap, None, &path("app"), EXTENSIONS, None, &limits).unwrap();
     let closure = model.route_dependencies(0).unwrap();
     assert_eq!(closure.unparsed, [&path("lib/broken.d.ts")]);
     assert!(closure.files.contains(&&path("lib/types.d.ts")));
