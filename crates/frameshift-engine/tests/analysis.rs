@@ -997,6 +997,80 @@ fn duplicate_route_patterns_are_source_evidence_rather_than_an_engine_error() {
 }
 
 #[test]
+fn convention_strategy_uses_its_entry_and_combines_owned_helpers_in_any_order() {
+    let helper = "function Helper(){const text='Hello';return <p>{text}</p>}";
+    for (name, path, entry, helper, expected) in [
+        (
+            "page",
+            "app/page.tsx",
+            "export default function Page(){return <Helper/>}",
+            helper,
+            Strategy::Astro,
+        ),
+        (
+            "async-page",
+            "app/page.tsx",
+            "export default async function Page(){return <Helper/>}",
+            helper,
+            Strategy::Astro,
+        ),
+        (
+            "layout",
+            "app/layout.tsx",
+            "export default function Layout({children}){return <html><body><Helper/>{children}</body></html>}",
+            helper,
+            Strategy::Astro,
+        ),
+        (
+            "preact-page",
+            "app/page.tsx",
+            "export default function Page(){const text='Hello';return <Helper text={text}/>}",
+            "function Helper({text}){return <p>{text}</p>}",
+            Strategy::PreactStatic,
+        ),
+        (
+            "unmapped-helper",
+            "app/page.tsx",
+            "export default function Page(){return <Helper/>}",
+            "async function Helper(){const text='Hello';return <p>{text}</p>}",
+            Strategy::Preserve,
+        ),
+    ] {
+        let mut results = Vec::new();
+        for source in [format!("{entry}{helper}"), format!("{helper}{entry}")] {
+            let root = create(name, &[("app/page.tsx", PAGE), (path, &source)]);
+            let analysis = run(&root);
+            let unit = analysis
+                .assessment
+                .units
+                .iter()
+                .find(|u| u.path.as_ref().is_some_and(|p| p.as_str() == path))
+                .unwrap();
+            assert_eq!(unit.strategy, expected, "{name}");
+            assert_eq!(
+                unit.status,
+                if expected == Strategy::Preserve {
+                    Status::Unsupported
+                } else {
+                    Status::Auto
+                },
+                "{name}"
+            );
+            results.push((
+                unit.strategy,
+                unit.status,
+                analysis.assessment.routes[0].status,
+            ));
+            StoredReport::parse(
+                analysis.document().unwrap().into_bytes(),
+                &Limits::default(),
+            )
+            .unwrap();
+        }
+        assert_eq!(results[0], results[1], "{name}");
+    }
+}
+#[test]
 fn implicit_layout_rendering_participates_in_conversion_demotion() {
     let root = create(
         "implicit-layout",

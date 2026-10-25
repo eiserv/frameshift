@@ -633,6 +633,16 @@ pub(crate) fn assess(
             }else{assess::classify(o, project, syntax)}
         })
         .collect();
+    for entry in &graph.entries {
+        if let Some(unit) = owners.owner(&units, &Location::File(entry.path.clone())) {
+            units[unit].strategy = if let Rendered::Definition(id) = entry.resolved.rendered {
+                let definition = &graph.definitions[id];
+                component_strategies[&(definition.path.clone(), definition.span)]
+            } else {
+                Strategy::Preserve
+            };
+        }
+    }
     for (key, strategy) in &component_strategies {
         if let Some(unit) = owners.owner(
             &units,
@@ -640,8 +650,10 @@ pub(crate) fn assess(
                 path: key.0.clone(),
                 span: key.1,
             },
-        ) && matches!(units[unit].strategy, Strategy::NotApplicable)
+        ) && (!main_files.contains(&key.0) || *strategy == Strategy::Preserve)
         {
+            // Astro entries can embed synchronous Preact helpers. A helper
+            // without a mapping withholds the whole owning unit's strategy.
             units[unit].strategy = *strategy;
         }
         let id = match strategy {
@@ -801,17 +813,12 @@ pub(crate) fn assess(
         };
         if id == "react.server-component"
             && let Location::Text { path, span } = &occurrence.occurrence.location
+            && component_strategies.get(&(path.clone(), *span)) == Some(&Strategy::Preserve)
         {
-            if component_strategies.get(&(path.clone(), *span)) == Some(&Strategy::Preserve) {
-                occurrence.status = Some(Status::Unsupported);
-                occurrence.reason = Reason::Proven(
-                    "An async component demoted by the conversion fixed point has no static Preact equivalent.",
-                );
-            } else if let Some(strategy) = component_strategies.get(&(path.clone(), *span))
-                && units[index].strategy == Strategy::NotApplicable
-            {
-                units[index].strategy = *strategy;
-            }
+            occurrence.status = Some(Status::Unsupported);
+            occurrence.reason = Reason::Proven(
+                "An async component demoted by the conversion fixed point has no static Preact equivalent.",
+            );
         }
         let status = occurrence.status.unwrap();
         units[index].status = units[index].status.max(status);
