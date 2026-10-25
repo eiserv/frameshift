@@ -9,8 +9,9 @@ use frameshift_engine::foundation::{
 use frameshift_engine::input::{Snapshot, snapshot};
 use frameshift_engine::limits::Limits;
 use frameshift_engine::modules::{
-    ConfigProblem, EdgeKind, FileKind, GraphLimits, ModuleError, ModuleGraph, ModuleLimits,
-    ModuleState, Resolution, ResolutionConfig, Resolver, UnresolvedReason as U, build_module_graph,
+    ConfigIssue, ConfigProblem, EdgeKind, FileKind, GraphLimits, ModuleError, ModuleGraph,
+    ModuleLimits, ModuleState, Resolution, ResolutionConfig, Resolver, UnresolvedReason as U,
+    build_module_graph,
 };
 use frameshift_engine::syntax::JsonLimits;
 
@@ -1432,6 +1433,98 @@ fn node10_inheritance_overrides_profiles_without_losing_option_origins() {
             )
             .issues()
             .is_empty()
+        );
+    }
+}
+
+#[test]
+fn unmodeled_module_resolution_is_judged_after_inheritance() {
+    // A base with an unmodeled value, as in shared workspace configurations,
+    // does not block a file that overrides it; the effective value does.
+    for (name, base, own, issue) in [
+        (
+            "overridden",
+            r#""module":"NodeNext","moduleResolution":"NodeNext""#,
+            r#","compilerOptions":{"module":"ESNext","moduleResolution":"Bundler"}"#,
+            None,
+        ),
+        (
+            "overridden-node10",
+            r#""moduleResolution":"classic""#,
+            r#","compilerOptions":{"moduleResolution":"node10"}"#,
+            None,
+        ),
+        (
+            "inherited",
+            r#""moduleResolution":"NodeNext""#,
+            "",
+            Some("config/base.json"),
+        ),
+        (
+            "effective",
+            r#""moduleResolution":"Bundler""#,
+            r#","compilerOptions":{"moduleResolution":"node16"}"#,
+            Some("tsconfig.json"),
+        ),
+    ] {
+        let g = graph(
+            &format!("resolution-inherit-{name}"),
+            &[
+                (
+                    "config/base.json",
+                    &format!(r#"{{"compilerOptions":{{{base}}}}}"#),
+                ),
+                (
+                    "tsconfig.json",
+                    &format!(r#"{{"extends":"./config/base.json"{own}}}"#),
+                ),
+                ("entry.ts", "import './dep';"),
+                ("dep.ts", ""),
+            ],
+        );
+        let resolution = &g.node(&path("entry.ts")).unwrap().edges[0].resolution;
+        match issue {
+            None => {
+                assert!(g.configuration_issues().is_empty(), "{name}");
+                assert!(
+                    matches!(resolution, Resolution::Local { path, .. } if path.as_str() == "dep.ts"),
+                    "{name}"
+                );
+            }
+            Some(origin) => {
+                assert_eq!(
+                    g.configuration_issues(),
+                    [ConfigIssue {
+                        path: path(origin),
+                        problem: ConfigProblem::Unsupported
+                    }],
+                    "{name}"
+                );
+                assert_eq!(
+                    *resolution,
+                    Resolution::Unresolved(U::Configuration),
+                    "{name}"
+                );
+            }
+        }
+    }
+    for (value, problem) in [
+        ("Classic", ConfigProblem::Unsupported),
+        ("Node16", ConfigProblem::Unsupported),
+        ("NodeNext", ConfigProblem::Unsupported),
+        ("node12", ConfigProblem::Invalid),
+    ] {
+        assert_eq!(
+            config(
+                &format!(r#"{{"compilerOptions":{{"moduleResolution":"{value}"}}}}"#),
+                "config/tsconfig.json"
+            )
+            .issues(),
+            [ConfigIssue {
+                path: path("config/tsconfig.json"),
+                problem
+            }],
+            "{value}"
         );
     }
 }
