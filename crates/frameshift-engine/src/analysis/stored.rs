@@ -5,7 +5,7 @@
 
 use super::{AnalyzeError, failure, metrics::Metric};
 use crate::{document, limits::Limits};
-use frameshift_core::{SourcePath, SourceText};
+use frameshift_core::{SourcePath, SourceText, UnitKind};
 use frameshift_syntax::{JsonDialect, JsonValue, parse_json};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -446,25 +446,26 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         {
             return Err(invalid());
         }
-        if !matches!(
-            text(unit, "kind")?,
-            "route"
-                | "layout"
-                | "provider"
-                | "endpoint"
-                | "component"
-                | "route-file"
-                | "module"
-                | "stylesheet"
-                | "config"
-        ) {
+        let kind = match text(unit, "kind")? {
+            "route" => UnitKind::Route,
+            "layout" => UnitKind::Layout,
+            "provider" => UnitKind::Provider,
+            "endpoint" => UnitKind::Endpoint,
+            "component" => UnitKind::Component,
+            "route-file" => UnitKind::RouteFile,
+            "module" => UnitKind::Module,
+            "stylesheet" => UnitKind::Stylesheet,
+            "config" => UnitKind::Config,
+            _ => return Err(invalid()),
+        };
+        let Some(Value::Bool(client)) = unit.get("client") else {
             return Err(invalid());
-        }
+        };
         if let Some(p) = optional_text(unit, "path")? {
             path(p, limits)?
         }
         let weight = number(unit, "weight")?;
-        if !matches!(weight, 2 | 3 | 4 | 5 | 8) {
+        if weight != super::metrics::weight(kind, *client) {
             return Err(invalid());
         }
         total = total.checked_add(weight).ok_or_else(invalid)?;

@@ -649,6 +649,74 @@ fn stored_reports_validate_nested_records_and_relationships() {
     assert_eq!(accepted.value(), &additive);
 }
 #[test]
+fn stored_unit_weights_match_kind_and_required_client_flag() {
+    let root = create("stored-unit-weights", &[("app/page.tsx", PAGE)]);
+    for kind in [
+        UnitKind::Route,
+        UnitKind::Layout,
+        UnitKind::Provider,
+        UnitKind::Endpoint,
+        UnitKind::Component,
+        UnitKind::RouteFile,
+        UnitKind::Module,
+        UnitKind::Stylesheet,
+        UnitKind::Config,
+    ] {
+        for client in [false, true] {
+            let mut analysis = run(&root);
+            // Report rendering recomputes every summary from these weights,
+            // so an inconsistent total cannot mask missing per-unit checks.
+            let index = analysis
+                .assessment
+                .units
+                .iter()
+                .position(|u| u.kind == UnitKind::Route)
+                .unwrap();
+            let unit = &mut analysis.assessment.units[index];
+            unit.kind = kind;
+            unit.client = client;
+            let expected = analysis::metrics::weight(kind, client);
+            for weight in [2, 3, 4, 5, 8] {
+                analysis.assessment.units[index].weight = weight;
+                let document = analysis.document().unwrap();
+                assert_eq!(
+                    StoredReport::parse(document.into_bytes(), &Limits::default()).is_ok(),
+                    weight == expected,
+                    "{kind:?}, client={client}, weight={weight}"
+                );
+            }
+        }
+    }
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    for flag in [
+        None,
+        Some(Value::Null),
+        Some(Value::Number("0".into())),
+        Some(Value::String("false".into())),
+    ] {
+        let mut changed = original.value().clone();
+        let Value::Object(root) = &mut changed else {
+            unreachable!()
+        };
+        let Value::Array(units) = root.get_mut("units").unwrap() else {
+            unreachable!()
+        };
+        let Value::Object(unit) = &mut units[0] else {
+            unreachable!()
+        };
+        if let Some(flag) = flag {
+            unit.insert("client".into(), flag);
+        } else {
+            unit.remove("client");
+        }
+        assert!(StoredReport::parse(changed.document().into_bytes(), &Limits::default()).is_err());
+    }
+}
+#[test]
 fn stored_report_reemission_enforces_the_retained_byte_bound() {
     let root = create("stored-output-bound", &[("app/page.tsx", PAGE)]);
     let original = run(&root).document().unwrap();
