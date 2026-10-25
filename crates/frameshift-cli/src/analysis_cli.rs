@@ -398,7 +398,10 @@ pub(crate) fn run(
                             );
                         }
                     };
-                    let document = stored.document();
+                    let document = match stored.document() {
+                        Ok(d) => d,
+                        Err(e) => return fail(&options, stdout, stderr, 3, &e.to_string()),
+                    };
                     if let Some(path) = &options.output {
                         let destination = match report_destination(Path::new(&options.source), path)
                         {
@@ -456,7 +459,9 @@ pub(crate) fn run(
         Request::Report(options) => match read_report(Path::new(&options.source)) {
             Ok(report) => {
                 let mut rendered = Vec::new();
-                render(&report, &options, &mut rendered)?;
+                if let Err(error) = render(&report, &options, &mut rendered) {
+                    return fail(&options, stdout, stderr, 3, &error.to_string());
+                }
                 if let Some(path) = &options.output {
                     if let Err(e) = write_new(path, &rendered) {
                         return fail(&options, stdout, stderr, 4, e);
@@ -616,10 +621,11 @@ fn render(report: &StoredReport, options: &Options, out: &mut impl Write) -> io:
     if options.format == "json" && !filtered && options.section == "summary" {
         return out.write_all(
             if options.section_given {
-                get(root, "summary").document()
+                report.projection_document(get(root, "summary"))
             } else {
                 report.document()
             }
+            .map_err(io::Error::other)?
             .as_bytes(),
         );
     }
@@ -742,14 +748,22 @@ fn render(report: &StoredReport, options: &Options, out: &mut impl Write) -> io:
         .collect();
     let projection = Value::Array(values);
     if options.format == "json" {
-        out.write_all(projection.document().as_bytes())
+        out.write_all(
+            report
+                .projection_document(&projection)
+                .map_err(io::Error::other)?
+                .as_bytes(),
+        )
     } else {
         if options.format == "markdown" {
             writeln!(out, "## {}\n\n```json", escape(section))?
         }
         // JSON string escaping also protects text and Markdown code fences
         // from control characters, multiline data, and injected backticks.
-        let printed = projection.document().replace('`', "\\u0060");
+        let printed = report
+            .projection_document(&projection)
+            .map_err(io::Error::other)?
+            .replace('`', "\\u0060");
         out.write_all(printed.as_bytes())?;
         if options.format == "markdown" {
             writeln!(out, "```")?

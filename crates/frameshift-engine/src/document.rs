@@ -38,21 +38,6 @@ impl Value {
 
 /// Prints only if the exact serialized byte count fits the explicit bound.
 pub(crate) fn print_bounded(value: &Value, max_bytes: usize) -> Option<String> {
-    fn string_size(text: &str) -> usize {
-        text.chars().fold(2usize, |n, c| {
-            n.saturating_add(match c {
-                '"' | '\\' | '\u{08}' | '\u{0c}' | '\n' | '\r' | '\t' => 2,
-                '\u{00}'..='\u{1f}'
-                | '\u{7f}'..='\u{9f}'
-                | '\u{061c}'
-                | '\u{200e}'
-                | '\u{200f}'
-                | '\u{2028}'..='\u{202e}'
-                | '\u{2066}'..='\u{2069}' => 6,
-                c => c.len_utf8(),
-            })
-        })
-    }
     fn size(value: &Value, depth: usize) -> usize {
         match value {
             Value::Null => 4,
@@ -155,7 +140,23 @@ fn newline(out: &mut String, depth: usize) {
     }
 }
 
-fn write_string(out: &mut String, text: &str) {
+pub(crate) fn string_size(text: &str) -> usize {
+    text.chars().fold(2usize, |n, c| {
+        n.saturating_add(match c {
+            '"' | '\\' | '\u{08}' | '\u{0c}' | '\n' | '\r' | '\t' => 2,
+            '\u{00}'..='\u{1f}'
+            | '\u{7f}'..='\u{9f}'
+            | '\u{061c}'
+            | '\u{200e}'
+            | '\u{200f}'
+            | '\u{2028}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}' => 6,
+            c => c.len_utf8(),
+        })
+    })
+}
+
+pub(crate) fn write_string(out: &mut String, text: &str) {
     out.push('"');
     for scalar in text.chars() {
         match scalar {

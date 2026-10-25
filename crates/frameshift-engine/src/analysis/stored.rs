@@ -61,14 +61,68 @@ impl Value {
         s.push('\n');
         s
     }
+    /// Re-emits JSON only when its exact byte count, including escaping,
+    /// indentation and the final LF, fits `max_bytes`.
+    pub fn document_bounded(&self, max_bytes: usize) -> Result<String, AnalyzeError> {
+        let bytes = self
+            .serialized_size(0)
+            .checked_add(1)
+            .filter(|&n| n <= max_bytes)
+            .ok_or_else(|| super::limit("analysis report byte limit exceeded"))?;
+        let mut out = String::new();
+        out.try_reserve_exact(bytes).map_err(super::limit)?;
+        self.write(&mut out, 0);
+        out.push('\n');
+        Ok(out)
+    }
+    fn serialized_size(&self, depth: usize) -> usize {
+        match self {
+            Self::Null => 4,
+            Self::Bool(b) => {
+                if *b {
+                    4
+                } else {
+                    5
+                }
+            }
+            Self::Number(n) => n.len(),
+            Self::String(s) => document::string_size(s),
+            Self::Array(a) => {
+                if a.is_empty() {
+                    return 2;
+                }
+                a.iter()
+                    .fold(3usize.saturating_add(depth.saturating_mul(2)), |n, v| {
+                        n.saturating_add(2)
+                            .saturating_add((depth + 1).saturating_mul(2))
+                            .saturating_add(v.serialized_size(depth + 1))
+                    })
+                    .saturating_sub(1)
+            }
+            Self::Object(o) => {
+                if o.is_empty() {
+                    return 2;
+                }
+                o.iter()
+                    .fold(
+                        3usize.saturating_add(depth.saturating_mul(2)),
+                        |n, (key, v)| {
+                            n.saturating_add(4)
+                                .saturating_add((depth + 1).saturating_mul(2))
+                                .saturating_add(document::string_size(key))
+                                .saturating_add(v.serialized_size(depth + 1))
+                        },
+                    )
+                    .saturating_sub(1)
+            }
+        }
+    }
     fn write(&self, out: &mut String, depth: usize) {
         match self {
             Self::Null => out.push_str("null"),
             Self::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
             Self::Number(n) => out.push_str(n),
-            Self::String(s) => {
-                out.push_str(document::print(&document::Value::string(s)).trim_end())
-            }
+            Self::String(s) => document::write_string(out, s),
             Self::Array(a) => {
                 out.push('[');
                 for (i, v) in a.iter().enumerate() {
@@ -93,7 +147,7 @@ impl Value {
                     }
                     out.push('\n');
                     out.push_str(&"  ".repeat(depth + 1));
-                    Value::String(k.clone()).write(out, depth + 1);
+                    document::write_string(out, k);
                     out.push_str(": ");
                     v.write(out, depth + 1)
                 }
@@ -110,6 +164,7 @@ impl Value {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StoredReport {
     value: Value,
+    max_report_bytes: usize,
 }
 impl StoredReport {
     /// Parses at most `analysis.max-report-bytes`, `json.max-nodes`, and the
@@ -175,15 +230,24 @@ impl StoredReport {
         }
         let value = nodes[parsed.root().index()].take().ok_or_else(invalid)?;
         validate(&value, limits)?;
-        Ok(Self { value })
+        Ok(Self {
+            value,
+            max_report_bytes: limits.analysis.max_report_bytes,
+        })
     }
     /// The validated document tree.
     pub fn value(&self) -> &Value {
         &self.value
     }
-    /// Re-emits canonical JSON. Equal parsed values produce equal bytes.
-    pub fn document(&self) -> String {
-        self.value.document()
+    /// Re-emits canonical JSON within the byte bound supplied to `parse`.
+    /// Equal parsed values produce equal bytes. Expansion beyond the bound
+    /// fails before allocating the output.
+    pub fn document(&self) -> Result<String, AnalyzeError> {
+        self.value.document_bounded(self.max_report_bytes)
+    }
+    /// Renders a report projection under the same retained byte bound.
+    pub fn projection_document(&self, value: &Value) -> Result<String, AnalyzeError> {
+        value.document_bounded(self.max_report_bytes)
     }
 }
 fn invalid() -> AnalyzeError {

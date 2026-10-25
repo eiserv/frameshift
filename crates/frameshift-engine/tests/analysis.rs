@@ -117,7 +117,8 @@ fn analysis_is_read_only_deterministic_and_schema_readable() {
     assert_eq!(route.strategy, Strategy::Astro);
     assert!(!a.document().unwrap().contains(root.to_str().unwrap()));
     assert_eq!(a.assessment.routes[0].unit, "route:/");
-    let again = StoredReport::parse(stored.document().into_bytes(), &Limits::default()).unwrap();
+    let again =
+        StoredReport::parse(stored.document().unwrap().into_bytes(), &Limits::default()).unwrap();
     assert_eq!(stored, again);
 }
 #[test]
@@ -646,6 +647,63 @@ fn stored_reports_validate_nested_records_and_relationships() {
     let accepted =
         StoredReport::parse(additive.document().into_bytes(), &Limits::default()).unwrap();
     assert_eq!(accepted.value(), &additive);
+}
+#[test]
+fn stored_report_reemission_enforces_the_retained_byte_bound() {
+    let root = create("stored-output-bound", &[("app/page.tsx", PAGE)]);
+    let original = run(&root).document().unwrap();
+    let compact_extra = format!(
+        "{},\"extra\":{}[{}]{} }}",
+        original.trim_end().strip_suffix('}').unwrap(),
+        "[".repeat(100),
+        vec!["null"; 200].join(","),
+        "]".repeat(100),
+    );
+    let expanded = StoredReport::parse(compact_extra.clone().into_bytes(), &Limits::default())
+        .unwrap()
+        .document()
+        .unwrap();
+    assert!(expanded.len() > compact_extra.len());
+    for bound in [compact_extra.len(), expanded.len() - 1, expanded.len()] {
+        let mut limits = Limits::default();
+        limits.analysis.max_report_bytes = bound;
+        let stored = StoredReport::parse(compact_extra.clone().into_bytes(), &limits).unwrap();
+        if bound == expanded.len() {
+            assert_eq!(stored.document().unwrap(), expanded);
+        } else {
+            assert_eq!(
+                stored.document().unwrap_err().kind(),
+                analysis::AnalyzeErrorKind::Limit
+            );
+            assert_eq!(
+                stored
+                    .projection_document(stored.value())
+                    .unwrap_err()
+                    .kind(),
+                analysis::AnalyzeErrorKind::Limit
+            );
+        }
+    }
+    let value = Value::Object(std::collections::BTreeMap::from([
+        (
+            "\u{202e}é".into(),
+            Value::String("\"\\\n\t\u{0080}💫".into()),
+        ),
+        (
+            "array".into(),
+            Value::Array(vec![
+                Value::Bool(true),
+                Value::Bool(false),
+                Value::Null,
+                Value::Number("-1.2e3".into()),
+                Value::Array(vec![]),
+                Value::Object(Default::default()),
+            ]),
+        ),
+    ]));
+    let expected = value.document();
+    assert_eq!(value.document_bounded(expected.len()).unwrap(), expected);
+    assert!(value.document_bounded(expected.len() - 1).is_err());
 }
 #[test]
 fn stored_reports_enforce_the_local_occurrence_bound() {
