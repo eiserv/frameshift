@@ -1,6 +1,6 @@
 # Migration Reporting
 
-**Status: reporting specification with catalog identifiers, unit identities, and finding records implemented.** `FindingCode`, `RuleId`, and `FeatureId` exist under `D-055`, `UnitKind` and `UnitId` under `D-056`, and bounded findings and deterministic report-local numbering under `D-057` (sections 15 to 17 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). The `frameshift.inspection` document of `frameshift inspect` exists (`D-075`, section 32 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). The V1 feature catalog with the `Status` order of section 3.1, and feature occurrences with the statuses of single-status matrix entries, exist as engine APIs (`D-099`, section 50 of [IMPLEMENTATION.md](IMPLEMENTATION.md)); unit assessment, metrics, the evidence ledger, and migration report documents remain planned. This document defines how Frameshift counts, classifies, measures, and reports migrations. Reporting is a core product feature: the numbers must be useful, reproducible, and impossible to misread as a guarantee of correctness. Related decisions: `D-009`, `P-006`, and `P-016` in [DECISIONS.md](DECISIONS.md).
+**Status: read-only analysis reporting implemented (`D-100`); execution and verification reporting remain specified.** Stable identifiers and findings exist under `D-055` to `D-057`, inspection under `D-075`, feature detection under `D-099`, and assessment, counting ownership, route readiness, `weights-v1`, dependency evidence, integer metrics, verdicts, `frameshift.analysis` v1, and stored report views under `D-100` (IMPLEMENTATION.md section 51). Analysis evidence is immutable; outcomes remain `not-run`, and no migration or equivalence is claimed. The larger examples below illustrate the intended presentation and later execution reports, rather than exact current output.
 
 ## 1. Principles
 
@@ -30,7 +30,7 @@ A unit is the smallest independently reported element of a migration. Units do n
 | `stylesheet` | One CSS, SCSS, or CSS Module file | `stylesheet:app/globals.css` |
 | `config` | One configuration concern, such as image handling, trailing slashes, TypeScript options, or scripts | `config:nextjs.images` |
 
-Unit ID values are implemented (`D-056`, section 16 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). They derive from kind, exact canonical source path and optional export name, original rooted URL pattern for routes/endpoints, or a namespaced configuration concern, never from counters. Within the subject and export, ASCII letters, digits, and `-._~/[]()` remain literal; every other original UTF-8 byte is encoded as uppercase `%HH`. This distinguishes literal `#`, `%`, `:`, controls, and Unicode bytes without normalizing source names. For example, file `a#b` becomes `component:a%23b`, export `b` of file `a` becomes `component:a#b`, and file `a%23b` becomes `component:a%2523b`. Constructors validate identity structure and serialized byte limits, not actual discovery or framework route semantics. The counting model itself remains planned.
+Unit ID values are implemented (`D-056`, section 16 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). They derive from kind, exact canonical source path and optional export name, original rooted URL pattern for routes/endpoints, or a namespaced configuration concern, never from counters. Within the subject and export, ASCII letters, digits, and `-._~/[]()` remain literal; every other original UTF-8 byte is encoded as uppercase `%HH`. This distinguishes literal `#`, `%`, `:`, controls, and Unicode bytes without normalizing source names. For example, file `a#b` becomes `component:a%23b`, export `b` of file `a` becomes `component:a#b`, and file `a%23b` becomes `component:a%2523b`. Constructors validate identity structure and serialized byte limits, not actual discovery or framework route semantics. Counting ownership is implemented under `D-100`, with exact byte partitions for component/module files and logical configuration concerns. Unestablished provider roles remain explicit unknown component/value evidence rather than a guessed provider classification.
 
 ### 2.2 Inventory items
 
@@ -151,7 +151,7 @@ A route can be locally `auto` and still blocked through a shared dependency. Rep
 | Usage-based criticality (fan-in) | Plausible, but adding one route changes the weights of unrelated components, which makes results hard to compare between runs. Rejected for V1. |
 | Fixed weights per unit kind | Explainable, reproducible, comparable across projects and runs. Coarse, because it ignores size within a kind. Chosen (`P-006`). |
 
-### 5.2 Weights v1 (proposed)
+### 5.2 Weights v1 (validated under `D-100`)
 
 Weights express the significance and risk of a unit for the behavior of the migrated site. They do not estimate effort.
 
@@ -173,7 +173,7 @@ Rules for weights:
 - Weights are integers, published in this document and in every report (`weights-v1`).
 - Weights are not tuned per project. Users can view unweighted counts, but cannot change weights, so reports stay comparable.
 - Changing any weight creates a new weights version, recorded in the decision register.
-- The values above are proposals to be validated against real projects in M5 (`Q-002`).
+- The owner authorized adoption after corpus validation (`D-100`, `Q-002`); the read-only M5 corpus evidence is recorded in IMPLEMENTATION.md section 51. They remain coarse significance weights, not measurements of effort.
 
 ## 6. Calculation and display
 
@@ -184,6 +184,8 @@ Rules for weights:
 - **Bars.** Distribution bars have a fixed width. Characters are allocated to the classes by the largest remainder method, and every bar is accompanied by its numerators.
 
 ## 7. Project-level verdicts
+
+Implemented (`D-100`): a strict majority of routes with request-time blockers is a poor candidate for static migration; other definite blockers require manual work. With no blocker, unknown readiness yields an explicit uncertainty verdict. A positive verdict requires routes and no blocked or uncertain closure. The finalized finding IDs are retained as verdict evidence. These rules use facts and route counts, never feasibility thresholds.
 
 A verdict summarizes the project in one or two sentences. It is derived from facts, not percentage thresholds:
 
@@ -210,11 +212,11 @@ Every verdict line cites the findings it rests on.
 | `remediation` | Concrete options for the user |
 | `rule` | The rule that produced or was blocked by the finding, if any |
 
-The foundation record and collector exist (`D-057`, IMPLEMENTATION.md section 17). Ordering compares severity (`error`, `blocker`, `unknown`, `review`, `info`), location, code, unit, feature, rule, message, explanation, and remediation. Locations compare project scope first, then original UTF-8 path bytes, file-only before text ranges on the same path, start/end byte offsets, then derived start/end line and column. Optional associations sort absent first. Strings compare original bytes, without normalization. Identical records remain separate and receive successive IDs. These IDs belong to one finalized list and are not persistent keys. The full report schema and renderers remain planned.
+The foundation record and collector exist (`D-057`, IMPLEMENTATION.md section 17). Ordering compares severity (`error`, `blocker`, `unknown`, `review`, `info`), location, code, unit, feature, rule, message, explanation, and remediation. Locations compare project scope first, then original UTF-8 path bytes, file-only before text ranges on the same path, start/end byte offsets, then derived start/end line and column. Optional associations sort absent first. Strings compare original bytes, without normalization. Identical records remain separate and receive successive IDs. These IDs belong to one finalized list and are not persistent keys. The analysis schema and renderers exist under `D-100`; execution-report schema and projections remain planned.
 
 The record requires nonblank prose, with a single-line control-free message and no NUL in any field. Explanation and remediation may contain line breaks and other controls, which future renderers must escape. Inclusive defaults are 64 KiB per prose field and 100,000 records per collector, counting duplicates. Size/count/allocation failures return explicit errors without truncating evidence.
 
-The following assessment and outcome propagation remains planned. Severities correspond to statuses: `blocker` makes the unit `unsupported`, `unknown` makes it `unknown`, and `review` makes it `review`. `info` does not change the status. `error` marks a Frameshift operational failure (the unit becomes `failed`), or an internal defect.
+Assessment propagation is implemented under `D-100`; execution outcome propagation remains planned. Severities correspond to statuses: `blocker` makes the unit `unsupported`, `unknown` makes it `unknown`, and `review` makes it `review`. `info` does not change the status. `error` marks a Frameshift operational failure (the unit becomes `failed`), or an internal defect.
 
 ### 8.2 Finding code ranges
 
@@ -303,7 +305,7 @@ A full report contains the following sections. Each one is a projection of the s
 
 - **Human-readable CLI output:** summary-first, compact, ASCII by default. Colors only on terminals that support them, honoring `NO_COLOR`. See [CLI.md](CLI.md).
 - **Markdown:** `.frameshift/SUMMARY.md` in the output project, plus `frameshift report --format markdown` for sharing.
-- **JSON:** versioned documents with `kind` and an integer `schemaVersion`. The CLI implements `frameshift.version` and `frameshift.error` v1 (`D-050`, [CLI.md](CLI.md), section 4.9), and the engine renders `frameshift.inspection` v1 for `frameshift inspect` (`D-075`, [CLI.md](CLI.md), section 4.1), with schemas in [frameshift.version.schema.json](../schemas/frameshift.version.schema.json), [frameshift.error.schema.json](../schemas/frameshift.error.schema.json), and [frameshift.inspection.schema.json](../schemas/frameshift.inspection.schema.json). The inspection document lists findings with the fields of section 8.1 and has no `run` section. The migration documents `frameshift.analysis`, `frameshift.plan`, `frameshift.report`, and `frameshift.manifest` remain planned. Adding fields does not change the schema version; consumers accept additional fields. Removing or changing the meaning of a field increments it and counts as a breaking change (see [RELEASES.md](RELEASES.md)). A formal JSON Schema for each remaining document kind is planned alongside its first implementation.
+- **JSON:** versioned documents with `kind` and an integer `schemaVersion`. The CLI implements `frameshift.version` and `frameshift.error` v1 (`D-050`, [CLI.md](CLI.md), section 4.9), and the engine renders `frameshift.inspection` v1 for `frameshift inspect` (`D-075`, [CLI.md](CLI.md), section 4.1), with schemas in [frameshift.version.schema.json](../schemas/frameshift.version.schema.json), [frameshift.error.schema.json](../schemas/frameshift.error.schema.json), and [frameshift.inspection.schema.json](../schemas/frameshift.inspection.schema.json). The inspection document lists findings with the fields of section 8.1 and has no `run` section. The read-only `frameshift.analysis` v1 document exists under `D-100`, with [its schema](../schemas/frameshift.analysis.schema.json), bounded stored parsing, section views, and text/JSON/Markdown presentation. `frameshift.plan`, `frameshift.report`, and `frameshift.manifest` remain planned. Adding fields does not change the schema version; consumers accept additional fields. Removing or changing the meaning of a field increments it and counts as a breaking change (see [RELEASES.md](RELEASES.md)). A formal JSON Schema for each remaining document kind is planned alongside its first implementation.
 
 ### 10.1 Determinism and privacy
 
@@ -313,7 +315,7 @@ A full report contains the following sections. Each one is a projection of the s
 
 ## 11. Sample reports
 
-> **Fictional example data.** The projects `lumen-site` and `harbor-portal`, their files, packages (including `motion-lite`), numbers, hashes, and version strings are invented to illustrate formats and metric definitions. Frameshift 0.9.0 is a placeholder version. None of these commands exist yet.
+> **Fictional example data.** The projects `lumen-site` and `harbor-portal`, their files, packages (including `motion-lite`), numbers, hashes, and version strings are invented to illustrate formats and metric definitions. Frameshift 0.9.0 is a placeholder version. Analysis, stored report, and explanation commands exist; these are illustrative future layouts and fictional results. Migration and verification commands do not exist yet.
 
 ### 11.1 Analysis summary
 

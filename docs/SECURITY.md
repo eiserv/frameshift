@@ -171,6 +171,8 @@ The implemented finding records (`D-057`, IMPLEMENTATION.md section 17) retain o
 - All source-derived strings printed to a terminal have control characters escaped, including ANSI escape sequences and carriage returns. `frameshift inspect` implements this: its text output also escapes backslashes, line and paragraph separators, and bidirectional formatting characters, so a file or package name cannot disguise the text around it (`D-075`). Its JSON documents spell DEL, the C1 controls (including the control sequence introducer U+009B), the separators, and the Bidi_Control characters as \u escapes, so a document shown in a terminal is as safe as the text output (`D-076`); the `inspect-hostile-names` fixture checks both.
 - Markdown output escapes source-derived text. HTML rendering, if ever added, escapes by context.
 
+**M5 report boundary (`D-100`).** Stored analysis documents are untrusted data: byte/depth/node bounds, duplicate-key rejection, schema/version checks, canonical path validation, exact metric/accounting checks, and reference validation precede rendering. Rendering never opens source paths from the document. Text controls are escaped and Markdown data is enclosed in a protected code block. Analysis report files use explicit new destinations outside the source root, resolve the output parent before creation, and reject existing final files or links. Analysis writes no migration output or source snippets.
+
 ### 7.9 Plan and manifest integrity
 
 - `migrate --plan` recomputes the plan and requires an identical hash (`P-005`). The plan file's contents are never interpreted as operations.

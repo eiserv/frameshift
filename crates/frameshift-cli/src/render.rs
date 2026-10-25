@@ -16,22 +16,26 @@ const ROOT_HELP: &str = concat!(
     "Frameshift: deterministic framework migration engine\n",
     "\nUsage: frameshift <command> [options]\n",
     "\nCommands available in this build:\n",
-    "  help [command]      Print usage for help, inspect, or version\n",
+    "  help [command]      Print usage for available commands\n",
     "  inspect [<source>]  Identify a project without changing it\n",
+    "  analyze [<source>]  Assess migration to astro-preact\n",
+    "  report <file>       Render a stored analysis report\n",
+    "  explain <id>        Explain a finding, feature, or assessment rule\n",
+    "  rules               List assessment rule metadata\n",
     "  version             Print engine and build information\n",
     "\nOptions:\n",
     "  -h, --help          Print usage\n",
     "  --version           Print the short version string\n",
-    "  --format text|json  Select inspect or version output (default: text)\n",
-    "  --package <dir>     Inspect one package of a workspace\n",
-    "\nAnalysis, migration, and verification are not implemented.\n",
+    "  --format text|json  Select command output (default: text)\n",
+    "  --package <dir>     Select one workspace package\n",
+    "\nMigration and verification commands are not implemented.\n",
 );
 
 pub(crate) fn help(topic: HelpTopic) -> &'static str {
     match topic {
         HelpTopic::Root => ROOT_HELP,
         HelpTopic::Help => {
-            "Usage: frameshift help [help|inspect|version]\n\
+            "Usage: frameshift help [help|inspect|analyze|report|explain|rules|version]\n\
 Print usage for the available commands. Without a topic, print the command overview.\n"
         }
         HelpTopic::Inspect => {

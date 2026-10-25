@@ -1,5 +1,6 @@
 //! Thin command-line adapter for Frameshift's implemented engine commands.
 
+mod analysis_cli;
 mod args;
 mod render;
 
@@ -30,6 +31,7 @@ fn run(
     stderr: &mut impl Write,
 ) -> io::Result<u8> {
     let code = match request {
+        Ok(Request::Extra(request)) => analysis_cli::run(*request, stdout, stderr)?,
         Ok(Request::Help(topic)) => {
             stdout.write_all(render::help(topic).as_bytes())?;
             0

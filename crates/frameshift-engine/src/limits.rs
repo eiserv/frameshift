@@ -70,6 +70,8 @@ pub struct Limits {
     pub modules: ModuleLimits,
     /// Static evaluation work, nesting, and value size.
     pub evaluate: EvaluateLimits,
+    /// Assessment units, occurrences, route work, and report bytes.
+    pub analysis: crate::analysis::AnalysisLimits,
     /// One span rewrite.
     pub edit: EditLimits,
     /// One emitted output file.
@@ -207,7 +209,7 @@ impl Limits {
     ///
     /// The list is complete by construction: adding a field to any limit type
     /// fails to compile until it is listed here.
-    pub fn entries(&self) -> [LimitEntry; 56] {
+    pub fn entries(&self) -> [LimitEntry; 60] {
         let Self {
             run,
             ignore,
@@ -228,6 +230,7 @@ impl Limits {
             workspace,
             modules,
             evaluate,
+            analysis,
             edit,
             emit,
         } = *self;
@@ -320,6 +323,12 @@ impl Limits {
             max_depth: evaluate_depth,
             max_value_size,
         } = evaluate;
+        let crate::analysis::AnalysisLimits {
+            max_units,
+            max_occurrences,
+            max_dependency_work,
+            max_report_bytes,
+        } = analysis;
         let EditLimits {
             max_edits,
             max_output_bytes: edit_output_bytes,
@@ -331,6 +340,10 @@ impl Limits {
         let entry = |name, value| LimitEntry { name, value };
         let wide = |value: usize| value as u64;
         [
+            entry("analysis.max-dependency-work", max_dependency_work),
+            entry("analysis.max-occurrences", wide(max_occurrences)),
+            entry("analysis.max-report-bytes", wide(max_report_bytes)),
+            entry("analysis.max-units", wide(max_units)),
             entry("css.max-tokens", wide(css_tokens)),
             entry("css.parser.max-depth", wide(css_depth)),
             entry("css.parser.max-diagnostics", wide(css_diagnostics)),

@@ -20,7 +20,7 @@
 //! a read-only identification of a project with its versioned JSON document.
 //! The `project` model assembles a package's source facts, and `features`
 //! detects occurrences of the V1 feature catalog in it; the facade contains
-//! no assessment, migration, or verification pipeline. The CLI
+//! read-only assessment and reporting through `analysis`; migration and verification remain unimplemented. The CLI
 //! consumes this facade, including immutable build identity, rather than
 //! lower layers.
 
@@ -33,6 +33,7 @@ pub use frameshift_bindings as bindings;
 /// Partial static evaluation of configuration files and constants.
 pub use frameshift_evaluate as evaluate;
 
+pub mod analysis;
 mod document;
 pub mod features;
 pub mod inspect;

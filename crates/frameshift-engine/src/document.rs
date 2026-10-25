@@ -36,6 +36,65 @@ impl Value {
     }
 }
 
+/// Prints only if the exact serialized byte count fits the explicit bound.
+pub(crate) fn print_bounded(value: &Value, max_bytes: usize) -> Option<String> {
+    fn string_size(text: &str) -> usize {
+        text.chars().fold(2usize, |n, c| {
+            n.saturating_add(match c {
+                '"' | '\\' | '\u{08}' | '\u{0c}' | '\n' | '\r' | '\t' => 2,
+                '\u{00}'..='\u{1f}'
+                | '\u{7f}'..='\u{9f}'
+                | '\u{061c}'
+                | '\u{200e}'
+                | '\u{200f}'
+                | '\u{2028}'..='\u{202e}'
+                | '\u{2066}'..='\u{2069}' => 6,
+                c => c.len_utf8(),
+            })
+        })
+    }
+    fn size(value: &Value, depth: usize) -> usize {
+        match value {
+            Value::Null => 4,
+            Value::Bool(b) => {
+                if *b {
+                    4
+                } else {
+                    5
+                }
+            }
+            Value::Number(n) => n.to_string().len(),
+            Value::String(s) => string_size(s),
+            Value::Array(a) => {
+                if a.is_empty() {
+                    2
+                } else {
+                    a.iter()
+                        .fold(2usize.saturating_add(1 + depth * 2), |n, v| {
+                            n.saturating_add(2 + (depth + 1) * 2)
+                                .saturating_add(size(v, depth + 1))
+                        })
+                        .saturating_sub(1)
+                }
+            }
+            Value::Object(o) => {
+                if o.is_empty() {
+                    2
+                } else {
+                    o.iter()
+                        .fold(2usize.saturating_add(1 + depth * 2), |n, (key, v)| {
+                            n.saturating_add(4 + (depth + 1) * 2)
+                                .saturating_add(string_size(key))
+                                .saturating_add(size(v, depth + 1))
+                        })
+                        .saturating_sub(1)
+                }
+            }
+        }
+    }
+    (size(value, 0).checked_add(1)? <= max_bytes).then(|| print(value))
+}
+
 /// Prints a document followed by an LF.
 pub(crate) fn print(value: &Value) -> String {
     let mut out = String::new();
@@ -129,6 +188,25 @@ fn write_string(out: &mut String, text: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serialized_size_bounds_include_indentation_unicode_and_escapes() {
+        let value = Value::Object(vec![(
+            "items",
+            Value::Array(vec![
+                Value::Null,
+                Value::Bool(true),
+                Value::Bool(false),
+                Value::Number(u64::MAX),
+                Value::String("a\n\t\\\"💫\u{0080}\u{202e}".into()),
+                Value::Object(Vec::new()),
+                Value::Array(Vec::new()),
+            ]),
+        )]);
+        let printed = print(&value);
+        assert_eq!(print_bounded(&value, printed.len()), Some(printed.clone()));
+        assert_eq!(print_bounded(&value, printed.len() - 1), None);
+    }
 
     #[test]
     fn values_print_deterministically_with_escapes_for_terminals() {

@@ -1,0 +1,725 @@
+//! M5 end-to-end evidence contracts on fictional, temporary source projects.
+use frameshift_engine::{
+    analysis::{
+        self, AnalyzeOptions, FileClass, Strategy,
+        stored::{StoredReport, Value},
+    },
+    catalog::Status,
+    foundation::{PathLimits, SourcePath, UnitKind},
+    limits::Limits,
+};
+use std::{fs, path::PathBuf};
+mod support;
+fn create(name: &str, files: &[(&str, &str)]) -> PathBuf {
+    let root = support::temporary().join(format!("analysis-{name}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap();
+    // Real framework names are introduced at test time only (Q-014).
+    fs::write(root.join("package.json"),format!("{{\"name\":\"fictional-site\",\"dependencies\":{{\"{}\":\"16.2.0\",\"react\":\"19.2.0\",\"react-dom\":\"19.2.0\"}}}}","next")).unwrap();
+    fs::create_dir_all(root.join("app")).unwrap();
+    fs::write(
+        root.join("app/layout.tsx"),
+        "export default function Layout({children}){return <html><body>{children}</body></html>}",
+    )
+    .unwrap();
+    for (path, text) in files {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    root
+}
+fn run(root: &std::path::Path) -> analysis::Analysis {
+    analysis::analyze(root, &AnalyzeOptions::default()).unwrap()
+}
+const PAGE: &str = "export default function Page() { return <h1>Welcome</h1> }\n";
+#[test]
+fn analysis_is_read_only_deterministic_and_schema_readable() {
+    let root = create(
+        "deterministic",
+        &[
+            ("app/page.tsx", PAGE),
+            ("public/a.svg", "<svg/>"),
+            ("tests/page.spec.ts", "throw 1"),
+            ("data/catalog.csv", "a,b\n"),
+        ],
+    );
+    let before = fs::read(root.join("app/page.tsx")).unwrap();
+    let a = run(&root);
+    let b = run(&root);
+    assert_eq!(a.document().unwrap(), b.document().unwrap());
+    assert_eq!(fs::read(root.join("app/page.tsx")).unwrap(), before);
+    let stored =
+        StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+    assert_eq!(
+        stored.value().get("kind").and_then(Value::text),
+        Some("frameshift.analysis")
+    );
+    assert!(
+        a.assessment
+            .files
+            .iter()
+            .any(|f| f.path.as_str() == "public/a.svg" && f.class == FileClass::Verbatim)
+    );
+    assert!(
+        a.assessment
+            .files
+            .iter()
+            .any(|f| f.path.as_str() == "tests/page.spec.ts" && f.class == FileClass::OutOfScope)
+    );
+    let route = a
+        .assessment
+        .units
+        .iter()
+        .find(|u| u.kind == UnitKind::Route)
+        .unwrap();
+    assert_eq!(route.id.as_str(), "route:/");
+    assert_eq!(route.weight, 8);
+    assert_eq!(route.strategy, Strategy::Astro);
+    assert!(!a.document().unwrap().contains(root.to_str().unwrap()));
+    assert_eq!(a.assessment.routes[0].unit, "route:/");
+    let again = StoredReport::parse(stored.document().into_bytes(), &Limits::default()).unwrap();
+    assert_eq!(stored, again);
+}
+#[test]
+fn shared_request_time_dependency_blocks_each_route_and_retains_a_witness() {
+    let root = create(
+        "closure",
+        &[
+            (
+                "app/page.tsx",
+                "import {read} from '../lib/request'; export default function Page(){return <p>{read()}</p>}",
+            ),
+            (
+                "app/shop/page.tsx",
+                "import {read} from '../../lib/request'; export default function Shop(){return <p>{read()}</p>}",
+            ),
+            (
+                "lib/request.ts",
+                "import {cookies} from 'next/headers'; export const read = () => cookies();",
+            ),
+        ],
+    );
+    let a = run(&root);
+    assert_eq!(a.assessment.routes.len(), 2);
+    for route in &a.assessment.routes {
+        assert_eq!(route.status, Status::Unsupported);
+        assert!(route.blocker.as_ref().unwrap().contains("lib/request.ts"));
+        assert_eq!(
+            route.dependency_path.last().unwrap().as_str(),
+            "lib/request.ts"
+        );
+    }
+    assert!(
+        a.findings
+            .iter()
+            .any(|(_, f)| f.code().as_str() == "FS3101")
+    );
+    assert!(a.verdict().starts_with("Poor candidate"));
+}
+#[test]
+fn unknown_evidence_does_not_disappear_and_definite_blockers_rank_above_it() {
+    let root = create(
+        "unknown",
+        &[
+            (
+                "app/page.tsx",
+                "import Missing from '../absent'; import {cookies} from 'next/headers'; export default function Page(){cookies();return <Missing/>}",
+            ),
+            ("unreached.ts", "export const ="),
+        ],
+    );
+    let a = run(&root);
+    assert!(a.assessment.units.iter().any(|u| {
+        u.path
+            .as_ref()
+            .is_some_and(|p| p.as_str() == "unreached.ts")
+            && u.status == Status::Unknown
+    }));
+    assert!(
+        a.assessment
+            .occurrences
+            .iter()
+            .any(|o| o.status == Some(Status::Unknown))
+    );
+    assert_eq!(a.assessment.routes[0].status, Status::Unsupported);
+}
+#[test]
+fn component_ownership_partitions_bytes_and_stable_identities() {
+    let code = "export function Hero(){return <h1>Hero</h1>}\nexport function Badge(){return <b>New</b>}\nexport const value=1;\n";
+    let root = create(
+        "units",
+        &[
+            (
+                "app/page.tsx",
+                "import {Hero,Badge} from '../ui'; export default function Page(){return <><Hero/><Badge/></>}",
+            ),
+            ("ui.tsx", code),
+        ],
+    );
+    let a = run(&root);
+    let units: Vec<_> = a
+        .assessment
+        .units
+        .iter()
+        .filter(|u| u.path.as_ref().is_some_and(|p| p.as_str() == "ui.tsx"))
+        .collect();
+    assert_eq!(
+        units
+            .iter()
+            .filter(|u| u.kind == UnitKind::Component)
+            .count(),
+        2
+    );
+    let mut ranges: Vec<_> = units.iter().flat_map(|u| u.ranges.iter()).collect();
+    ranges.sort();
+    let mut end = 0;
+    for range in ranges {
+        assert_eq!(range.start(), end);
+        end = range.end()
+    }
+    assert_eq!(end, code.len());
+    assert!(
+        units
+            .iter()
+            .any(|u| u.id.as_str() == "component:ui.tsx#Hero")
+    );
+}
+#[test]
+fn conversion_fixed_point_demotes_children_and_rejects_async_preact() {
+    let root = create(
+        "fixed-point",
+        &[
+            (
+                "app/page.tsx",
+                "import Parent from '../parent';export default function Page(){return <Parent/>}",
+            ),
+            (
+                "parent.tsx",
+                "import Child from './child'; export default class Parent {render(){return <Child/>}}",
+            ),
+            (
+                "child.tsx",
+                "export default async function Child(){return <div>Child</div>}",
+            ),
+        ],
+    );
+    let a = run(&root);
+    let child = a
+        .assessment
+        .units
+        .iter()
+        .find(|u| {
+            u.path.as_ref().is_some_and(|p| p.as_str() == "child.tsx")
+                && u.kind == UnitKind::Component
+        })
+        .unwrap();
+    assert_eq!(child.status, Status::Unsupported);
+    assert_eq!(child.strategy, Strategy::Preserve);
+    assert_eq!(a.assessment.routes[0].status, Status::Unsupported);
+}
+#[test]
+fn declaration_only_dependency_does_not_poison_a_route() {
+    let root = create("dependencies", &[("app/page.tsx", PAGE)]);
+    let manifest = root.join("package.json");
+    let original = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        original.replacen(
+            "\"dependencies\":{",
+            "\"dependencies\":{\"fictional-widget\":\"^1.0.0\",",
+            1,
+        ),
+    )
+    .unwrap();
+    let a = run(&root);
+    let dependency = a
+        .dependencies
+        .iter()
+        .find(|d| d.name == "fictional-widget")
+        .unwrap();
+    assert!(dependency.used_in.is_empty());
+    assert!(
+        !a.findings
+            .iter()
+            .any(|(_, f)| f.code().as_str() == "FS3302")
+    );
+    fs::write(
+        root.join("app/page.tsx"),
+        "import Widget from 'fictional-widget';export default function Page(){return <Widget/>}",
+    )
+    .unwrap();
+    let b = run(&root);
+    assert_eq!(b.assessment.routes[0].status, Status::Unknown);
+    assert!(
+        b.findings
+            .iter()
+            .any(|(_, f)| f.code().as_str() == "FS3302")
+    );
+}
+#[test]
+fn computed_script_strategy_is_unknown_and_literal_worker_is_unsupported() {
+    for (name, strategy, status) in [
+        ("worker", "\"worker\"", Status::Unsupported),
+        ("computed", "{mode}", Status::Unknown),
+    ] {
+        let code = format!(
+            "import Script from 'next/script';export default function Page(){{return <Script src=\"/a.js\" strategy={strategy}/>}}"
+        );
+        let root = create(name, &[("app/page.tsx", &code)]);
+        let a = run(&root);
+        let o = a
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| o.occurrence.feature.id == "nextjs.api.script")
+            .unwrap();
+        assert_eq!(o.status, Some(status));
+    }
+}
+#[test]
+fn hostile_text_is_escaped_in_json_and_coordinates_are_original() {
+    let root = create(
+        "hostile",
+        &[
+            (
+                "app/page.tsx",
+                "// 💫\nimport {cookies} from 'next/headers';export default function Page(){cookies();return <p/>}",
+            ),
+            ("public/evil\u{202e}.txt", "x"),
+        ],
+    );
+    let a = run(&root);
+    let document = a.document().unwrap();
+    assert!(!document.contains('\u{202e}'));
+    assert!(document.contains("\\u202e"));
+    let f = a
+        .findings
+        .iter()
+        .find(|(_, f)| f.code().as_str() == "FS3101")
+        .unwrap()
+        .1;
+    assert!(
+        matches!(f.location(),frameshift_engine::foundation::FindingLocation::Text(t) if t.start().line==2)
+    );
+    StoredReport::parse(document.into_bytes(), &Limits::default()).unwrap();
+}
+#[test]
+fn stored_reports_reject_tampering_duplicate_keys_dangling_units_and_versions() {
+    let root = create("reader", &[("app/page.tsx", PAGE)]);
+    let original = run(&root).document().unwrap();
+    for damaged in [
+        original.replacen("\"schemaVersion\": 1", "\"schemaVersion\": 2", 1),
+        original.replacen(
+            "\"schemaVersion\": 1",
+            "\"schemaVersion\": 1,\"schemaVersion\":1",
+            1,
+        ),
+        original.replacen("\"totalWeight\": 12", "\"totalWeight\": 999", 1),
+        original.replace("\"closure\": [", "\"closure\": [\"module:missing.ts\", "),
+    ] {
+        if damaged != original {
+            assert!(StoredReport::parse(damaged.into_bytes(), &Limits::default()).is_err())
+        }
+    }
+    let mut limits = Limits::default();
+    limits.analysis.max_report_bytes = 10;
+    assert!(StoredReport::parse(original.into_bytes(), &limits).is_err());
+}
+#[test]
+fn root_relative_workspace_selection_is_explicit() {
+    let root = create(
+        "workspace",
+        &[
+            ("apps/site/package.json", "{\"name\":\"fictional-member\"}"),
+            ("apps/site/app/page.tsx", PAGE),
+        ],
+    );
+    fs::write(root.join("package-lock.json"), "{}").unwrap();
+    let mut manifest = fs::read_to_string(root.join("package.json")).unwrap();
+    manifest = manifest.replacen("{", "{\"workspaces\":[\"apps/*\"],", 1);
+    fs::write(root.join("package.json"), manifest).unwrap();
+    fs::remove_dir_all(root.join("app")).unwrap();
+    assert!(analysis::analyze(&root, &AnalyzeOptions::default()).is_err());
+    let options = AnalyzeOptions {
+        package: Some(SourcePath::new("apps/site", PathLimits::default()).unwrap()),
+        ..Default::default()
+    };
+    let a = analysis::analyze(&root, &options).unwrap();
+    assert!(
+        a.assessment
+            .files
+            .iter()
+            .all(|f| f.path.as_str().starts_with("apps/site/"))
+    );
+}
+
+/// Reproducible, read-only M5 measurement on the approved D-043 checkouts.
+/// FRAMESHIFT_ANALYSIS_DIRS is a semicolon-separated list of external roots.
+#[test]
+#[ignore = "requires the approved pinned M5 corpus outside the repository"]
+fn external_analysis_sample() {
+    use frameshift_engine::{
+        foundation::{FindingCollector, FindingLimits},
+        input::snapshot,
+        package::load_workspace,
+    };
+    use std::collections::{BTreeMap, BTreeSet};
+    let roots = std::env::var("FRAMESHIFT_ANALYSIS_DIRS").expect("set FRAMESHIFT_ANALYSIS_DIRS");
+    let mut counts: BTreeMap<String, u64> = BTreeMap::new();
+    let mut increment = |key: String, n: u64| *counts.entry(key).or_default() += n;
+    for root in roots.split(';').filter(|s| !s.is_empty()) {
+        let root = std::path::Path::new(root);
+        let mut limits = Limits::default();
+        limits.run.max_files = 400_000;
+        limits.run.max_entries = 800_000;
+        limits.run.max_total_bytes = 4 << 30;
+        let mut findings = FindingCollector::new(FindingLimits::default());
+        let snapshot = snapshot(root, limits.snapshot(), &mut findings).unwrap();
+        let workspace = load_workspace(&snapshot, limits.package(), &mut findings).ok();
+        let files: BTreeSet<_> = snapshot
+            .inventory()
+            .files()
+            .as_slice()
+            .iter()
+            .map(SourcePath::as_str)
+            .collect();
+        let mut packages = Vec::new();
+        for path in &files {
+            let Some(package) = path.strip_suffix("package.json") else {
+                continue;
+            };
+            if ["app/", "src/app/"].iter().any(|app| {
+                let prefix = format!("{package}{app}");
+                files
+                    .range(prefix.as_str()..)
+                    .take_while(|f| f.starts_with(&prefix))
+                    .any(|file| {
+                        ["/page.tsx", "/page.ts", "/page.jsx", "/page.js"]
+                            .iter()
+                            .any(|suffix| file.ends_with(suffix))
+                    })
+            }) {
+                packages.push(package.to_owned());
+            }
+        }
+        for package in packages {
+            let member = package
+                .strip_suffix('/')
+                .map(|p| SourcePath::new(p, PathLimits::default()).unwrap());
+            let at_workspace = workspace
+                .as_ref()
+                .is_some_and(|w| w.select(member.as_ref()).is_ok());
+            let options = AnalyzeOptions {
+                package: if at_workspace { member } else { None },
+                limits,
+            };
+            let directory = if at_workspace {
+                root.to_path_buf()
+            } else {
+                root.join(&package)
+            };
+            let result = analysis::analyze(&directory, &options);
+            let a = match result {
+                Ok(a) => a,
+                Err(e) => {
+                    increment(format!("error {e}"), 1);
+                    continue;
+                }
+            };
+            increment("packages".into(), 1);
+            for unit in &a.assessment.units {
+                increment(format!("kind {} count", unit.kind.as_str()), 1);
+                increment(format!("kind {} weight", unit.kind.as_str()), unit.weight);
+                increment(format!("status {} count", unit.status.as_str()), 1);
+                increment(
+                    format!("status {} weight", unit.status.as_str()),
+                    unit.weight,
+                );
+                increment(format!("strategy {}", unit.strategy.as_str()), 1);
+            }
+            for route in &a.assessment.routes {
+                increment(format!("route {}", route.status.as_str()), 1);
+            }
+            for file in &a.assessment.files {
+                increment(format!("file {}", file.class.as_str()), 1);
+            }
+            let document = a.document().unwrap();
+            StoredReport::parse(document.into_bytes(), &limits).unwrap();
+            assert!(a.assessment.files.windows(2).all(|p| p[0].path < p[1].path));
+        }
+    }
+    for (key, count) in counts {
+        println!("{key}: {count}");
+    }
+}
+/// Executes only the explicit, externally installed compatibility references,
+/// never the real-world corpus. Install scripts must be disabled at setup.
+#[test]
+#[ignore = "requires pinned compatibility packages outside the repository"]
+fn external_knowledge_fixtures() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let directory =
+        std::env::var("FRAMESHIFT_COMPAT_MODULES").expect("set FRAMESHIFT_COMPAT_MODULES");
+    let script = r#"
+const path=require('node:path');
+const assert=require('node:assert/strict');
+const root=process.env.FRAMESHIFT_COMPAT_MODULES;
+const load=(name)=>require(path.join(root,name));
+for(const [name,version] of [['clsx','2.1.1'],['classnames','2.5.1'],['preact','10.29.8'],['preact-render-to-string','6.6.1']]) {
+  assert.equal(load(name+'/package.json').version,version);
+}
+const {h}=load('preact');const render=load('preact-render-to-string');
+for(const name of ['clsx','classnames']) {
+  const classes=load(name);
+  for(const [args,expected] of [
+    [['a',false,null,undefined,0,'b'],'a b'],
+    [[['a',['b',{c:true,d:false}]],{e:1,f:0}],'a b c e'],
+    [[{active:true,hidden:false},'theme'],'active theme'],
+    [[1,2,'x'],'1 2 x']
+  ]) {
+    assert.equal(classes(...args),expected);
+    assert.equal(render(h('div',{className:classes(...args)},'fixture')),`<div class="${expected}">fixture</div>`);
+  }
+}
+console.log('knowledge fixtures: clsx 2.1.1 and classnames 2.5.1 with preact 10.29.8 passed');
+"#;
+    let mut child = Command::new("node")
+        .arg("-")
+        .env("FRAMESHIFT_COMPAT_MODULES", directory)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(script.as_bytes())
+        .unwrap();
+    let result = child.wait_with_output().unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    print!("{}", String::from_utf8(result.stdout).unwrap());
+}
+
+#[test]
+fn assessment_limits_fail_explicitly_and_report_byte_boundary_is_inclusive() {
+    let root = create("limits", &[("app/page.tsx", PAGE)]);
+    let normal = run(&root);
+    let bytes = normal.document().unwrap().len();
+    for (name, limit) in [("units", 0), ("occurrences", 0), ("dependencies", 0)] {
+        let mut options = AnalyzeOptions::default();
+        match name {
+            "units" => options.limits.analysis.max_units = limit,
+            "occurrences" => options.limits.analysis.max_occurrences = limit,
+            "dependencies" => options.limits.analysis.max_dependency_work = limit as u64,
+            _ => unreachable!(),
+        }
+        assert!(analysis::analyze(&root, &options).is_err(), "{name}");
+    }
+    let mut options = AnalyzeOptions::default();
+    options.limits.analysis.max_report_bytes = bytes;
+    let exact = analysis::analyze(&root, &options)
+        .unwrap()
+        .document()
+        .unwrap()
+        .len();
+    options.limits.analysis.max_report_bytes = exact;
+    assert_eq!(
+        analysis::analyze(&root, &options)
+            .unwrap()
+            .document()
+            .unwrap()
+            .len(),
+        exact
+    );
+    options.limits.analysis.max_report_bytes = exact - 1;
+    assert!(
+        analysis::analyze(&root, &options)
+            .unwrap()
+            .document()
+            .is_err()
+    );
+}
+
+#[test]
+fn island_props_keep_unknown_types_and_promises_visible() {
+    for (name, prop, feature, status) in [
+        (
+            "plain",
+            "data={{name:'x',items:[1,2]}}",
+            "boundary.props",
+            Status::Auto,
+        ),
+        (
+            "jsx",
+            "icon={<b>Icon</b>}",
+            "boundary.jsx-props",
+            Status::Review,
+        ),
+        (
+            "dynamic",
+            "data={unknownValue}",
+            "boundary.dynamic-props",
+            Status::Review,
+        ),
+        (
+            "promise",
+            "data={Promise.resolve(1)}",
+            "boundary.promise-props",
+            Status::Unsupported,
+        ),
+    ] {
+        let page = format!(
+            "import Counter from '../counter';export default function Page(){{return <Counter {prop}/>}}"
+        );
+        let root = create(
+            name,
+            &[
+                ("app/page.tsx", &page),
+                (
+                    "counter.tsx",
+                    "'use client';export default function Counter(props){return <p>Counter</p>}",
+                ),
+            ],
+        );
+        let a = run(&root);
+        assert!(
+            a.assessment
+                .occurrences
+                .iter()
+                .any(|o| o.occurrence.feature.id == feature && o.status == Some(status)),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn request_reading_get_is_a_blocker_while_an_unused_parameter_is_static() {
+    for (name, source, status) in [
+        (
+            "request-read",
+            "export function GET(request){return new Response(request.url)}",
+            Status::Unsupported,
+        ),
+        (
+            "unused-request",
+            "export function GET(request){return new Response('fixed')}",
+            Status::Review,
+        ),
+        (
+            "destructured-request",
+            "export const GET=({url})=>new Response(url)",
+            Status::Unsupported,
+        ),
+    ] {
+        let root = create(
+            name,
+            &[("app/page.tsx", PAGE), ("app/data/route.ts", source)],
+        );
+        let a = run(&root);
+        let unit = a
+            .assessment
+            .units
+            .iter()
+            .find(|u| u.id.as_str() == "endpoint:/data")
+            .unwrap();
+        assert_eq!(unit.status, status, "{name}");
+    }
+}
+
+#[test]
+fn every_shipped_input_finding_has_an_explanation() {
+    for source in [
+        include_str!("../../frameshift-input/src/walk.rs"),
+        include_str!("../../frameshift-input/src/snapshot.rs"),
+        include_str!("../../frameshift-package/src/load.rs"),
+        include_str!("../../frameshift-package/src/workspace.rs"),
+        include_str!("../../frameshift-package/src/workspace/listing.rs"),
+        include_str!("../../frameshift-nextjs/src/detect.rs"),
+    ] {
+        for (offset, _) in source.match_indices("FS") {
+            if let Some(code) = source.get(offset..offset + 6)
+                && frameshift_engine::foundation::FindingCode::new(code).is_ok()
+            {
+                assert!(analysis::knowledge::explain(code).is_some(), "{code}");
+            }
+        }
+    }
+}
+
+fn golden_document() -> String {
+    let root = create(
+        "golden",
+        &[
+            (
+                "app/page.tsx",
+                "import Counter from '../counter';export default function Page(){return <Counter label=\"Count\"/>}",
+            ),
+            (
+                "counter.tsx",
+                "'use client';import {useState} from 'react';export default function Counter({label}){const [n,set]=useState(0);return <button onClick={()=>set(n+1)}>{label}: {n}</button>}",
+            ),
+            (
+                "app/private/page.tsx",
+                "import {cookies} from 'next/headers';export default function Private(){cookies();return <p>Private</p>}",
+            ),
+            ("public/logo.svg", "fictional asset"),
+        ],
+    );
+    run(&root).document().unwrap().replace(
+        frameshift_engine::version::info().engine_version,
+        "@ENGINE_VERSION@",
+    )
+}
+#[test]
+fn analysis_golden_matches_the_complete_evidence_document() {
+    assert_eq!(
+        golden_document(),
+        fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/analysis.json")
+        )
+        .unwrap()
+    );
+}
+#[test]
+#[ignore = "explicit golden update"]
+fn update_analysis_golden() {
+    fs::write(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/analysis.json"),
+        golden_document(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_direct_children_slot_has_no_value_dependent_conversion_assumption() {
+    let root = create("slot", &[("app/page.tsx", PAGE)]);
+    let a = run(&root);
+    let layout = a
+        .assessment
+        .units
+        .iter()
+        .find(|u| u.kind == UnitKind::Layout)
+        .unwrap();
+    assert_eq!(layout.strategy, Strategy::Astro);
+    assert_eq!(layout.status, Status::Auto);
+}
+
+#[test]
+fn duplicate_route_patterns_are_source_evidence_rather_than_an_engine_error() {
+    let root = create(
+        "route-collision",
+        &[("app/(one)/page.tsx", PAGE), ("app/(two)/page.tsx", PAGE)],
+    );
+    let a = run(&root);
+    assert_eq!(a.assessment.routes.len(), 1);
+    assert_eq!(a.assessment.routes[0].status, Status::Unknown);
+    StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+}

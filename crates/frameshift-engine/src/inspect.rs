@@ -600,7 +600,7 @@ fn position(position: Position) -> Value {
     ])
 }
 
-fn findings(list: &FindingList) -> Value {
+pub(crate) fn findings(list: &FindingList) -> Value {
     Value::Array(
         list.iter()
             .map(|(id, finding)| {

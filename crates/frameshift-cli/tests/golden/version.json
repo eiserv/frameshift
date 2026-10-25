@@ -2,9 +2,9 @@
   "kind": "frameshift.version",
   "schemaVersion": 1,
   "engineVersion": "@ENGINE_VERSION@",
-  "rulesets": [],
-  "knowledgeBases": [],
-  "targetProfiles": [],
+  "rulesets": ["nextjs-to-astro-preact/assessment-v1"],
+  "knowledgeBases": ["2026.10.1"],
+  "targetProfiles": ["astro7-preact10"],
   "buildCommit": @BUILD_COMMIT_JSON@,
   "toolchain": "@TOOLCHAIN@"
 }

@@ -17,7 +17,7 @@ pub struct VersionInfo {
     pub toolchain: &'static str,
 }
 
-/// Returns build identity and empty catalogs until migration data is shipped.
+/// Returns build identity and the shipped assessment and knowledge catalogs.
 ///
 /// The development-only E2 fixtures do not constitute a product ruleset,
 /// knowledge base, or target profile. This function reads no environment,
@@ -25,9 +25,9 @@ pub struct VersionInfo {
 pub const fn info() -> VersionInfo {
     VersionInfo {
         engine_version: env!("CARGO_PKG_VERSION"),
-        rulesets: &[],
-        knowledge_bases: &[],
-        target_profiles: &[],
+        rulesets: &[crate::analysis::RULESET],
+        knowledge_bases: &[crate::analysis::knowledge::VERSION],
+        target_profiles: &[crate::analysis::TARGET_PROFILE],
         build_commit: option_env!("FRAMESHIFT_BUILD_COMMIT"),
         toolchain: env!("FRAMESHIFT_RUSTC_VERSION"),
     }

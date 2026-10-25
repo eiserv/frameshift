@@ -1150,7 +1150,8 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Status:** Accepted (2026-10-25), confirmed by the owner through the Codex App question interface.
 - **Scope:** Build on PR #59 and implement M5 including the `analyze` CLI, assessment, counting units and file accounting, route readiness, knowledge, integer metrics, versioned analysis documents, stored-report rendering, explanations, and verdicts. Preserve explicit unknown evidence wherever a rule's preconditions cannot be established. This authorizes a complete analysis capability, not execution of analyzed code or migration output.
 - **Corpus (`Q-006`):** Reuse all twelve public, commit-pinned MIT/Apache-2.0 checkouts listed in `D-043`, for the reasons in that table. Read and analyze them outside the repository, without installing dependencies, building, or executing their code. The Next.js 13 sample is an out-of-range negative case, not supported-version evidence.
-- **Weights (`Q-002`):** Validate the proposed values of MIGRATION_REPORTING.md section 5.2 against this corpus and adopt them as `weights-v1` if the results are plausible. If evidence contradicts the proposal, present it before choosing different values. The values measure significance, not effort.
+- **Weights (`Q-002`, adopted after validation):** The owner authorized validating the proposed values of MIGRATION_REPORTING.md section 5.2 against this corpus and adopting them as `weights-v1` if the results are plausible. The full approved corpus was analyzed without execution; assets remain outside the denominator, shared units count once, and the resulting kind totals support adopting the unchanged values as coarse significance weights. Detailed counts and conservative unknown boundaries are recorded in IMPLEMENTATION.md section 51. A contrary result would have required a new owner decision before choosing different values. The values measure significance, not effort.
+- **Implementation defaults within this scope:** The initial curated knowledge entries cover exact `clsx` 2.1.1 and `classnames` 2.5.1. External fixtures use the existing inline Node oracle pattern, with Preact 10.29.8 and `preact-render-to-string` 6.6.1, to check the actual JavaScript behavior and SSR output that Rust cannot substitute for. The packages are pinned, installed outside the repository with scripts disabled, and never shipped as dependencies. This adds no product implementation language. CI workflows are inventory-only `tooling.workflow` entries, and unknown boundary prop types have `boundary.dynamic-props` review evidence, matching the existing reporting and migration policies.
 - **Integration:** Create a new pull request based on PR #59, monitor its checks and reviews, address actionable feedback, and leave the new pull request open for owner integration. Do not extend `D-099`'s merge authorization to this pull request.
 - **Architecture (`D-033`):** Keep assessment in the engine above source facts and catalog data. Share strict parses with the source-model visitor. Keep rule evidence distinct from future transformation operations and rule coverage. No new runtime dependency is authorized. Report parsing treats stored reports as untrusted data and never executes them.
 
@@ -1191,7 +1192,7 @@ Statuses change through an edit to this file under the integration workflow in D
 
 ### P-006: Fixed kind-based weights (`weights-v1`)
 
-- **Status:** Accepted (2026-10-11), confirmed by the project owner. The weight values are still validated in M5 (Q-002).
+- **Status:** Accepted (2026-10-11), confirmed by the project owner. The fixed values were validated for plausibility in M5 under `D-100` (Q-002).
 - **Proposal:** Weighted headline metrics with fixed integer weights per unit kind, alongside unweighted counts. Dependencies and verbatim files are excluded from headline metrics and reported separately. See section 5 of [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md).
 - **Tradeoff:** Coarse, because size within a kind is ignored, but explainable and comparable across runs.
 
@@ -1286,11 +1287,11 @@ Statuses change through an edit to this file under the integration workflow in D
 | ID | Question | Current thinking | Resolve by |
 | --- | --- | --- | --- |
 | Q-001 | Column encoding in source locations | Resolved by D-029 | Resolved |
-| Q-002 | Final values of `weights-v1` | Validate the proposed weights on real projects | M5 |
+| Q-002 | Final values of `weights-v1` | Resolved by D-100: proposed values adopted after read-only corpus validation; evidence in IMPLEMENTATION.md section 51 | Resolved |
 | Q-003 | Naming of public environment variables | Resolved by D-021 | Resolved |
 | Q-004 | Several components in one file | Resolved by D-025 | Resolved |
 | Q-005 | Static output comparison: normalization, thresholds, HTML parser (build, or adopt an established HTML5 parser such as html5ever) | Experiment E4 | M10 |
-| Q-006 | Real-world evaluation corpus | Process resolved by D-030. The concrete project list is proposed and approved in M5. | M5 |
+| Q-006 | Real-world evaluation corpus | Resolved by D-100: the owner approved all twelve pinned D-043 projects for M5 read-only evaluation | Resolved |
 | Q-007 | Target profile policy | Resolved by D-028 | Resolved |
 | Q-008 | Monorepo scope in V1 | Resolved by D-022 | Resolved |
 | Q-009 | Placement of modules colocated in `app/` | Resolved by D-024 | Resolved |
