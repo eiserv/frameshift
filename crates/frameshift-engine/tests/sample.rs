@@ -1,12 +1,15 @@
 //! Opt-in measurement of the component graph and environment classification
-//! (`D-096`) on the approved `D-043` sample, outside the repository.
+//! (`D-096`) and of feature detection (`D-099`) on the approved `D-043`
+//! sample, outside the repository.
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use frameshift_engine::features::{self, Detail};
 use frameshift_engine::foundation::{FindingCollector, FindingLimits, PathLimits, SourcePath};
 use frameshift_engine::input::snapshot;
 use frameshift_engine::limits::Limits;
-use frameshift_engine::nextjs::{ApiKind, Rendered, Wrapper};
+use frameshift_engine::nextjs::{ApiKind, Rendered, Wrapper, detect};
+use frameshift_engine::package::load_workspace;
 use frameshift_engine::project;
 
 const EXTENSIONS: &[&str] = &["tsx", "ts", "jsx", "js"];
@@ -26,12 +29,10 @@ fn external_model_sample() {
         limits.run.max_files = 400_000;
         limits.run.max_entries = 800_000;
         limits.run.max_total_bytes = 4 << 30;
-        let snapshot = snapshot(
-            std::path::Path::new(dir),
-            limits.snapshot(),
-            &mut FindingCollector::new(FindingLimits::default()),
-        )
-        .unwrap();
+        let mut findings = FindingCollector::new(FindingLimits::default());
+        let snapshot =
+            snapshot(std::path::Path::new(dir), limits.snapshot(), &mut findings).unwrap();
+        let workspace = load_workspace(&snapshot, limits.package(), &mut findings).ok();
         let files: BTreeSet<&str> = snapshot
             .inventory()
             .files()
@@ -66,8 +67,17 @@ fn external_model_sample() {
                 .strip_suffix('/')
                 .map(|p| SourcePath::new(p, PathLimits::default()).unwrap());
             let app = SourcePath::new(&app, PathLimits::default()).unwrap();
+            // Packages that the root's workspace does not select, such as
+            // nested example workspaces, have no detection here; their model
+            // is built without configuration, and their features are
+            // measured with the package as its own run root.
+            let detection = workspace.as_ref().and_then(|workspace| {
+                let selected = workspace.select(root.as_ref()).ok()?;
+                detect(snapshot.inventory(), &selected, &mut findings).ok()
+            });
+            let config = detection.as_ref().and_then(|d| d.config.as_ref());
             let model =
-                match project::build(&snapshot, root.as_ref(), &app, EXTENSIONS, None, &limits) {
+                match project::build(&snapshot, root.as_ref(), &app, EXTENSIONS, config, &limits) {
                     Ok(model) => model,
                     Err(e) => {
                         count(format!("package error {e:?}"));
@@ -75,6 +85,30 @@ fn external_model_sample() {
                     }
                 };
             count("package".to_owned());
+            let occurrences = match &detection {
+                Some(detection) => {
+                    count("package features at the run root".to_owned());
+                    Some(features::detect(&snapshot, &model, detection))
+                }
+                None => own_root(dir, &package, &app, &limits),
+            };
+            match occurrences {
+                Some(occurrences) => {
+                    for occurrence in occurrences {
+                        let status = occurrence.status.map_or("-", |s| s.as_str());
+                        count(format!("feature {} {status}", occurrence.feature.id));
+                        if let Detail::Unknown(cause) = &occurrence.detail {
+                            let cause = format!("{cause:?}");
+                            let short = cause.split(['(', ' ']).next().unwrap();
+                            count(format!("cause {short}"));
+                            if std::env::var("FRAMESHIFT_MODEL_VERBOSE").is_ok() {
+                                count(format!("cause detail {cause}"));
+                            }
+                        }
+                    }
+                }
+                None => count("package without detection".to_owned()),
+            }
             if std::env::var("FRAMESHIFT_MODEL_VERBOSE").is_ok() {
                 for node in model.modules().nodes() {
                     for edge in &node.edges {
@@ -159,4 +193,31 @@ fn external_model_sample() {
     for (key, value) in &counts {
         println!("{key}: {value}");
     }
+}
+
+/// Feature occurrences of a package that its repository's workspace does
+/// not select, analyzed with the package directory as the run root.
+fn own_root(
+    dir: &str,
+    package: &str,
+    app: &SourcePath,
+    limits: &Limits,
+) -> Option<Vec<frameshift_engine::features::Occurrence>> {
+    let mut findings = FindingCollector::new(FindingLimits::default());
+    let root = std::path::Path::new(dir).join(package);
+    let snapshot = snapshot(&root, limits.snapshot(), &mut findings).ok()?;
+    let workspace = load_workspace(&snapshot, limits.package(), &mut findings).ok()?;
+    let selected = workspace.select(None).ok()?;
+    let detection = detect(snapshot.inventory(), &selected, &mut findings).ok()?;
+    let app = SourcePath::new(app.as_str().strip_prefix(package)?, PathLimits::default()).ok()?;
+    let model = project::build(
+        &snapshot,
+        None,
+        &app,
+        EXTENSIONS,
+        detection.config.as_ref(),
+        limits,
+    )
+    .ok()?;
+    Some(features::detect(&snapshot, &model, &detection))
 }
