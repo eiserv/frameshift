@@ -8,6 +8,7 @@ pub mod knowledge;
 pub mod metrics;
 mod model;
 mod report;
+mod route;
 pub mod stored;
 
 use crate::{features, limits::Limits, project};
@@ -179,6 +180,7 @@ pub fn analyze(root: &Path, options: &AnalyzeOptions) -> Result<Analysis, Analyz
     }
     let dependencies = knowledge::dependencies(&selected, &workspace, &project);
     syntax.correlate_links(&occurrences);
+    syntax.correlate_routes(&project);
     let manifest_automatic = matches!(selected.manifest(),ManifestState::Analyzed(manifest) if manifest.scripts.iter().all(|entry|matches!(entry.value.as_ref(),"next dev"|"next build")));
     let assessment = model::assess(
         &snapshot,

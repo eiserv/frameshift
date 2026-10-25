@@ -39,6 +39,41 @@ fn call(root: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 #[test]
+fn independent_dynamic_routes_do_not_trigger_fail_on_review() {
+    let root = fixture("dynamic-route");
+    fs::write(root.join("package-lock.json"), format!(
+        "{{\"lockfileVersion\":3,\"packages\":{{\"\":{{\"name\":\"fictional-site\",\"dependencies\":{{\"{0}\":\"16.2.0\"}}}},\"node_modules/{0}\":{{\"version\":\"16.2.0\"}}}}}}", "next"
+    )).unwrap();
+    fs::create_dir_all(root.join("app/[slug]")).unwrap();
+    for (generator, code) in [
+        (
+            "export function generateStaticParams(){return [{slug:'a'}]}",
+            0,
+        ),
+        (
+            "export function generateStaticParams({params}){return [{slug:params.slug}]}",
+            1,
+        ),
+        (
+            "const slug='a';export function generateStaticParams(){return [{slug}]}",
+            1,
+        ),
+    ] {
+        fs::write(
+            root.join("app/[slug]/page.tsx"),
+            format!("{generator}\nexport default function Page(){{return <p/>}}"),
+        )
+        .unwrap();
+        let output = call(&root, &["analyze", "--to=astro-preact", "--fail-on=review"]);
+        assert_eq!(
+            output.status.code(),
+            Some(code),
+            "{generator}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+#[test]
 fn literal_object_links_do_not_trigger_fail_on_review() {
     let root = fixture("link-object");
     fs::write(root.join("package-lock.json"), format!(

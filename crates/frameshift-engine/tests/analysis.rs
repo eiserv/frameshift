@@ -1435,6 +1435,163 @@ fn implicit_layout_rendering_participates_in_conversion_demotion() {
     );
 }
 #[test]
+fn independent_single_segment_enumeration_is_automatic() {
+    for (segment, generator, page, expected) in [
+        (
+            "[slug]",
+            "export function generateStaticParams(){return [{slug:'a'}]}",
+            "export default function Page(){return <p/>}",
+            Status::Auto,
+        ),
+        (
+            "[slug]",
+            "export async function generateStaticParams(){const slug='a';return [{slug}]}",
+            "export default function Page({params}){return <p>{params.slug}</p>}",
+            Status::Auto,
+        ),
+        (
+            "[slug]",
+            "export const generateStaticParams=()=>[{slug:'a'}]",
+            "export default function Page(){return <p/>}",
+            Status::Auto,
+        ),
+        (
+            "[slug]",
+            "const enumerate=()=>[{slug:'a'}];export {enumerate as generateStaticParams}",
+            "export default function Page(){return <p/>}",
+            Status::Auto,
+        ),
+        (
+            "[slug]",
+            "export function generateStaticParams({params}){return [{slug:params.slug}]}",
+            "export default function Page(){return <p/>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "const slug='a';export function generateStaticParams(){return [{slug}]}",
+            "export default function Page(){return <p/>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "export function generateStaticParams(){return arguments[0]}",
+            "export default function Page(){return <p/>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "export function generateStaticParams(){return this.params}",
+            "export default function Page(){return <p/>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "export function generateStaticParams(){return eval('[]')}",
+            "export default function Page(){return <p/>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "export function* generateStaticParams(){yield {slug:'a'}}",
+            "export default function Page(){return <p/>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "export function generateStaticParams(){return [{slug:'a'}]}",
+            "export default function Page({params}){return <p>{JSON.stringify(params)}</p>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "export function generateStaticParams(){return [{slug:'a'}]}",
+            "export default function Page({params}){return <p>{params.other}</p>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "export function generateStaticParams(){return [{slug:'a'}]}",
+            "export default function Page(props){return <p>{props.params.slug}</p>}",
+            Status::Review,
+        ),
+        (
+            "[slug]",
+            "export function generateStaticParams(){return [{slug:'a'}]}",
+            "export default async function Page({params}){const {slug}=await params;return <p>{slug}</p>}",
+            Status::Auto,
+        ),
+        (
+            "[...slug]",
+            "export function generateStaticParams(){return [{slug:['a','b']}]}",
+            "export default async function Page({params}){const {slug}=await params;return <p>{slug}</p>}",
+            Status::Auto,
+        ),
+        (
+            "[...slug]",
+            "export function generateStaticParams(){return [{slug:['a']}]}",
+            "export default function Page({params}){return <p>{params.slug}</p>}",
+            Status::Review,
+        ),
+        (
+            "[[...slug]]",
+            "export function generateStaticParams(){return [{slug:['a']}]}",
+            "export default function Page(){return <p/>}",
+            Status::Review,
+        ),
+        (
+            "[parent]/[slug]",
+            "export function generateStaticParams(){return [{parent:'p',slug:'a'}]}",
+            "export default function Page(){return <p/>}",
+            Status::Review,
+        ),
+    ] {
+        let path = format!("app/{segment}/page.tsx");
+        let source = format!("{generator}\n{page}");
+        let root = create("single-enumeration", &[(path.as_str(), source.as_str())]);
+        let a = run(&root);
+        let occurrences: Vec<_> = a
+            .assessment
+            .occurrences
+            .iter()
+            .filter(|o| {
+                [
+                    "nextjs.route.dynamic",
+                    "nextjs.route.catch-all",
+                    "nextjs.route.optional-catch-all",
+                ]
+                .contains(&o.occurrence.feature.id)
+            })
+            .collect();
+        assert!(!occurrences.is_empty(), "{segment}: {generator}");
+        for o in occurrences {
+            assert_eq!(o.status, Some(expected), "{segment}: {generator} {page}");
+        }
+        StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+    }
+    let root = create(
+        "layout-enumeration",
+        &[
+            (
+                "app/[slug]/layout.tsx",
+                "export function generateStaticParams(){return [{slug:'a'}]}export default function Layout({children}){return <section>{children}</section>}",
+            ),
+            (
+                "app/[slug]/page.tsx",
+                "export default function Page(){return <p/>}",
+            ),
+        ],
+    );
+    let a = run(&root);
+    assert!(
+        a.assessment
+            .occurrences
+            .iter()
+            .filter(|o| o.occurrence.feature.id == "nextjs.route.dynamic")
+            .all(|o| o.status == Some(Status::Auto))
+    );
+}
+#[test]
 fn base_path_uses_only_binding_proven_next_link_sites() {
     for (body, expected) in [
         ("return <a href={destination}>Native</a>", Status::Auto),

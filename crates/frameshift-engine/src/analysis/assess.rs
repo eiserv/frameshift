@@ -52,6 +52,7 @@ pub struct AssessedOccurrence {
 pub(crate) struct Syntax {
     pub modules: BTreeMap<SourcePath, Module>,
     pub link_hrefs_need_review: bool,
+    automatic_routes: BTreeMap<SourcePath, std::collections::BTreeSet<String>>,
 }
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Module {
@@ -59,6 +60,7 @@ pub(crate) struct Module {
     pub tags: BTreeMap<Span, Tag>,
     pub calls: BTreeMap<Span, Option<usize>>,
     pub handler_request: Option<bool>,
+    pub route: super::route::Summary,
 }
 #[derive(Clone, Debug)]
 pub(crate) struct Function {
@@ -90,6 +92,28 @@ impl frameshift_emit::ElementResolver for Components {
     }
 }
 impl Syntax {
+    pub fn correlate_routes(&mut self, project: &Project) {
+        let mut routes: BTreeMap<SourcePath, std::collections::BTreeSet<String>> = BTreeMap::new();
+        for route in &project.nextjs().routes.routes {
+            if super::route::automatic(route, self) {
+                routes
+                    .entry(route.file.clone())
+                    .or_default()
+                    .insert(route.pattern.clone());
+            }
+        }
+        self.automatic_routes = routes;
+    }
+    fn automatic_route(&self, occurrence: &Occurrence) -> bool {
+        let Detail::Segment { pattern, .. } = &occurrence.detail else {
+            return false;
+        };
+        occurrence
+            .location
+            .path()
+            .and_then(|p| self.automatic_routes.get(p))
+            .is_some_and(|routes| routes.contains(pattern))
+    }
     pub fn correlate_links(&mut self, occurrences: &[Occurrence]) {
         self.link_hrefs_need_review = occurrences
             .iter()
@@ -147,6 +171,7 @@ impl Syntax {
             }
         }
         module.handler_request = handler_request(tree, bindings);
+        module.route = super::route::summarize(tree, bindings);
         self.modules.insert(path.clone(), module);
     }
     pub fn function(&self, path: &SourcePath, span: Span) -> Option<&Function> {
@@ -305,7 +330,7 @@ fn function_summary(tree: &SyntaxTree<'_>, kind: N) -> Option<Function> {
         assumptions: converted.is_some_and(|c| !c.assumptions.is_empty()),
     })
 }
-fn unwrap(tree: &SyntaxTree<'_>, mut id: NodeId) -> NodeId {
+pub(super) fn unwrap(tree: &SyntaxTree<'_>, mut id: NodeId) -> NodeId {
     loop {
         if let N::JsxExpressionContainer {
             expression: Some(e),
@@ -507,7 +532,7 @@ pub(crate) fn classify(
         "env.reference"=> if let Detail::Variable{name}=&result.occurrence.detail {at.path().and_then(|p|project.environment().module(p)).map(|m| {
                 if name=="NODE_ENV" || m.browser {(Review,"Environment naming and deployment settings require review.")} else {(Auto,"A build-time environment reference maps to import.meta.env.")}
             }) }else {None},
-        "nextjs.route.dynamic"|"nextjs.route.catch-all"=>Some((Review,"The exported parameter generator is retained for build-time evaluation; parameter composition needs review.")),
+        "nextjs.route.dynamic"|"nextjs.route.catch-all"=>Some(if syntax.automatic_route(&result.occurrence) {(Auto,"One independent parameter generator and recognized page parameter uses map to static paths.")} else {(Review,"Parameter composition, captured declarations, or unrecognized parameter uses require review.")}),
         "nextjs.config.base-path"=>Some(if syntax.link_hrefs_need_review {(Review,"Computed Next Link hrefs need review when adding the base prefix.")}else{(Auto,"No computed Next Link href is present in the analyzed render sites.")}),
         "nextjs.api.link"=>tag.map(|tag| if !tag.spread && tag.literal_href && !["prefetch","replace","scroll"].iter().any(|p|tag.attrs.contains_key(*p)) {(Auto,"The literal href maps to an anchor without dropped navigation props.")}else{(Review,"Computed hrefs, spread props, or dropped navigation props require review.")}),
         "nextjs.api.image"=>tag.map(|tag| if !tag.spread && !["fill","placeholder"].iter().any(|k|tag.attrs.contains_key(*k)) && tag.attrs.get("src").is_some_and(Option::is_some) && matches!(project.configuration().property(&["images","unoptimized"]),ConfigProperty::Value(frameshift_evaluate::Value::Bool(true))) && !matches!(&result.occurrence.detail,Detail::Api{specifier,..} if specifier=="next/legacy/image") {(Auto,"The source disables optimization and its literal image props can be preserved.")}else{(Review,"Image loading, optimization, legacy layout, or dynamic props require review.")}),
