@@ -1100,10 +1100,15 @@ pub(crate) fn assess(
     let mut work = conversion_work;
     let unit_index = UnitIndex::new(&units);
     for (index, route) in project.nextjs().routes.routes.iter().enumerate() {
-        let dependencies = project.route_dependencies(index).map_err(failure)?;
-        work = work
-            .checked_sub(dependencies.files.len() as u64 + dependencies.edges.len() as u64)
-            .ok_or_else(|| super::limit("assessment dependency work limit reached"))?;
+        let dependencies = project
+            .route_dependencies_with_budget(index, &mut work)
+            .map_err(|error| {
+                if error == crate::project::ProjectError::WorkLimit {
+                    super::limit("assessment dependency work limit reached")
+                } else {
+                    failure(error)
+                }
+            })?;
         let files: BTreeSet<_> = dependencies.files.into_iter().collect();
         let kind = if route.kind == RouteKind::Page {
             UnitKind::Route

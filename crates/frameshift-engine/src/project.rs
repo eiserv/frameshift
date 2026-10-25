@@ -531,13 +531,23 @@ impl Project {
     /// Reaching the limit returns no partial closure. Framework runtime
     /// dispatch and component rendering are not inferred from imports.
     pub fn route_dependencies(&self, index: usize) -> Result<RouteDependencies<'_>, ProjectError> {
+        let mut budget = self.max_dependency_work;
+        self.route_dependencies_with_budget(index, &mut budget)
+    }
+
+    pub(crate) fn route_dependencies_with_budget(
+        &self,
+        index: usize,
+        budget: &mut u64,
+    ) -> Result<RouteDependencies<'_>, ProjectError> {
         let route = self
             .app
             .routes
             .routes
             .get(index)
             .ok_or(ProjectError::InvalidRoute)?;
-        let mut work = self.max_dependency_work;
+        let query_budget = self.max_dependency_work.min(*budget);
+        let mut work = query_budget;
         let mut charge = || {
             work = work.checked_sub(1).ok_or(ProjectError::WorkLimit)?;
             Ok(())
@@ -590,6 +600,7 @@ impl Project {
                     }),
             );
         }
+        *budget -= query_budget - work;
         Ok(RouteDependencies {
             files: files.into_iter().collect(),
             edges,
@@ -601,6 +612,82 @@ impl Project {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cumulative_dependency_budget_includes_repeated_type_only_edge_visits() {
+        use frameshift_core::{FindingCollector, FindingLimits, PathLimits};
+        let root = std::env::temp_dir().join("frameshift-project-shared-query-budget");
+        std::fs::create_dir_all(root.join("app/one")).unwrap();
+        std::fs::create_dir_all(root.join("app/two")).unwrap();
+        std::fs::create_dir_all(root.join("lib")).unwrap();
+        for name in ["one", "two"] {
+            std::fs::write(
+                root.join(format!("app/{name}/page.tsx")),
+                "import {value} from '../../lib/shared';export default()=> <p>{value}</p>;",
+            )
+            .unwrap();
+        }
+        let imports = (0..64)
+            .map(|i| format!("import type {{Type as T{i}}} from 'fictional-types';\n"))
+            .collect::<String>();
+        std::fs::write(
+            root.join("lib/shared.ts"),
+            format!("{imports}export const value=1;"),
+        )
+        .unwrap();
+        let limits = Limits::default();
+        let snapshot = frameshift_input::snapshot(
+            &root,
+            limits.snapshot(),
+            &mut FindingCollector::new(FindingLimits::default()),
+        )
+        .unwrap();
+        let mut model = build(
+            &snapshot,
+            None,
+            &SourcePath::new("app", PathLimits::default()).unwrap(),
+            &["tsx", "ts"],
+            None,
+            &limits,
+        )
+        .unwrap();
+        let mut budget = 1000;
+        let result = model
+            .route_dependencies_with_budget(0, &mut budget)
+            .unwrap();
+        let actual_work = 1000 - budget;
+        assert!(actual_work >= 64 + result.files.len() as u64 + result.edges.len() as u64);
+        assert!(result.edges.iter().all(|e| !e.edge.type_only));
+        let mut budget = actual_work * 2;
+        model
+            .route_dependencies_with_budget(0, &mut budget)
+            .unwrap();
+        model
+            .route_dependencies_with_budget(1, &mut budget)
+            .unwrap();
+        assert_eq!(budget, 0);
+        assert_eq!(
+            model.route_dependencies_with_budget(0, &mut budget),
+            Err(ProjectError::WorkLimit)
+        );
+        let mut budget = actual_work * 2 - 1;
+        model
+            .route_dependencies_with_budget(0, &mut budget)
+            .unwrap();
+        assert_eq!(
+            model.route_dependencies_with_budget(1, &mut budget),
+            Err(ProjectError::WorkLimit)
+        );
+        assert_eq!(budget, actual_work - 1);
+        model.max_dependency_work = actual_work - 1;
+        let mut budget = 1000;
+        assert_eq!(
+            model.route_dependencies_with_budget(0, &mut budget),
+            Err(ProjectError::WorkLimit)
+        );
+        assert_eq!(budget, 1000);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn dependency_work_boundary_is_inclusive() {
