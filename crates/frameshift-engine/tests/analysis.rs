@@ -1435,6 +1435,179 @@ fn implicit_layout_rendering_participates_in_conversion_demotion() {
     );
 }
 #[test]
+fn image_assessment_requires_local_source_provenance_and_astro_context() {
+    for (config, imports, attrs, body, expected) in [
+        (
+            "{images:{unoptimized:true}}",
+            "",
+            "src='/photo.png'",
+            "return <Image SRC alt='' width={10} height={10}/>",
+            Status::Auto,
+        ),
+        (
+            "{images:{unoptimized:true}}",
+            "",
+            "src='https://example.test/photo.png'",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{images:{unoptimized:true}}",
+            "",
+            "src='//example.test/photo.png'",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{images:{unoptimized:true}}",
+            "import photo from '../assets/photo.png';",
+            "src={photo}",
+            "return <Image SRC/>",
+            Status::Auto,
+        ),
+        (
+            "{}",
+            "import photo from '../assets/photo.png';",
+            "src={photo}",
+            "return <Image SRC/>",
+            Status::Auto,
+        ),
+        (
+            "{}",
+            "import {default as photo} from '../assets/photo.png';",
+            "src={photo}",
+            "return <Image SRC/>",
+            Status::Auto,
+        ),
+        (
+            "{images:{unoptimized:true}}",
+            "const photo='/photo.png';",
+            "src={photo}",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{}",
+            "import photo from '../assets/photo.png';",
+            "src={photo}",
+            "const value=1;return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{}",
+            "import photo from '../assets/photo.png';",
+            "src={photo} fill",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{}",
+            "import photo from '../assets/photo.png';",
+            "src={photo} placeholder='blur'",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{}",
+            "import photo from '../assets/photo.png';",
+            "src={photo} {...props}",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{images:{loader:'custom',loaderFile:'./loader.ts'}}",
+            "import photo from '../assets/photo.png';",
+            "src={photo}",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{images:{unoptimized:true}}",
+            "",
+            "src='/photo.png' unoptimized={false}",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{images:{unoptimized:true}}",
+            "",
+            "src='/photo.png' unoptimized={setting}",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{}",
+            "",
+            "src='/photo.png' unoptimized",
+            "return <Image SRC/>",
+            Status::Auto,
+        ),
+        (
+            "{}",
+            "import photo from '../assets/missing.png';",
+            "src={photo}",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+        (
+            "{}",
+            "import photo from '../assets/data.csv';",
+            "src={photo}",
+            "return <Image SRC/>",
+            Status::Review,
+        ),
+    ] {
+        let source = format!(
+            "import Image from 'next/image';{imports}export default function Page(){{{}}}",
+            body.replace("SRC", attrs)
+        );
+        let config = format!("export default {config}");
+        let root = create(
+            "image-provenance",
+            &[
+                ("app/page.tsx", &source),
+                ("next.config.mjs", &config),
+                ("assets/photo.png", "fictional image bytes"),
+                ("assets/data.csv", "a,b"),
+            ],
+        );
+        let a = run(&root);
+        let image = a
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| o.occurrence.feature.id == "nextjs.api.image")
+            .unwrap();
+        assert_eq!(image.status, Some(expected), "{source}; {config}");
+        StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+    }
+    for source in [
+        "'use client';import Image from 'next/image';import photo from '../assets/photo.png';export default function Page(){return <Image src={photo}/>}",
+        "import Image from 'next/image';import photo from '../assets/photo.png';export default function Page(){return <Helper/>}function Helper(){const n=1;return <Image src={photo}/>}",
+        "import Image from 'next/image';import photo from '../assets/photo.png';export default function Page(){const photo='/photo.png';return <Image src={photo}/>}",
+    ] {
+        let root = create(
+            "image-renderer",
+            &[
+                ("app/page.tsx", source),
+                ("next.config.mjs", "export default {}"),
+                ("assets/photo.png", "fictional image bytes"),
+            ],
+        );
+        let a = run(&root);
+        assert_eq!(
+            a.assessment
+                .occurrences
+                .iter()
+                .find(|o| o.occurrence.feature.id == "nextjs.api.image")
+                .unwrap()
+                .status,
+            Some(Status::Review),
+            "{source}"
+        );
+    }
+}
+#[test]
 fn runtime_reachability_overrides_test_like_file_names() {
     for path in [
         "app/lib/session.spec.ts",

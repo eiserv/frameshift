@@ -739,6 +739,18 @@ pub(crate) fn assess(
         .filter(|f| f.class == FileClass::OutOfScope)
         .map(|f| &f.path)
         .collect();
+    let astro_sites: BTreeSet<_> = graph
+        .sites
+        .iter()
+        .filter(|site| {
+            site.owner.is_some_and(|id| {
+                let definition = &graph.definitions[id];
+                component_strategies.get(&(definition.path.clone(), definition.span))
+                    == Some(&Strategy::Astro)
+            })
+        })
+        .map(|site| (&site.path, site.span))
+        .collect();
     for occurrence in &mut assessed {
         if occurrence
             .occurrence
@@ -824,6 +836,15 @@ pub(crate) fn assess(
             occurrence.status = Some(Status::Unsupported);
             occurrence.reason = Reason::Proven(
                 "An async component demoted by the conversion fixed point has no static Preact equivalent.",
+            );
+        }
+        if id == "nextjs.api.image"
+            && occurrence.status == Some(Status::Auto)
+            && !matches!(&occurrence.occurrence.location, Location::Text {path, span} if astro_sites.contains(&(path, *span)))
+        {
+            occurrence.status = Some(Status::Review);
+            occurrence.reason = Reason::Review(
+                "Images inside Preact or unestablished renderers require review of their target behavior.",
             );
         }
         let status = occurrence.status.unwrap();

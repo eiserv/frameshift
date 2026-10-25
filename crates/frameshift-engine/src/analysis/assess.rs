@@ -72,6 +72,10 @@ pub(crate) struct Function {
 pub(crate) struct Tag {
     pub attrs: BTreeMap<String, Option<String>>,
     pub literal_href: bool,
+    pub local_image_url: bool,
+    pub image_import: Option<Span>,
+    pub static_image: bool,
+    pub image_unoptimized: Option<Option<bool>>,
     pub spread: bool,
     pub jsx_props: bool,
     pub dynamic_props: bool,
@@ -92,6 +96,17 @@ impl frameshift_emit::ElementResolver for Components {
     }
 }
 impl Syntax {
+    pub fn correlate_images(&mut self, project: &Project) {
+        for (path, module) in &mut self.modules {
+            let images: std::collections::BTreeSet<_> = project.modules().node(path).into_iter()
+                .flat_map(|n| &n.edges).filter(|e| !e.type_only)
+                .filter(|e| matches!(&e.resolution, frameshift_modules::Resolution::Local { path, kind: frameshift_modules::FileKind::Asset } if path.as_str().rsplit_once('.').is_some_and(|(_, ext)| ["png", "jpg", "jpeg", "gif", "webp", "avif"].contains(&ext))))
+                .map(|e| e.span).collect();
+            for tag in module.tags.values_mut() {
+                tag.static_image = tag.image_import.is_some_and(|span| images.contains(&span));
+            }
+        }
+    }
     pub fn correlate_routes(&mut self, project: &Project) {
         let mut routes: BTreeMap<SourcePath, std::collections::BTreeSet<String>> = BTreeMap::new();
         for route in &project.nextjs().routes.routes {
@@ -125,6 +140,18 @@ impl Syntax {
     }
     pub fn collect(&mut self, path: &SourcePath, tree: &SyntaxTree<'_>, bindings: &Bindings) {
         let mut module = Module::default();
+        let written: std::collections::BTreeSet<_> = bindings
+            .references()
+            .iter()
+            .filter(|r| r.write)
+            .filter_map(|r| {
+                if let frameshift_bindings::Target::Binding(id) = r.target {
+                    Some(id)
+                } else {
+                    None
+                }
+            })
+            .collect();
         for node in tree.nodes() {
             if let Some(function) = function_summary(tree, node.kind()) {
                 module.functions.insert(node.span(), function);
@@ -141,6 +168,27 @@ impl Syntax {
                         let known = value.and_then(|v| literal(tree, v));
                         if name == "href" {
                             tag.literal_href = value.is_some_and(|v| literal_href(tree, v));
+                        }
+                        if name == "src" {
+                            tag.local_image_url = known.as_ref().is_some_and(|s| {
+                                s.starts_with('/') && !s.starts_with("//") && !s.contains('\\')
+                            });
+                            tag.image_import =
+                                value.and_then(|v| image_import(tree, bindings, &written, v));
+                        }
+                        if name == "unoptimized" {
+                            tag.image_unoptimized = Some(match value {
+                                None => Some(true),
+                                Some(v) => {
+                                    if let N::BooleanLiteral(b) =
+                                        tree.node(unwrap(tree, v)).unwrap().kind()
+                                    {
+                                        Some(b)
+                                    } else {
+                                        None
+                                    }
+                                }
+                            });
                         }
                         let jsx = value.is_some_and(|v| jsx_value(tree, v));
                         tag.jsx_props |= name != "children" && jsx;
@@ -412,6 +460,69 @@ fn literal_href(tree: &SyntaxTree<'_>, id: NodeId) -> bool {
     }
     matches!(tree.node(id).unwrap().kind(), N::ObjectExpression { .. }) && serializable(tree, id)
 }
+fn image_import(
+    tree: &SyntaxTree<'_>,
+    bindings: &Bindings,
+    written: &std::collections::BTreeSet<frameshift_bindings::BindingId>,
+    id: NodeId,
+) -> Option<Span> {
+    use frameshift_bindings::{ImportedName, Target};
+    let reference = bindings.reference(unwrap(tree, id))?;
+    let Target::Binding(id) = reference.target else {
+        return None;
+    };
+    let import = bindings.binding(id).import.as_ref()?;
+    if import.type_only
+        || !(matches!(&import.imported, ImportedName::Default)
+            || matches!(&import.imported, ImportedName::Named(n) if n == "default"))
+    {
+        return None;
+    }
+    if written.contains(&id) {
+        return None;
+    }
+    Some(tree.node(import.source)?.span())
+}
+fn image_automatic(tag: &Tag, project: &Project) -> bool {
+    use frameshift_evaluate::Value;
+    let default_loader = matches!(
+        project.configuration().property(&["images", "loader"]),
+        ConfigProperty::Absent
+    ) || matches!(project.configuration().property(&["images", "loader"]), ConfigProperty::Value(Value::String(s)) if s == "default");
+    let default_loader = default_loader
+        && matches!(
+            project.configuration().property(&["images", "loaderFile"]),
+            ConfigProperty::Absent
+        );
+    let unoptimized = match tag.image_unoptimized {
+        Some(Some(b)) => b,
+        Some(None) => return false,
+        None => match project.configuration().property(&["images", "unoptimized"]) {
+            ConfigProperty::Value(Value::Bool(b)) => *b,
+            ConfigProperty::Absent => false,
+            ConfigProperty::Value(_) | ConfigProperty::Unknown | ConfigProperty::Invalid => {
+                return false;
+            }
+        },
+    };
+    if tag.spread
+        || ["fill", "placeholder", "loader"]
+            .iter()
+            .any(|k| tag.attrs.contains_key(*k))
+    {
+        return false;
+    }
+    let static_image = tag.static_image
+        && !matches!(
+            project
+                .configuration()
+                .property(&["images", "disableStaticImages"]),
+            ConfigProperty::Value(Value::Bool(true))
+                | ConfigProperty::Unknown
+                | ConfigProperty::Invalid
+        );
+    (unoptimized && (tag.local_image_url || static_image)) || (default_loader && static_image)
+}
 fn serializable(tree: &SyntaxTree<'_>, id: NodeId) -> bool {
     let mut pending = vec![id];
     while let Some(id) = pending.pop() {
@@ -535,7 +646,7 @@ pub(crate) fn classify(
         "nextjs.route.dynamic"|"nextjs.route.catch-all"=>Some(if syntax.automatic_route(&result.occurrence) {(Auto,"One independent parameter generator and recognized page parameter uses map to static paths.")} else {(Review,"Parameter composition, captured declarations, or unrecognized parameter uses require review.")}),
         "nextjs.config.base-path"=>Some(if syntax.link_hrefs_need_review {(Review,"Computed Next Link hrefs need review when adding the base prefix.")}else{(Auto,"No computed Next Link href is present in the analyzed render sites.")}),
         "nextjs.api.link"=>tag.map(|tag| if !tag.spread && tag.literal_href && !["prefetch","replace","scroll"].iter().any(|p|tag.attrs.contains_key(*p)) {(Auto,"The literal href maps to an anchor without dropped navigation props.")}else{(Review,"Computed hrefs, spread props, or dropped navigation props require review.")}),
-        "nextjs.api.image"=>tag.map(|tag| if !tag.spread && !["fill","placeholder"].iter().any(|k|tag.attrs.contains_key(*k)) && tag.attrs.get("src").is_some_and(Option::is_some) && matches!(project.configuration().property(&["images","unoptimized"]),ConfigProperty::Value(frameshift_evaluate::Value::Bool(true))) && !matches!(&result.occurrence.detail,Detail::Api{specifier,..} if specifier=="next/legacy/image") {(Auto,"The source disables optimization and its literal image props can be preserved.")}else{(Review,"Image loading, optimization, legacy layout, or dynamic props require review.")}),
+        "nextjs.api.image"=>tag.map(|tag| if image_automatic(tag, project) && !matches!(&result.occurrence.detail,Detail::Api{specifier,..} if specifier=="next/legacy/image") {(Auto,"The local image source has an established preserving or static-asset mapping.")}else{(Review,"Remote sources, loaders, optimization, legacy layout, or dynamic props require review.")}),
         "nextjs.api.script"=>tag.and_then(|tag| if tag.spread {None} else {match tag.attrs.get("strategy") {Some(Some(s)) if s=="worker"=>Some((Unsupported,"The worker script strategy has no V1 mapping.")),Some(None)=>None,Some(Some(s)) if !["afterInteractive","beforeInteractive","lazyOnload"].contains(&s.as_str())=>None,Some(Some(_))|None=>Some((Review,"Script placement and loading behavior require review."))}}),
         "react.server-component"=> if let Location::Text{path,span}=at {syntax.function(path,*span).map(|f|if f.asynchronous&&!f.astro {(Unsupported,"An async component outside the proven Astro subset cannot render through Preact.")}else{(Auto,"The component has an Astro or synchronous static Preact strategy.")})} else {None},
         "css.tailwind"=>Some((Review,"Tailwind and PostCSS configuration must be reviewed against the target integration.")),

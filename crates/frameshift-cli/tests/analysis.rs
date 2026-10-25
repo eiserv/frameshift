@@ -39,6 +39,46 @@ fn call(root: &Path, args: &[&str]) -> Output {
         .unwrap()
 }
 #[test]
+fn remote_images_require_review_and_static_imports_have_a_proven_mapping() {
+    let root = fixture("image-sources");
+    fs::write(root.join("package-lock.json"), format!(
+        "{{\"lockfileVersion\":3,\"packages\":{{\"\":{{\"name\":\"fictional-site\",\"dependencies\":{{\"{0}\":\"16.2.0\"}}}},\"node_modules/{0}\":{{\"version\":\"16.2.0\"}}}}}}", "next"
+    )).unwrap();
+    fs::create_dir_all(root.join("assets")).unwrap();
+    fs::write(root.join("assets/photo.png"), "fictional image bytes").unwrap();
+    for (config, source, code) in [
+        (
+            "{images:{unoptimized:true}}",
+            "import Image from 'next/image';export default function Page(){return <Image src='/photo.png'/>}",
+            0,
+        ),
+        (
+            "{images:{unoptimized:true}}",
+            "import Image from 'next/image';export default function Page(){return <Image src='https://example.test/photo.png'/>}",
+            1,
+        ),
+        (
+            "{}",
+            "import Image from 'next/image';import photo from '../assets/photo.png';export default function Page(){return <Image src={photo}/>}",
+            0,
+        ),
+    ] {
+        fs::write(
+            root.join("next.config.mjs"),
+            format!("export default {config}"),
+        )
+        .unwrap();
+        fs::write(root.join("app/page.tsx"), source).unwrap();
+        let output = call(&root, &["analyze", "--to=astro-preact", "--fail-on=review"]);
+        assert_eq!(
+            output.status.code(),
+            Some(code),
+            "{source}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+#[test]
 fn independent_dynamic_routes_do_not_trigger_fail_on_review() {
     let root = fixture("dynamic-route");
     fs::write(root.join("package-lock.json"), format!(
