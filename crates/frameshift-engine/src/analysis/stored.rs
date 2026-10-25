@@ -5,7 +5,7 @@
 
 use super::{AnalyzeError, failure, metrics::Metric};
 use crate::{document, limits::Limits};
-use frameshift_core::{SourcePath, SourceText, UnitKind};
+use frameshift_core::{SourcePath, SourceText, UnitId, UnitKind};
 use frameshift_syntax::{JsonDialect, JsonValue, parse_json};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -273,6 +273,68 @@ fn path(s: &str, limits: &Limits) -> Result<(), AnalyzeError> {
         .map(|_| ())
         .map_err(|_| invalid())
 }
+fn unit_identity(unit: &Value, kind: UnitKind, limits: &Limits) -> Result<String, AnalyzeError> {
+    fn decode(encoded: &str) -> Result<String, AnalyzeError> {
+        let mut bytes = Vec::with_capacity(encoded.len());
+        let mut at = 0;
+        while at < encoded.len() {
+            let byte = encoded.as_bytes()[at];
+            if byte == b'%' {
+                let hex = encoded.get(at + 1..at + 3).ok_or_else(invalid)?;
+                bytes.push(u8::from_str_radix(hex, 16).map_err(|_| invalid())?);
+                at += 3;
+            } else {
+                bytes.push(byte);
+                at += 1;
+            }
+        }
+        String::from_utf8(bytes).map_err(|_| invalid())
+    }
+    let id = text(unit, "id")?;
+    if id.len() > limits.identifier.max_bytes {
+        return Err(invalid());
+    }
+    let (prefix, encoded) = id.split_once(':').ok_or_else(invalid)?;
+    if prefix != kind.as_str() {
+        return Err(invalid());
+    }
+    let (subject, export) = encoded
+        .split_once('#')
+        .map_or((encoded, None), |(s, e)| (s, Some(e)));
+    let subject = decode(subject)?;
+    let export = export.map(decode).transpose()?;
+    let canonical = match kind {
+        UnitKind::Route | UnitKind::Endpoint => {
+            if export.is_some() {
+                return Err(invalid());
+            }
+            UnitId::for_route(kind, &subject, limits.identifier)
+        }
+        UnitKind::Config => {
+            if export.is_some() {
+                return Err(invalid());
+            }
+            UnitId::for_config(&subject, limits.identifier)
+        }
+        UnitKind::Layout
+        | UnitKind::Provider
+        | UnitKind::Component
+        | UnitKind::RouteFile
+        | UnitKind::Module
+        | UnitKind::Stylesheet => {
+            if optional_text(unit, "path")? != Some(subject.as_str()) {
+                return Err(invalid());
+            }
+            let path = SourcePath::new(&subject, limits.path).map_err(|_| invalid())?;
+            UnitId::for_file(kind, &path, export.as_deref(), limits.identifier)
+        }
+    }
+    .map_err(|_| invalid())?;
+    if canonical.as_str() != id {
+        return Err(invalid());
+    }
+    Ok(subject)
+}
 fn optional_text<'a>(v: &'a Value, key: &str) -> Result<Option<&'a str>, AnalyzeError> {
     match v.get(key) {
         None | Some(Value::Null) => Ok(None),
@@ -438,6 +500,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     let mut total = 0u64;
     let mut weighted = BTreeMap::new();
     let mut counts = BTreeMap::new();
+    let mut route_patterns = BTreeMap::new();
     for unit in units {
         let id = text(unit, "id")?;
         if id.chars().any(char::is_control)
@@ -461,6 +524,10 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         let Some(Value::Bool(client)) = unit.get("client") else {
             return Err(invalid());
         };
+        let subject = unit_identity(unit, kind, limits)?;
+        if matches!(kind, UnitKind::Route | UnitKind::Endpoint) {
+            route_patterns.insert(id, subject);
+        }
         if let Some(p) = optional_text(unit, "path")? {
             path(p, limits)?
         }
@@ -595,6 +662,11 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     }
     for route in array(v, "routes")? {
         if !identities.contains(text(route, "unit")?) || !status(text(route, "status")?) {
+            return Err(invalid());
+        }
+        if route_patterns.get(text(route, "unit")?).map(String::as_str)
+            != Some(text(route, "pattern")?)
+        {
             return Err(invalid());
         }
         refs(route, "closure", &identities)?;

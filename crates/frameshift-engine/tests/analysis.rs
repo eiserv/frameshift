@@ -649,6 +649,101 @@ fn stored_reports_validate_nested_records_and_relationships() {
     assert_eq!(accepted.value(), &additive);
 }
 #[test]
+fn stored_unit_ids_require_canonical_spelling_and_record_consistency() {
+    fn rename(value: &mut Value, old: &str, new: &str) {
+        match value {
+            Value::String(s) => {
+                if s == old {
+                    *s = new.into();
+                }
+            }
+            Value::Array(a) => {
+                for v in a {
+                    rename(v, old, new);
+                }
+            }
+            Value::Object(o) => {
+                for v in o.values_mut() {
+                    rename(v, old, new);
+                }
+            }
+            Value::Null | Value::Bool(_) | Value::Number(_) => {}
+        }
+    }
+    let root = create(
+        "unit-id-grammar",
+        &[
+            (
+                "app/page.tsx",
+                "import Cafe from '../components/Café';export default function Page(){return <Cafe/>}",
+            ),
+            (
+                "components/Café.tsx",
+                "export default function Café(){return <p>Café</p>}",
+            ),
+        ],
+    );
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let component = original
+        .value()
+        .get("units")
+        .unwrap()
+        .array()
+        .iter()
+        .find(|u| u.get("kind").and_then(Value::text) == Some("component"))
+        .unwrap()
+        .get("id")
+        .and_then(Value::text)
+        .unwrap();
+    assert!(component.contains("%C3%A9"));
+    for (old, new) in [
+        ("route:/", "x"),
+        ("route:/", "endpoint:/"),
+        ("route:/", "route:%2f"),
+        ("route:/", "route:%2F"),
+        ("route:/", "route:/#name"),
+        ("route:/", "route:/other"),
+        ("route:/", "route:/a//b"),
+        ("route:/", "route:/%FF"),
+        ("layout:app/layout.tsx", "layout:app/other.tsx"),
+        ("layout:app/layout.tsx", "layout:app/%6Cayout.tsx"),
+        ("layout:app/layout.tsx", "layout:app/layout.tsx#"),
+        ("layout:app/layout.tsx", "layout:app/layout.tsx#%00"),
+        (component, "component:components/Caf%c3%a9.tsx#Caf%c3%a9"),
+        (component, "component:components/Café.tsx#Café"),
+    ] {
+        let mut changed = original.value().clone();
+        rename(&mut changed, old, new);
+        assert_ne!(changed, *original.value(), "{old}");
+        assert!(
+            StoredReport::parse(changed.document().into_bytes(), &Limits::default()).is_err(),
+            "{new}"
+        );
+    }
+    let mut limits = Limits::default();
+    limits.identifier.max_bytes = original
+        .value()
+        .get("units")
+        .unwrap()
+        .array()
+        .iter()
+        .map(|u| u.get("id").and_then(Value::text).unwrap().len())
+        .max()
+        .unwrap();
+    StoredReport::parse(original.document().unwrap().into_bytes(), &limits).unwrap();
+    let mut changed = original.value().clone();
+    rename(
+        &mut changed,
+        component,
+        &format!("{component}{}", "x".repeat(limits.identifier.max_bytes)),
+    );
+    assert!(StoredReport::parse(changed.document().into_bytes(), &limits).is_err());
+}
+#[test]
 fn stored_unit_weights_match_kind_and_required_client_flag() {
     let root = create("stored-unit-weights", &[("app/page.tsx", PAGE)]);
     for kind in [
@@ -675,10 +770,43 @@ fn stored_unit_weights_match_kind_and_required_client_flag() {
             let unit = &mut analysis.assessment.units[index];
             unit.kind = kind;
             unit.client = client;
+            let identifier = match kind {
+                UnitKind::Route | UnitKind::Endpoint => {
+                    frameshift_engine::foundation::UnitId::for_route(
+                        kind,
+                        "/",
+                        Limits::default().identifier,
+                    )
+                    .unwrap()
+                }
+                UnitKind::Config => frameshift_engine::foundation::UnitId::for_config(
+                    "test.weight",
+                    Limits::default().identifier,
+                )
+                .unwrap(),
+                UnitKind::Layout
+                | UnitKind::Provider
+                | UnitKind::Component
+                | UnitKind::RouteFile
+                | UnitKind::Module
+                | UnitKind::Stylesheet => frameshift_engine::foundation::UnitId::for_file(
+                    kind,
+                    unit.path.as_ref().unwrap(),
+                    None,
+                    Limits::default().identifier,
+                )
+                .unwrap(),
+            };
+            if !matches!(kind, UnitKind::Route | UnitKind::Endpoint) {
+                analysis.assessment.routes.clear();
+            }
             let expected = analysis::metrics::weight(kind, client);
             for weight in [2, 3, 4, 5, 8] {
                 analysis.assessment.units[index].weight = weight;
-                let document = analysis.document().unwrap();
+                let document = analysis
+                    .document()
+                    .unwrap()
+                    .replace("\"route:/\"", &format!("\"{}\"", identifier.as_str()));
                 assert_eq!(
                     StoredReport::parse(document.into_bytes(), &Limits::default()).is_ok(),
                     weight == expected,
