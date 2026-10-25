@@ -1307,6 +1307,45 @@ fn implicit_layout_rendering_participates_in_conversion_demotion() {
     );
 }
 #[test]
+fn base_path_uses_only_binding_proven_next_link_sites() {
+    for (body, expected) in [
+        ("return <a href={destination}>Native</a>", Status::Auto),
+        (
+            "function Widget(props){return <p/>} return <Widget {...props}/>",
+            Status::Auto,
+        ),
+        (
+            "function Link(props){return <a/>} return <Link href={destination}/>",
+            Status::Auto,
+        ),
+        (
+            "return <><a href={destination}/><NextLink href='/about'/></>",
+            Status::Auto,
+        ),
+        ("return <NextLink href={destination}/>", Status::Review),
+        ("return <NextLink {...props}/>", Status::Review),
+    ] {
+        let source =
+            format!("import NextLink from 'next/link';export default function Page(){{{body}}}");
+        let root = create(
+            "base-path-links",
+            &[
+                ("app/page.tsx", &source),
+                ("next.config.mjs", "export default {basePath:'/docs'}"),
+            ],
+        );
+        let a = run(&root);
+        let base = a
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| o.occurrence.feature.id == "nextjs.config.base-path")
+            .unwrap();
+        assert_eq!(base.status, Some(expected), "{body}");
+        StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+    }
+}
+#[test]
 fn link_literal_objects_preserve_mapping_and_base_path_assessments() {
     for (attributes, expected) in [
         ("href=\"/about\"", Status::Auto),

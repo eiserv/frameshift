@@ -51,6 +51,7 @@ pub struct AssessedOccurrence {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Syntax {
     pub modules: BTreeMap<SourcePath, Module>,
+    pub link_hrefs_need_review: bool,
 }
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Module {
@@ -89,6 +90,15 @@ impl frameshift_emit::ElementResolver for Components {
     }
 }
 impl Syntax {
+    pub fn correlate_links(&mut self, occurrences: &[Occurrence]) {
+        self.link_hrefs_need_review = occurrences
+            .iter()
+            .filter(|o| o.feature.id == "nextjs.api.link")
+            .any(|o| {
+                self.tag(&o.location)
+                    .is_none_or(|tag| tag.spread || !tag.literal_href)
+            });
+    }
     pub fn collect(&mut self, path: &SourcePath, tree: &SyntaxTree<'_>, bindings: &Bindings) {
         let mut module = Module::default();
         for node in tree.nodes() {
@@ -498,7 +508,7 @@ pub(crate) fn classify(
                 if name=="NODE_ENV" || m.browser {(Review,"Environment naming and deployment settings require review.")} else {(Auto,"A build-time environment reference maps to import.meta.env.")}
             }) }else {None},
         "nextjs.route.dynamic"|"nextjs.route.catch-all"=>Some((Review,"The exported parameter generator is retained for build-time evaluation; parameter composition needs review.")),
-        "nextjs.config.base-path"=>Some(if syntax.modules.values().flat_map(|m|m.tags.values()).any(|t|t.spread||(t.attrs.contains_key("href") && !t.literal_href)) {(Review,"Computed hrefs need review when adding the base prefix.")}else{(Auto,"No computed href is present in the analyzed render sites.")}),
+        "nextjs.config.base-path"=>Some(if syntax.link_hrefs_need_review {(Review,"Computed Next Link hrefs need review when adding the base prefix.")}else{(Auto,"No computed Next Link href is present in the analyzed render sites.")}),
         "nextjs.api.link"=>tag.map(|tag| if !tag.spread && tag.literal_href && !["prefetch","replace","scroll"].iter().any(|p|tag.attrs.contains_key(*p)) {(Auto,"The literal href maps to an anchor without dropped navigation props.")}else{(Review,"Computed hrefs, spread props, or dropped navigation props require review.")}),
         "nextjs.api.image"=>tag.map(|tag| if !tag.spread && !["fill","placeholder"].iter().any(|k|tag.attrs.contains_key(*k)) && tag.attrs.get("src").is_some_and(Option::is_some) && matches!(project.configuration().property(&["images","unoptimized"]),ConfigProperty::Value(frameshift_evaluate::Value::Bool(true))) && !matches!(&result.occurrence.detail,Detail::Api{specifier,..} if specifier=="next/legacy/image") {(Auto,"The source disables optimization and its literal image props can be preserved.")}else{(Review,"Image loading, optimization, legacy layout, or dynamic props require review.")}),
         "nextjs.api.script"=>tag.and_then(|tag| if tag.spread {None} else {match tag.attrs.get("strategy") {Some(Some(s)) if s=="worker"=>Some((Unsupported,"The worker script strategy has no V1 mapping.")),Some(None)=>None,Some(Some(s)) if !["afterInteractive","beforeInteractive","lazyOnload"].contains(&s.as_str())=>None,Some(Some(_))|None=>Some((Review,"Script placement and loading behavior require review."))}}),
