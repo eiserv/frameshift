@@ -9,11 +9,13 @@ use std::collections::BTreeSet;
 
 use frameshift_bindings::{Bindings, Reference, Target};
 use frameshift_core::{SourcePath, Span};
+use frameshift_evaluate::EvaluateError;
 use frameshift_input::{EntryKind, Snapshot};
 use frameshift_modules::{Edge, FileKind, ModuleGraph, ModuleState, Resolution};
 use frameshift_nextjs::{
-    AppAnalysis, AppError, ComponentError, ComponentGraph, Convention, EnvironmentAnalysis,
-    analyze_app_with, classify_environment, link_components, summarize_components,
+    AppAnalysis, AppError, ComponentError, ComponentGraph, ConfigFile, ConfigurationFacts,
+    Convention, EnvironmentAnalysis, FactError, FactLimits, FrameworkModuleFacts,
+    analyze_app_facts_with, classify_environment, link_components, summarize_components,
     summarize_environment,
 };
 use frameshift_syntax::{NodeId, SyntaxNodeKind as N, SyntaxTree, TypeScriptKind};
@@ -49,6 +51,8 @@ pub struct Project {
     package: Option<SourcePath>,
     files: Vec<ProjectFile>,
     app: AppAnalysis,
+    configuration: ConfigurationFacts,
+    framework: Vec<FrameworkModuleFacts>,
     semantics: Vec<ModuleFacts>,
     components: ComponentGraph,
     environment: EnvironmentAnalysis,
@@ -64,6 +68,9 @@ pub enum ProjectError {
     OutsidePackage,
     /// App Router or module analysis failed; no model is returned.
     App(AppError),
+    /// Static evaluation of configuration or convention exports failed
+    /// operationally, rather than yielding unknown values.
+    Evaluate(EvaluateError),
     /// A route index does not belong to this model.
     InvalidRoute,
     /// Component linking or a dependency query exhausted `modules.max-work`.
@@ -76,6 +83,7 @@ impl std::fmt::Display for ProjectError {
             Self::Limits(e) => e.fmt(f),
             Self::OutsidePackage => f.write_str("app directory is outside the selected package"),
             Self::App(e) => e.fmt(f),
+            Self::Evaluate(e) => e.fmt(f),
             Self::InvalidRoute => f.write_str("route index is outside the project model"),
             Self::WorkLimit => f.write_str("project dependency work limit reached"),
         }
@@ -85,17 +93,20 @@ impl std::fmt::Display for ProjectError {
 impl std::error::Error for ProjectError {}
 
 /// Builds one source model from an existing snapshot. The caller selects
-/// the package, app directory, and page extensions explicitly; this API does
-/// not guess configuration or framework identity. Source files are parsed
-/// once by `analyze_app`; files outside its graph are inventoried, not read.
-/// Incomplete discovery and invalid roots fail without a partial model.
-/// Component linking charges a fresh `modules.max-work` budget; its
-/// exhaustion also returns no model.
+/// the package, app directory, page extensions, and the configuration file
+/// that detection found explicitly; this API does not guess configuration
+/// or framework identity. `None` establishes that no configuration exists.
+/// Source files are parsed once by the Next.js fact analysis, which also
+/// evaluates the configuration and convention exports (`D-097`); files
+/// outside its graph are inventoried, not read. Incomplete discovery and
+/// invalid roots fail without a partial model. Component linking charges a
+/// fresh `modules.max-work` budget; its exhaustion also returns no model.
 pub fn build(
     snapshot: &Snapshot,
     package: Option<&SourcePath>,
     app: &SourcePath,
     extensions: &[&str],
+    config: Option<&ConfigFile>,
     limits: &Limits,
 ) -> Result<Project, ProjectError> {
     limits.validate().map_err(ProjectError::Limits)?;
@@ -105,12 +116,16 @@ pub fn build(
     let mut semantics = Vec::new();
     let mut summaries = Vec::new();
     let mut environments = Vec::new();
-    let app = analyze_app_with(
+    let facts = analyze_app_facts_with(
         snapshot,
         package,
         app,
         extensions,
-        limits.modules(),
+        config,
+        FactLimits {
+            graph: limits.modules(),
+            evaluate: limits.evaluate,
+        },
         &mut |path, tree, bindings| {
             semantics.push(module_facts(path, tree, bindings));
             summaries.push(summarize_components(path, tree, bindings));
@@ -118,7 +133,11 @@ pub fn build(
             Ok(())
         },
     )
-    .map_err(ProjectError::App)?;
+    .map_err(|e| match e {
+        FactError::App(e) => ProjectError::App(e),
+        FactError::Evaluate(e) => ProjectError::Evaluate(e),
+    })?;
+    let app = facts.app;
     let components = link_components(&app.graph, &app.routes, &summaries, limits.modules.max_work)
         .map_err(|e| match e {
             ComponentError::WorkLimit => ProjectError::WorkLimit,
@@ -162,6 +181,8 @@ pub fn build(
         package: package.cloned(),
         files,
         app,
+        configuration: facts.configuration,
+        framework: facts.modules,
         semantics,
         components,
         environment,
@@ -169,7 +190,7 @@ pub fn build(
     })
 }
 
-fn inside(path: &SourcePath, package: Option<&SourcePath>) -> bool {
+pub(crate) fn inside(path: &SourcePath, package: Option<&SourcePath>) -> bool {
     package.is_none_or(|root| {
         path.as_str()
             .strip_prefix(root.as_str())
@@ -210,6 +231,13 @@ pub struct ModuleFacts {
     /// Direct `process.env` accesses with global-name provenance. No
     /// environment file or host variable is read; aliases are not inferred.
     pub environment: Vec<EnvironmentUse>,
+    /// Opening tags of intrinsic `style` elements with a `jsx` attribute,
+    /// the spelling that styled-jsx compiles, in source order.
+    pub styled_jsx: Vec<Span>,
+    /// Non-computed or literal `searchParams` member reads and object
+    /// pattern keys, in source order. This is property-name evidence for
+    /// later filtering by convention and render context, not a binding.
+    pub search_params: Vec<Span>,
 }
 
 /// A direct access through a global (possibly ambient) `process` name.
@@ -235,6 +263,8 @@ impl EnvironmentUse {
 fn module_facts(path: &SourcePath, tree: &SyntaxTree<'_>, bindings: &Bindings) -> ModuleFacts {
     let mut renders = Vec::new();
     let mut environment = Vec::new();
+    let mut styled_jsx = Vec::new();
+    let mut search_params = Vec::new();
     let mut pending = vec![(tree.root(), None, None)];
     while let Some((id, owner, parent)) = pending.pop() {
         let node = tree.node(id).expect("parser-owned node");
@@ -280,6 +310,42 @@ fn module_facts(path: &SourcePath, tree: &SyntaxTree<'_>, bindings: &Bindings) -
                 .unwrap_or((node.span(), None));
             environment.push(EnvironmentUse { span, name });
         }
+        let search = if let N::Member {
+            property, computed, ..
+        } = node.kind()
+        {
+            (member_name(tree, property, computed).as_deref() == Some("searchParams"))
+                .then_some(property)
+        } else if let N::PatternProperty {
+            key,
+            computed: false,
+            ..
+        } = node.kind()
+        {
+            (property_key(tree, key).as_deref() == Some("searchParams")).then_some(key)
+        } else if let N::ShorthandPatternProperty { target, .. } = node.kind() {
+            (tree.identifier_value(target).as_deref() == Some("searchParams")).then_some(target)
+        } else {
+            None
+        };
+        if let Some(key) = search {
+            search_params.push(tree.node(key).expect("parser-owned key").span());
+        }
+        if let N::JsxOpeningElement {
+            name, attributes, ..
+        } = node.kind()
+            && jsx_name(tree, name) == Some("style")
+            && tree
+                .children(attributes)
+                .unwrap_or_default()
+                .iter()
+                .any(|&attribute| {
+                    matches!(tree.node(attribute).unwrap().kind(),
+                        N::JsxAttribute { name, .. } if jsx_name(tree, name) == Some("jsx"))
+                })
+        {
+            styled_jsx.push(node.span());
+        }
         if let N::JsxOpeningElement { name, .. } = node.kind() {
             let name_span = tree.node(name).expect("parser-owned name").span();
             let mut root = name;
@@ -315,13 +381,31 @@ fn module_facts(path: &SourcePath, tree: &SyntaxTree<'_>, bindings: &Bindings) -
     }
     environment.sort_by_key(|usage| usage.span.start());
     renders.sort_by_key(|site| site.span.start());
+    styled_jsx.sort_by_key(|span| span.start());
+    search_params.sort_by_key(|span| span.start());
     ModuleFacts {
         path: path.clone(),
         bindings: bindings.clone(),
         spans: tree.nodes().iter().map(|node| node.span()).collect(),
         renders,
         environment,
+        styled_jsx,
+        search_params,
     }
+}
+
+/// The spelling of a plain JSX identifier; namespaced and member names have none.
+fn jsx_name<'a>(tree: &'a SyntaxTree<'_>, name: NodeId) -> Option<&'a str> {
+    let node = tree.node(name)?;
+    matches!(node.kind(), N::JsxIdentifier)
+        .then(|| tree.source().slice(node.span()).ok())
+        .flatten()
+}
+
+/// A literal object-pattern key: an identifier name or a string literal.
+fn property_key(tree: &SyntaxTree<'_>, key: NodeId) -> Option<String> {
+    tree.identifier_value(key)
+        .or_else(|| tree.string_literal_value(key))
 }
 
 fn member_name(tree: &SyntaxTree<'_>, property: NodeId, computed: bool) -> Option<String> {
@@ -395,6 +479,18 @@ impl Project {
     /// `ModuleFacts::environment` keeps the direct reads alone.
     pub fn environment(&self) -> &EnvironmentAnalysis {
         &self.environment
+    }
+
+    /// The evaluated configuration with its loading evidence and unknown
+    /// parts (`D-097`). Unknown values are never defaults.
+    pub fn configuration(&self) -> &ConfigurationFacts {
+        &self.configuration
+    }
+
+    /// Convention exports and direct-import uses of every strictly parsed
+    /// module, in path order (`D-097`).
+    pub fn framework(&self) -> &[FrameworkModuleFacts] {
+        &self.framework
     }
 
     /// The shared module graph, without a copy per route.
@@ -500,6 +596,7 @@ mod tests {
             None,
             &SourcePath::new("app", PathLimits::default()).unwrap(),
             &["tsx"],
+            None,
             &limits,
         )
         .unwrap();

@@ -17,8 +17,10 @@
 //! and workspace members, which it reads through the snapshot store. The
 //! Next.js API detects the framework, version, configuration file, and
 //! routers of the selected package. The `inspect` pipeline combines them into
-//! a read-only identification of a project with its versioned JSON document;
-//! the facade contains no migration or verification pipeline. The CLI
+//! a read-only identification of a project with its versioned JSON document.
+//! The `project` model assembles a package's source facts, and `features`
+//! detects occurrences of the V1 feature catalog in it; the facade contains
+//! no assessment, migration, or verification pipeline. The CLI
 //! consumes this facade, including immutable build identity, rather than
 //! lower layers.
 
@@ -32,10 +34,14 @@ pub use frameshift_bindings as bindings;
 pub use frameshift_evaluate as evaluate;
 
 mod document;
+pub mod features;
 pub mod inspect;
 pub mod limits;
 pub mod project;
 pub mod version;
+
+/// The V1 feature catalog of the `nextjs-to-astro-preact` path (`D-099`).
+pub use frameshift_catalog as catalog;
 
 /// Framework-independent text, paths, identifiers, findings, SHA-256, limits,
 /// and deterministic collections.

@@ -281,6 +281,8 @@ Islands and static Preact components use the `preact/compat` strategy by default
 | `<title>`, `<meta>`, `<link>` rendered inside components (React 19 hoisting) | `review`: Preact does not hoist these into `<head>` |
 | Custom hooks | Analyzed recursively. A custom hook inherits the most severe status of what it uses. |
 
+The feature IDs of these hooks and APIs, and of `Fragment`, `Children`, `cloneElement`, `isValidElement`, `createElement`, and `startTransition`, which `preact/compat` also provides, are listed in section 17.7.
+
 ### 9.7 Context providers and shared state
 
 Astro islands are independent render roots. React context does not cross islands, and static content between islands is not inside any provider.
@@ -438,9 +440,9 @@ Removed relative to the source: `next.config.*`, `next-env.d.ts`, and the `app/`
 
 ## 17. Compatibility matrix
 
-Legend: **A** `auto`, **R** `review`, **U** `unsupported` in V1. "Later" names the stage that plans to support an unsupported feature. Any construct not listed is `unknown`.
+Legend: **A** `auto`, **R** `review`, **U** `unsupported` in V1. "Later" names the stage that plans to support an unsupported feature. Any construct not listed is `unknown`. The V1 column lists every status that the entry allows, including the conditions in its notes; an entry with exactly one status has it fixed, and every other entry needs an assessment rule that chooses among the listed statuses.
 
-Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Existing two-segment names remain stable. Entries ending in `.*` describe catalog families, not literal identifiers; each concrete member must pass `FeatureId` validation. The facade regression test validates every concrete ID and an example expansion of each family in this matrix.
+Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Existing two-segment names remain stable. Entries ending in `.*` describe catalog families, not literal identifiers; their concrete members are listed in section 17.7, and each must pass `FeatureId` validation. The catalog crate `frameshift-catalog` holds exactly these entries as data (`D-099`, section 50 of [IMPLEMENTATION.md](IMPLEMENTATION.md)); the facade test `crates/frameshift-engine/tests/features.rs` requires that every table below and the catalog agree in IDs and V1 statuses, and the identifier test validates every concrete ID and an example expansion of each family.
 
 ### 17.1 Project and configuration
 
@@ -471,11 +473,11 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 | Optional catch-all | `nextjs.route.optional-catch-all` | R | |
 | Parallel routes | `nextjs.route.parallel` | U | |
 | Intercepting routes | `nextjs.route.intercepting` | U | |
-| Layouts | `nextjs.file.layout` | A | Non-convertible root layout: U |
+| Layouts | `nextjs.file.layout` | A or U | Non-convertible root layout: U |
 | `template` | `nextjs.file.template` | R | |
 | `loading` | `nextjs.file.loading` | R | Dropped |
 | `error`, `global-error` | `nextjs.file.error` | R | Dropped |
-| Root `not-found` | `nextjs.file.not-found` | A | Nested: R |
+| Root `not-found` | `nextjs.file.not-found` | A or R | Nested: R |
 | Static GET route handler | `nextjs.file.route-handler-static` | R | |
 | Other route handlers | `nextjs.file.route-handler` | U | Later: V3 with server adapters |
 | `proxy.ts`, `middleware.ts` | `nextjs.file.proxy` | U | `FS3130`. Later: V3. |
@@ -485,10 +487,11 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 
 | Feature | Feature ID | V1 | Notes |
 | --- | --- | --- | --- |
-| Server component, synchronous or async | `react.server-component` | A | Async requires Astro conversion |
-| Build-time `fetch` | `nextjs.fetch` | A | R with Next.js cache options |
+| Server component, synchronous or async | `react.server-component` | A or U | Async requires Astro conversion, otherwise U (section 8) |
+| Build-time `fetch` | `nextjs.fetch` | A or R | R with Next.js cache options |
 | ISR `revalidate` | `nextjs.segment.revalidate` | R | |
 | `force-dynamic` | `nextjs.segment.dynamic` | U | |
+| `export const runtime` | `nextjs.segment.runtime` | A | Dropped (section 8) |
 | `cookies`, `headers`, `draftMode` | `nextjs.api.request` | U | `FS3101`, `FS3102` |
 | Server `searchParams` | `nextjs.api.search-params-server` | U | |
 | Server Actions | `nextjs.api.server-action` | U | `FS3120`. Later: V3. |
@@ -505,6 +508,7 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 | Client component at a boundary | `component.island` | A | `client:load` |
 | `'use client'` page | `component.client-page` | R | |
 | `next/dynamic` with `ssr: false` | `nextjs.api.dynamic-no-ssr` | A | `client:only` |
+| Other `next/dynamic` calls | `nextjs.api.dynamic` | R | Regular imports (section 10) |
 | Serializable props across the boundary | `boundary.props` | A | |
 | JSX props across the boundary | `boundary.jsx-props` | R | Named slots |
 | Promise props across the boundary | `boundary.promise-props` | U | |
@@ -522,22 +526,86 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 | `next/link` | `nextjs.api.link` | A or R | |
 | `next/image` | `nextjs.api.image` | A or R | Section 12.3 |
 | `next/font` | `nextjs.api.font` | R | |
-| `next/script` | `nextjs.api.script` | R | `worker` strategy: U |
+| `next/script` | `nextjs.api.script` | R or U | `worker` strategy: U |
 | `next/navigation` hooks | `nextjs.api.navigation` | R | Generated helper |
 | `redirect`, `permanentRedirect` | `nextjs.api.redirect` | U | |
 | `notFound` | `nextjs.api.not-found` | R | |
-| `next/headers`, `next/cache`, `next/og`, `next/form` | `nextjs.api.server-only` | U | |
+| `next/headers`, `next/cache`, `next/og`, `next/form`, `next/server` outside route handlers | `nextjs.api.server-only` | U | Request APIs and `unstable_cache` have their own entries |
+| `next/head`, `next/router`, `next/document`, `next/app` | `nextjs.api.pages-router` | U | Pages Router (`DF-007`) |
+| `next/config` | `nextjs.api.config` | U | Removed in Next.js 16 |
 | Global CSS, CSS Modules, Sass | `css.global`, `css.module`, `css.sass` | A | |
 | Tailwind CSS v3 and v4 | `css.tailwind` | A or R | |
 | `styled-jsx` | `css.styled-jsx` | U | Later: V2 |
 | Runtime CSS-in-JS | `css.in-js` | U | |
 | `public/` assets | `asset.public` | A | Verbatim |
 | Static asset imports | `asset.import` | A | |
+| JSON module imports | `asset.json-import` | A | Vite imports JSON natively |
 | Static metadata files | `nextjs.metadata.file` | A | |
-| Generated metadata files | `nextjs.metadata.route` | R | `opengraph-image.tsx`: U |
+| Generated metadata files | `nextjs.metadata.route` | R or U | `opengraph-image.tsx`: U |
 | Static `metadata` (supported fields) | `nextjs.metadata.static` | A | |
 | Unsupported metadata fields | `nextjs.metadata.unsupported-field` | U | Per field |
 | `generateMetadata`, non-literal metadata | `nextjs.metadata.dynamic` | R | Generated helper |
+
+### 17.6 Unrecognized constructs
+
+| Feature | Feature ID | V1 | Notes |
+| --- | --- | --- | --- |
+| A construct that analysis cannot match to the catalog, or cannot analyze: an unparsed module, an unresolved reference, an unlisted framework API, segment option, or convention, an unestablished render value, or a whole-object environment use | `source.unknown` | Unknown | Each occurrence names its cause (`D-099`) |
+
+### 17.7 Family members
+
+The concrete members of the families above, with their own statuses. Members that need their own row elsewhere, such as `react.hook.use-id` and `react.hook.react19`, stay there.
+
+| Feature | Feature ID | V1 | Notes |
+| --- | --- | --- | --- |
+| `output: 'export'` | `nextjs.config.output` | A | Other values are `nextjs.config.unknown` |
+| `trailingSlash` | `nextjs.config.trailing-slash` | A | |
+| `basePath` | `nextjs.config.base-path` | A or R | R for computed hrefs |
+| `images.unoptimized` | `nextjs.config.images.unoptimized` | A | |
+| `images.remotePatterns` | `nextjs.config.images.remote-patterns` | R | |
+| `images.domains` | `nextjs.config.images.domains` | R | |
+| `images.loader`, `images.loaderFile` | `nextjs.config.images.loader` | U | |
+| `env` | `nextjs.config.env` | R | |
+| `redirects()` returning a literal list | `nextjs.config.redirects` | R | Other values are `nextjs.config.unknown` |
+| `rewrites()` | `nextjs.config.rewrites` | U | |
+| `headers()` | `nextjs.config.headers` | U | |
+| `reactStrictMode` | `nextjs.config.react-strict-mode` | A | Dropped |
+| `poweredByHeader` | `nextjs.config.powered-by-header` | A | Dropped |
+| `compress` | `nextjs.config.compress` | A | Dropped |
+| `typescript` | `nextjs.config.typescript` | A | Dropped |
+| `eslint` | `nextjs.config.eslint` | A | Dropped |
+| `transpilePackages` | `nextjs.config.transpile-packages` | R | |
+| `webpack` | `nextjs.config.webpack` | U | |
+| `turbopack`, `experimental.turbo` | `nextjs.config.turbopack` | U | |
+| `pageExtensions` including `mdx` | `nextjs.config.page-extensions` | U | Other lists are `nextjs.config.unknown` |
+| `i18n` | `nextjs.config.i18n` | U | |
+| `useState` | `react.hook.use-state` | A | |
+| `useEffect` | `react.hook.use-effect` | A | |
+| `useLayoutEffect` | `react.hook.use-layout-effect` | A | |
+| `useRef` | `react.hook.use-ref` | A | |
+| `useMemo` | `react.hook.use-memo` | A | |
+| `useCallback` | `react.hook.use-callback` | A | |
+| `useReducer` | `react.hook.use-reducer` | A | |
+| `useContext` | `react.hook.use-context` | A | |
+| `useImperativeHandle` | `react.hook.use-imperative-handle` | A | |
+| `useTransition` | `react.hook.use-transition` | A or R | Compat coverage table (section 9.6) |
+| `useDeferredValue` | `react.hook.use-deferred-value` | A or R | Compat coverage table (section 9.6) |
+| `useSyncExternalStore` | `react.hook.use-sync-external-store` | A or R | Compat coverage table (section 9.6) |
+| `useInsertionEffect` | `react.hook.use-insertion-effect` | A or R | Compat coverage table (section 9.6) |
+| `createContext` | `react.api.create-context` | A | |
+| `memo` | `react.api.memo` | A | |
+| `forwardRef` | `react.api.forward-ref` | A | |
+| `lazy` | `react.api.lazy` | A | |
+| Client-side `Suspense` | `react.api.suspense` | A | Server-rendered trees: `react.suspense-server` |
+| `createPortal` (`react-dom`) | `react.api.create-portal` | A | |
+| `Component`, `PureComponent` | `react.api.component` | A | Class components and error boundaries |
+| `StrictMode` | `react.api.strict-mode` | A | Removed |
+| `Fragment` | `react.api.fragment` | A | |
+| `Children` | `react.api.children` | A | Prevents Astro conversion (section 9.3) |
+| `cloneElement` | `react.api.clone-element` | A | Prevents Astro conversion (section 9.3) |
+| `isValidElement` | `react.api.is-valid-element` | A | Prevents Astro conversion (section 9.3) |
+| `createElement` | `react.api.create-element` | A | Prevents Astro conversion (section 9.3) |
+| `startTransition` | `react.api.start-transition` | A or R | Compat coverage table (section 9.6) |
 
 ## 18. Transformation examples
 

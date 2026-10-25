@@ -1,0 +1,119 @@
+project nextjs.navigation.client review None
+.github/workflows/ci.yml deploy.config unsupported None
+app nextjs.project.app-router auto None
+app/(marketing)/pricing/page.tsx nextjs.route.group auto Segment { pattern: "/pricing", name: "(marketing)" }
+app/(marketing)/pricing/page.tsx nextjs.route.page auto Route { pattern: "/pricing" }
+app/(marketing)/pricing/page.tsx nextjs.route.segment auto Route { pattern: "/pricing" }
+app/(marketing)/pricing/page.tsx@13..37 "dynamic = 'force-static'" source.unknown unknown Unknown(SegmentValue)
+app/(marketing)/pricing/page.tsx@54..89 "function Pricing() { return null" react.server-component - Component { name: Some("Pricing") }
+app/@modal/default.tsx nextjs.route.parallel unsupported None
+app/@modal/default.tsx@15..48 "function Modal() { return null; " react.server-component - Component { name: Some("Modal") }
+app/_lib nextjs.route.private auto None
+app/about/page.tsx nextjs.route.page auto Route { pattern: "/about" }
+app/about/page.tsx nextjs.route.segment auto Route { pattern: "/about" }
+app/about/page.tsx@0..12 "'use client'" component.client-page review None
+app/about/page.tsx@146..157 "useState(0)" react.hook.use-state auto Api { specifier: "react", export: "useState" }
+app/about/page.tsx@170..177 "useId()" react.hook.use-id review Api { specifier: "react", export: "useId" }
+app/about/page.tsx@179..190 "useRouter()" nextjs.api.navigation review Api { specifier: "next/navigation", export: "useRouter" }
+app/api/submit/route.ts nextjs.file.route-handler unsupported Methods { methods: ["POST"] }
+app/api/submit/route.ts nextjs.route.segment auto Route { pattern: "/api/submit" }
+app/blog/[slug]/page.tsx nextjs.route.dynamic - Segment { pattern: "/blog/[slug]", name: "[slug]" }
+app/blog/[slug]/page.tsx nextjs.route.segment auto Route { pattern: "/blog/[slug]" }
+app/blog/[slug]/page.tsx@124..172 "async function generateMetadata(" nextjs.metadata.dynamic review Export { name: "generateMetadata" }
+app/blog/[slug]/page.tsx@188..300 "function Post({ params, searchPa" react.server-component - Component { name: Some("Post") }
+app/blog/[slug]/page.tsx@212..224 "searchParams" nextjs.api.search-params-server unsupported None
+app/blog/[slug]/page.tsx@243..253 "notFound()" nextjs.api.not-found review Api { specifier: "next/navigation", export: "notFound" }
+app/docs/[...path]/page.tsx nextjs.route.catch-all - Segment { pattern: "/docs/[...path]", name: "[...path]" }
+app/docs/[...path]/page.tsx nextjs.route.dynamic-unenumerable unsupported Segment { pattern: "/docs/[...path]", name: "[...path]" }
+app/docs/[...path]/page.tsx nextjs.route.segment auto Route { pattern: "/docs/[...path]" }
+app/docs/[...path]/page.tsx@13..38 "dynamic = 'force-dynamic'" nextjs.segment.dynamic unsupported Export { name: "dynamic" }
+app/docs/[...path]/page.tsx@55..87 "function Docs() { return null; }" react.server-component - Component { name: Some("Docs") }
+app/error.tsx nextjs.file.error review None
+app/error.tsx@0..12 "'use client'" component.island auto None
+app/feed.xml/route.ts nextjs.file.route-handler-static review Methods { methods: ["GET"] }
+app/feed.xml/route.ts nextjs.route.segment auto Route { pattern: "/feed.xml" }
+app/forbidden.tsx source.unknown unknown Unknown(Convention(Forbidden))
+app/forbidden.tsx@15..44 "function F() { return null; }" react.server-component - Component { name: Some("F") }
+app/globals.css css.global auto None
+app/icon.png nextjs.metadata.file auto None
+app/layout.tsx nextjs.file.layout - None
+app/layout.tsx@31..44 "'server-only'" nextjs.guard auto None
+app/layout.tsx@59..144 "metadata = { title: 'Site', open" nextjs.metadata.static auto Export { name: "metadata" }
+app/layout.tsx@59..144 "metadata = { title: 'Site', open" nextjs.metadata.unsupported-field unsupported Field { export: "metadata", path: "openGraph.videos" }
+app/layout.tsx@59..144 "metadata = { title: 'Site', open" nextjs.metadata.unsupported-field unsupported Field { export: "metadata", path: "category" }
+app/layout.tsx@161..243 "function RootLayout({ children }" react.server-component - Component { name: Some("RootLayout") }
+app/loading.tsx nextjs.file.loading review None
+app/loading.tsx@15..50 "function Loading() { return null" react.server-component - Component { name: Some("Loading") }
+app/not-found.tsx nextjs.file.not-found - None
+app/not-found.tsx@15..51 "function NotFound() { return nul" react.server-component - Component { name: Some("NotFound") }
+app/page.tsx nextjs.route.page auto Route { pattern: "/" }
+app/page.tsx@79..99 "'../public/logo.svg'" asset.import auto None
+app/page.tsx@118..131 "'./data.json'" asset.json-import auto None
+app/page.tsx@264..275 "'./missing'" source.unknown unknown Unknown(Unresolved(NotFound))
+app/page.tsx@326..341 "revalidate = 60" nextjs.segment.revalidate review Export { name: "revalidate" }
+app/page.tsx@356..374 "runtime = 'nodejs'" nextjs.segment.runtime auto Export { name: "runtime" }
+app/page.tsx@389..415 "fetchCache = 'force-cache'" source.unknown unknown Unknown(SegmentOption { name: "fetchCache" })
+app/page.tsx@452..720 "async function Home() { const na" react.server-component - Component { name: Some("Home") }
+app/page.tsx@507..511 "name" source.unknown unknown Unknown(Unresolved(Computed))
+app/page.tsx@532..537 "fetch" nextjs.fetch - None
+app/page.tsx@575..582 "<title>" react.head-hoisting review None
+app/page.tsx@594..604 "<Suspense>" react.suspense-server auto Api { specifier: "react", export: "Suspense" }
+app/page.tsx@626..646 "<Link href=\"/about\">" nextjs.api.link - Api { specifier: "next/link", export: "default" }
+app/page.tsx@658..685 "<Image src={logo} alt=\"\" />" nextjs.api.image - Api { specifier: "next/image", export: "default" }
+app/page.tsx@695..702 "<Dyn />" source.unknown unknown Unknown(Render(Call(Some("make"))))
+app/shop/[[...filter]]/page.tsx nextjs.route.optional-catch-all review Segment { pattern: "/shop/[[...filter]]", name: "[[...filter]]" }
+app/shop/[[...filter]]/page.tsx nextjs.route.segment auto Route { pattern: "/shop/[[...filter]]" }
+app/shop/[[...filter]]/page.tsx source.unknown unknown Unknown(Enumeration)
+app/shop/[[...filter]]/page.tsx@41..75 "function Filter() { return null;" react.server-component - Component { name: Some("Filter") }
+app/shop/layout.tsx nextjs.file.layout - None
+app/shop/layout.tsx@75..123 "function Shop({ children }) { re" react.server-component - Component { name: Some("Shop") }
+app/sitemap.ts nextjs.metadata.route - None
+app/template.tsx nextjs.file.template review None
+app/template.tsx@15..60 "function T({ children }) { retur" react.server-component - Component { name: Some("T") }
+app/theme.module.scss css.module auto None
+app/theme.module.scss css.sass auto None
+bun.lockb npm.lockfile.bun-binary review None
+components/Broken.tsx source.unknown unknown Unknown(Unparsed)
+components/Counter.tsx@0..12 "'use client'" component.island auto None
+components/Counter.tsx@147..195 "dynamic(() => import('./Chart')," nextjs.api.dynamic-no-ssr auto Api { specifier: "next/dynamic", export: "default" }
+components/Counter.tsx@209..239 "dynamic(() => import('./Map'))" nextjs.api.dynamic review Api { specifier: "next/dynamic", export: "default" }
+components/Counter.tsx@277..300 "useEffect(() => {}, [])" react.hook.use-effect auto Api { specifier: "react", export: "useEffect" }
+components/Counter.tsx@302..328 "React.useMemo(() => 1, [])" react.hook.use-memo auto Api { specifier: "react", export: "useMemo" }
+components/Counter.tsx@330..362 "useActionState(async () => 1, 0)" react.hook.react19 unsupported Api { specifier: "react", export: "useActionState" }
+components/Counter.tsx@374..401 "process.env.NEXT_PUBLIC_API" env.reference - Variable { name: "NEXT_PUBLIC_API" }
+components/Counter.tsx@418..429 "process.env" source.unknown unknown Unknown(Environment(Whole))
+components/Counter.tsx@444..455 "<style jsx>" css.styled-jsx unsupported None
+components/Counter.tsx@488..505 "<meta name=\"x\" />" react.head-hoisting review None
+jest.config.js test.setup - None
+lib/actions.ts@0..12 "'use server'" nextjs.api.server-action unsupported None
+lib/actions.ts@146..155 "cookies()" nextjs.api.request unsupported Api { specifier: "next/headers", export: "cookies" }
+lib/actions.ts@157..176 "revalidatePath('/')" nextjs.api.server-only unsupported Api { specifier: "next/cache", export: "revalidatePath" }
+lib/actions.ts@178..201 "unstable_cache(() => 1)" react.cache review Api { specifier: "next/cache", export: "unstable_cache" }
+lib/legacy.ts@185..189 "Head" nextjs.api.pages-router unsupported Api { specifier: "next/head", export: "default" }
+lib/legacy.ts@208..219 "getConfig()" nextjs.api.config unsupported Api { specifier: "next/config", export: "default" }
+lib/legacy.ts@238..247 "userAgent" nextjs.api.server-only unsupported Api { specifier: "next/server", export: "userAgent" }
+lib/legacy.ts@266..290 "useSelectedLayoutSegment" source.unknown unknown Unknown(Api { specifier: "next/navigation", export: Some("useSelectedLayoutSegment") })
+middleware.ts nextjs.file.proxy unsupported None
+next.config.mjs nextjs.config.base-path - Configuration { key: "basePath" }
+next.config.mjs nextjs.config.images.loader unsupported Configuration { key: "images.loader" }
+next.config.mjs nextjs.config.images.unoptimized auto Configuration { key: "images.unoptimized" }
+next.config.mjs nextjs.config.output auto Configuration { key: "output" }
+next.config.mjs nextjs.config.page-extensions unsupported Configuration { key: "pageExtensions" }
+next.config.mjs nextjs.config.react-strict-mode auto Configuration { key: "reactStrictMode" }
+next.config.mjs nextjs.config.rewrites unsupported Configuration { key: "rewrites" }
+next.config.mjs nextjs.config.trailing-slash auto Configuration { key: "trailingSlash" }
+next.config.mjs nextjs.config.turbopack unsupported Configuration { key: "experimental.turbo" }
+next.config.mjs nextjs.config.unknown unknown Unknown(Configuration { key: Some("images.deviceSizes") })
+next.config.mjs nextjs.config.unknown unknown Unknown(Configuration { key: Some("experimental.ppr") })
+next.config.mjs nextjs.config.unknown unknown Unknown(Configuration { key: Some("redirects") })
+next.config.mjs nextjs.config.unknown unknown Unknown(Configuration { key: Some("env") })
+next.config.mjs nextjs.config.unknown unknown Unknown(Configuration { key: Some("futureKey") })
+next.config.mjs nextjs.config.webpack unsupported Configuration { key: "webpack" }
+next.config.mjs@328..344 "process.env.SITE" env.reference - Variable { name: "SITE" }
+package.json npm.manifest - None
+pages nextjs.project.pages-router unsupported None
+public/logo.svg asset.public auto None
+public/site.css asset.public auto None
+tailwind.config.ts css.tailwind - None
+tsconfig.json ts.config auto None
+vercel.json deploy.config unsupported None
