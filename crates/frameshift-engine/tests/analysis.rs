@@ -34,6 +34,45 @@ fn run(root: &std::path::Path) -> analysis::Analysis {
 }
 const PAGE: &str = "export default function Page() { return <h1>Welcome</h1> }\n";
 #[test]
+fn manifest_scripts_preserve_production_server_and_other_next_review() {
+    let root = create("scripts", &[("app/page.tsx", PAGE)]);
+    for (script, expected) in [
+        ("next dev", Status::Auto),
+        ("next build", Status::Auto),
+        ("next start", Status::Review),
+        ("next lint", Status::Review),
+        ("next build && next start", Status::Review),
+    ] {
+        fs::write(
+            root.join("package.json"),
+            format!(
+                "{{\"dependencies\":{{\"{}\":\"16.2.0\"}},\"scripts\":{{\"test\":\"{script}\"}}}}",
+                "next"
+            ),
+        )
+        .unwrap();
+        let result = run(&root);
+        let manifest = result
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| o.occurrence.feature.id == "npm.manifest")
+            .unwrap();
+        assert_eq!(manifest.status, Some(expected), "{script}");
+        let owner = manifest.unit.as_ref().unwrap();
+        assert_eq!(
+            result
+                .assessment
+                .units
+                .iter()
+                .find(|u| u.id.as_str() == owner)
+                .unwrap()
+                .status,
+            expected
+        );
+    }
+}
+#[test]
 fn analysis_is_read_only_deterministic_and_schema_readable() {
     let root = create(
         "deterministic",

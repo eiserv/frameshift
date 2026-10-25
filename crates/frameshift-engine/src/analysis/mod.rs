@@ -178,7 +178,7 @@ pub fn analyze(root: &Path, options: &AnalyzeOptions) -> Result<Analysis, Analyz
         return Err(limit("analysis occurrence limit reached"));
     }
     let dependencies = knowledge::dependencies(&selected, &workspace, &project);
-    let manifest_automatic = matches!(selected.manifest(),ManifestState::Analyzed(manifest) if manifest.scripts.iter().all(|entry|matches!(entry.value.as_ref(),"next dev"|"next build"|"next start"|"next lint")));
+    let manifest_automatic = matches!(selected.manifest(),ManifestState::Analyzed(manifest) if manifest.scripts.iter().all(|entry|matches!(entry.value.as_ref(),"next dev"|"next build")));
     let assessment = model::assess(
         &snapshot,
         &project,
