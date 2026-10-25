@@ -121,6 +121,37 @@ fn analysis_is_read_only_deterministic_and_schema_readable() {
     assert_eq!(stored, again);
 }
 #[test]
+fn spread_fetch_arguments_cannot_establish_an_option_free_call() {
+    for (arguments, expected) in [
+        ("'/data'", Status::Auto),
+        ("'/data', {next:{revalidate:60}}", Status::Review),
+        ("...args", Status::Review),
+        ("'/data', ...args", Status::Review),
+        ("...['/data', {cache:'no-store'}]", Status::Review),
+    ] {
+        let source = format!(
+            "const args=['/data'];export default function Page(){{fetch({arguments});return <p/>}}"
+        );
+        let root = create("fetch-spread", &[("app/page.tsx", &source)]);
+        let result = run(&root);
+        let occurrence = result
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| o.occurrence.feature.id == "nextjs.fetch")
+            .unwrap();
+        assert_eq!(occurrence.status, Some(expected), "{arguments}");
+        let unit = result
+            .assessment
+            .units
+            .iter()
+            .find(|u| u.id.as_str() == "route:/")
+            .unwrap();
+        assert_eq!(unit.status, expected, "{arguments}");
+        assert_eq!(result.assessment.routes[0].status, expected, "{arguments}");
+    }
+}
+#[test]
 fn request_api_finding_codes_follow_the_imported_export() {
     for (import, read, code) in [
         ("import {cookies} from 'next/headers';", "cookies", "FS3101"),

@@ -124,7 +124,11 @@ impl Syntax {
             {
                 module.calls.insert(
                     tree.node(unwrap(tree, callee)).unwrap().span(),
-                    tree.children(arguments).map(<[_]>::len),
+                    tree.children(arguments).and_then(|args| {
+                        args.iter()
+                            .all(|&id| !matches!(tree.node(id).unwrap().kind(), N::Spread { .. }))
+                            .then_some(args.len())
+                    }),
                 );
             }
         }
@@ -488,7 +492,7 @@ pub(crate) fn classify(
         "css.tailwind"=>Some((Review,"Tailwind and PostCSS configuration must be reviewed against the target integration.")),
         "npm.manifest"=>Some((Review,"Framework dependency replacement and project scripts require review.")),
         "react.api.start-transition"|"react.hook.use-transition"|"react.hook.use-deferred-value"|"react.hook.use-insertion-effect"|"react.hook.use-sync-external-store"=>Some((Review,"The pinned compat implementation has scheduling or style-insertion differences.")),
-        "nextjs.fetch"=>if let Location::Text{path,span}=at { syntax.modules.get(path).and_then(|m|m.calls.get(span).copied()).flatten().map(|n| if n<2 {(Auto,"A fetch without options remains a build-time fetch.")}else{(Review,"Fetch options and build-time snapshot semantics require review.")}) }else{None},
+        "nextjs.fetch"=>if let Location::Text{path,span}=at { syntax.modules.get(path).and_then(|m|m.calls.get(span).copied()).map(|n| match n {Some(n) if n<2 =>(Auto,"A fetch without options remains a build-time fetch."),Some(_)=>(Review,"Fetch options and build-time snapshot semantics require review."),None=>(Review,"Spread fetch arguments may supply options; cache and snapshot semantics require review.")}) }else{None},
         "nextjs.metadata.route"=>at.path().and_then(|p|project.nextjs().routes.files.iter().find(|f|&f.path==p)).map(|f|if matches!(f.convention,Convention::Metadata(Metadata::OpenGraphImage|Metadata::TwitterImage)) {(Unsupported,"Generated social images require a runtime image renderer.")}else{(Review,"Generated metadata is retained as a build-time endpoint with review.")}),
         _=>None,
     };
