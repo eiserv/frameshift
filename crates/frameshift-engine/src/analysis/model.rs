@@ -250,6 +250,8 @@ pub(crate) fn assess(
     limits: &Limits,
     findings: &mut FindingCollector,
 ) -> Result<Assessment, AnalyzeError> {
+    let mut conversion_work = limits.analysis.max_dependency_work;
+    let runtime_files = runtime_files(project, &mut conversion_work)?;
     let mut units = Vec::new();
     let mut main_files = BTreeSet::new();
     for route in &project.nextjs().routes.routes {
@@ -356,7 +358,6 @@ pub(crate) fn assess(
             }
         })
         .collect();
-    let mut conversion_work = limits.analysis.max_dependency_work;
     for route in &project.nextjs().routes.routes {
         if route.kind != RouteKind::Page {
             continue;
@@ -572,7 +573,7 @@ pub(crate) fn assess(
                     FileClass::Units
                 } else if local.starts_with("public/") {
                     FileClass::Verbatim
-                } else if out_of_scope(local) {
+                } else if out_of_scope(local) && !runtime_files.contains(&file.path) {
                     FileClass::OutOfScope
                 } else {
                     match file.kind.unwrap_or(FileKind::Asset) {
@@ -733,12 +734,17 @@ pub(crate) fn assess(
     if assessed.len() > limits.analysis.max_occurrences {
         return Err(super::limit("analysis occurrence limit reached"));
     }
+    let excluded_files: BTreeSet<_> = files
+        .iter()
+        .filter(|f| f.class == FileClass::OutOfScope)
+        .map(|f| &f.path)
+        .collect();
     for occurrence in &mut assessed {
         if occurrence
             .occurrence
             .location
             .path()
-            .is_some_and(|p| out_of_scope(p.as_str().strip_prefix(&prefix).unwrap_or(p.as_str())))
+            .is_some_and(|p| excluded_files.contains(p))
         {
             occurrence.status = None;
             occurrence.rule = None;
@@ -1149,6 +1155,41 @@ pub(crate) fn assess(
         routes,
         unrepresentable: snapshot.inventory().unrepresentable(),
     })
+}
+fn runtime_files(project: &Project, work: &mut u64) -> Result<BTreeSet<SourcePath>, AnalyzeError> {
+    let mut pending: BTreeSet<_> = project
+        .nextjs()
+        .routes
+        .routes
+        .iter()
+        .flat_map(|r| std::iter::once(&r.file).chain(r.chain.iter().map(|f| &f.path)))
+        .collect();
+    let mut reached = BTreeSet::new();
+    while let Some(path) = pending.pop_first() {
+        if reached.contains(path) {
+            continue;
+        }
+        *work = work
+            .checked_sub(1)
+            .ok_or_else(|| super::limit("assessment dependency work limit reached"))?;
+        reached.insert(path.clone());
+        if let Some(node) = project.nextjs().graph.node(path)
+            && node.kind != FileKind::Declaration
+        {
+            for edge in &node.edges {
+                *work = work
+                    .checked_sub(1)
+                    .ok_or_else(|| super::limit("assessment dependency work limit reached"))?;
+                if !edge.type_only
+                    && let Resolution::Local { path, .. } = &edge.resolution
+                    && !reached.contains(path)
+                {
+                    pending.insert(path);
+                }
+            }
+        }
+    }
+    Ok(reached)
 }
 fn out_of_scope(path: &str) -> bool {
     path.starts_with(".github/")

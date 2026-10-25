@@ -1435,6 +1435,71 @@ fn implicit_layout_rendering_participates_in_conversion_demotion() {
     );
 }
 #[test]
+fn runtime_reachability_overrides_test_like_file_names() {
+    for path in [
+        "app/lib/session.spec.ts",
+        "tests/session.ts",
+        "app/__tests__/session.ts",
+    ] {
+        let source = format!(
+            "import {{session}} from '../{}';export default function Page(){{return <p>{{session()}}</p>}}",
+            path.strip_suffix(".ts").unwrap()
+        );
+        let root = create(
+            "runtime-test-name",
+            &[
+                ("app/page.tsx", &source),
+                (
+                    path,
+                    "import {cookies} from 'next/headers';export function session(){return cookies()}",
+                ),
+                (
+                    "tests/unused.spec.ts",
+                    "import {cookies} from 'next/headers';cookies();",
+                ),
+            ],
+        );
+        let a = run(&root);
+        let file = a
+            .assessment
+            .files
+            .iter()
+            .find(|f| f.path.as_str() == path)
+            .unwrap();
+        assert_eq!(file.class, FileClass::Units, "{path}");
+        let request = a
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| {
+                o.occurrence.feature.id == "nextjs.api.request"
+                    && o.occurrence
+                        .location
+                        .path()
+                        .is_some_and(|p| p.as_str() == path)
+            })
+            .unwrap();
+        assert_eq!(request.status, Some(Status::Unsupported), "{path}");
+        assert!(request.unit.is_some());
+        assert_eq!(a.assessment.routes[0].status, Status::Unsupported);
+        assert!(
+            a.assessment.routes[0]
+                .closure
+                .contains(request.unit.as_ref().unwrap())
+        );
+        assert_eq!(
+            a.assessment
+                .files
+                .iter()
+                .find(|f| f.path.as_str() == "tests/unused.spec.ts")
+                .unwrap()
+                .class,
+            FileClass::OutOfScope
+        );
+        StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+    }
+}
+#[test]
 fn independent_single_segment_enumeration_is_automatic() {
     for (segment, generator, page, expected) in [
         (
