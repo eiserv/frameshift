@@ -137,7 +137,7 @@ fn fail_on_review_includes_findings_without_a_counting_unit() {
             .all(|u| u.get("status").and_then(|s| s.text()) == Some("auto"))
     );
     assert!(value.get("findings").unwrap().array().iter().any(|f| {
-        f.get("code").and_then(|s| s.text()) == Some("FS1042") && matches!(f.get("unit"), None)
+        f.get("code").and_then(|s| s.text()) == Some("FS1042") && f.get("unit").is_none()
     }));
     let failed = call(&root, &["analyze", "--to=astro-preact", "--fail-on=review"]);
     assert_eq!(failed.status.code(), Some(1));
