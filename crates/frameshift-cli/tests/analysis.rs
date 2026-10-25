@@ -217,6 +217,7 @@ fn explanations_and_help_are_available_without_a_source_project() {
     let root = fixture("explain");
     for args in [
         vec!["explain", "FS3101"],
+        vec!["explain", "FS3102"],
         vec!["explain", "nextjs.api.request"],
         vec![
             "explain",

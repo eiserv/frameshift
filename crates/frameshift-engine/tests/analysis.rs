@@ -121,6 +121,67 @@ fn analysis_is_read_only_deterministic_and_schema_readable() {
     assert_eq!(stored, again);
 }
 #[test]
+fn request_api_finding_codes_follow_the_imported_export() {
+    for (import, read, code) in [
+        ("import {cookies} from 'next/headers';", "cookies", "FS3101"),
+        ("import {headers} from 'next/headers';", "headers", "FS3102"),
+        (
+            "import {headers as read} from 'next/headers';",
+            "read",
+            "FS3102",
+        ),
+        (
+            "import * as request from 'next/headers';",
+            "request.headers",
+            "FS3102",
+        ),
+        (
+            "import {draftMode} from 'next/headers';",
+            "draftMode",
+            "FS3100",
+        ),
+    ] {
+        let source = format!("{import}export default function Page(){{{read}();return <p/>}}");
+        let root = create("request-codes", &[("app/page.tsx", &source)]);
+        let result = run(&root);
+        let findings: Vec<_> = result
+            .findings
+            .iter()
+            .filter(|(_, f)| {
+                f.context()
+                    .feature
+                    .as_ref()
+                    .is_some_and(|id| id.as_str() == "nextjs.api.request")
+            })
+            .collect();
+        assert_eq!(findings.len(), 1, "{read}");
+        assert_eq!(findings[0].1.code().as_str(), code, "{read}");
+        assert_eq!(
+            findings[0].1.severity(),
+            frameshift_engine::foundation::Severity::Blocker
+        );
+        assert_eq!(result.assessment.routes[0].status, Status::Unsupported);
+        assert_eq!(
+            findings[0].1.message(),
+            analysis::knowledge::explain(code).unwrap().0
+        );
+        StoredReport::parse(result.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+    }
+    let root = create(
+        "shadowed-headers",
+        &[(
+            "app/page.tsx",
+            "function headers(){return 'local'}export default function Page(){headers();return <p/>}",
+        )],
+    );
+    assert!(
+        !run(&root)
+            .findings
+            .iter()
+            .any(|(_, f)| f.code().as_str() == "FS3102")
+    );
+}
+#[test]
 fn shared_request_time_dependency_blocks_each_route_and_retains_a_witness() {
     let root = create(
         "closure",

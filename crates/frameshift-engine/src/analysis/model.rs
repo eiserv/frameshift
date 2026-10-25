@@ -1164,7 +1164,17 @@ fn out_of_scope(path: &str) -> bool {
 }
 fn code(o: &AssessedOccurrence) -> &'static str {
     match o.occurrence.feature.id {
-        "nextjs.api.request" => "FS3101",
+        "nextjs.api.request" => {
+            if let Detail::Api { export, .. } = &o.occurrence.detail {
+                match export.as_str() {
+                    "cookies" => "FS3101",
+                    "headers" => "FS3102",
+                    _ => "FS3100",
+                }
+            } else {
+                "FS3100"
+            }
+        }
         "nextjs.api.server-action" => "FS3120",
         "nextjs.route.dynamic-unenumerable" => "FS3110",
         "nextjs.file.proxy" => "FS3130",

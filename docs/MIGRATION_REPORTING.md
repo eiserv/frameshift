@@ -231,6 +231,8 @@ Assessment propagation is implemented under `D-100`; execution outcome propagati
 | `FS7xxx` | Output and filesystem safety | `FS7001` output location exists. `FS7002` output location inside the source. `FS7003` unsafe output path rejected. `FS7004` managed output was modified since generation. |
 | `FS9xxx` | Internal | `FS9001` internal error. Results of this run are not trustworthy. |
 
+M5 request API findings use the imported export, including through a local alias: `cookies()` emits `FS3101`, `headers()` emits `FS3102`, and `draftMode()` emits the generic unsupported-feature code `FS3100`. Each emitted code has an embedded explanation.
+
 The discovery walker, the snapshot store, the package loader, workspace detection, and the Next.js source adapter emit the following assigned codes (`D-064`, `D-065`, `D-067`, `D-069`, `D-073`, `D-074`, `D-076`, sections 22, 24, 26, 30, and 31 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). Locations are the named path, a text range in it where the problem has a span, or, for entries directly in the root, project scope. Package and workspace findings name fields, kinds, paths, releases, and limits, never package names, patterns, or values. Severities follow the status mapping above: `unknown` where content is not analyzed, `error` for operational failures, and `info` where nothing is lost.
 
 | Code | Severity | Meaning |

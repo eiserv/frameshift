@@ -967,8 +967,8 @@
       "unit": "route:/private",
       "feature": "nextjs.api.request",
       "rule": "nextjs-to-astro-preact/assessment.nextjs-api-request",
-      "message": "Request-time API requires a server",
-      "explanation": "A request-time Next.js API cannot run in static output.",
+      "message": "cookies() requires request-time rendering",
+      "explanation": "Next.js cookies() reads request-specific cookie state, which static output cannot provide.",
       "remediation": "Replace request-time data with build-time data or a separately hosted API."
     },
     {

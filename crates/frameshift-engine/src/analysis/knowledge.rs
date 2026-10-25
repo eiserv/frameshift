@@ -79,8 +79,13 @@ pub fn explain(code: &str) -> Option<(&'static str, &'static str, &'static str)>
             "Remove the feature, implement it outside the static site, or retain a server deployment.",
         ),
         "FS3101" => (
-            "Request-time API requires a server",
-            "A request-time Next.js API cannot run in static output.",
+            "cookies() requires request-time rendering",
+            "Next.js cookies() reads request-specific cookie state, which static output cannot provide.",
+            "Replace request-time data with build-time data or a separately hosted API.",
+        ),
+        "FS3102" => (
+            "headers() requires request-time rendering",
+            "Next.js headers() reads request-specific HTTP headers, which static output cannot provide.",
             "Replace request-time data with build-time data or a separately hosted API.",
         ),
         "FS3110" => (

@@ -198,7 +198,7 @@ Next.js performs client-side navigation between routes and preserves client comp
 | `fetch` with `next: { revalidate }` or `cache: 'no-store'` | The Next.js option is removed. The data becomes a build-time snapshot. | `review` |
 | Segment `revalidate` (ISR) | Content is fixed at build time and needs rebuilds to refresh | `review` |
 | `dynamic = 'force-dynamic'` | | `unsupported` |
-| `cookies()`, `headers()`, `draftMode()` | Request-time APIs (`FS3101`, `FS3102`) | `unsupported` |
+| `cookies()`, `headers()`, `draftMode()` | Request-time APIs (`FS3101` for cookies, `FS3102` for headers, `FS3100` for draft mode) | `unsupported` |
 | `searchParams` in a server page | Not available at build time | `unsupported` |
 | Server Actions (`'use server'`) | No server in static output (`FS3120`) | `unsupported` |
 | `import 'server-only'` | Removed. Astro frontmatter is server-only by construction. | `auto` |
@@ -493,7 +493,7 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 | ISR `revalidate` | `nextjs.segment.revalidate` | R | |
 | `force-dynamic` | `nextjs.segment.dynamic` | U | |
 | `export const runtime` | `nextjs.segment.runtime` | A | Dropped (section 8) |
-| `cookies`, `headers`, `draftMode` | `nextjs.api.request` | U | `FS3101`, `FS3102` |
+| `cookies`, `headers`, `draftMode` | `nextjs.api.request` | U | `FS3101` for cookies, `FS3102` for headers, `FS3100` for draft mode |
 | Server `searchParams` | `nextjs.api.search-params-server` | U | |
 | Server Actions | `nextjs.api.server-action` | U | `FS3120`. Later: V3. |
 | `server-only`, `client-only` | `nextjs.guard` | A | Removed |
