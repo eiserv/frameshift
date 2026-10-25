@@ -493,6 +493,15 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             .unwrap_or(usize::MAX)
     };
     let mut paths = BTreeSet::new();
+    let mut physical_owners = BTreeMap::new();
+    for unit in units {
+        if text(unit, "kind")? != "config"
+            && let Some(p) = optional_text(unit, "path")?
+        {
+            physical_owners.insert(text(unit, "id")?, p);
+        }
+    }
+    let mut associated = BTreeSet::new();
     for file in array(v, "files")? {
         let p = text(file, "path")?;
         path(p, limits)?;
@@ -507,6 +516,17 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         if (class == "units") == array(file, "units")?.is_empty() {
             return Err(invalid());
         }
+        for id in array(file, "units")? {
+            let id = id.text().ok_or_else(invalid)?;
+            if let Some(owner) = physical_owners.get(id)
+                && (*owner != p || !associated.insert(id))
+            {
+                return Err(invalid());
+            }
+        }
+    }
+    if associated.len() != physical_owners.len() {
+        return Err(invalid());
     }
     for route in array(v, "routes")? {
         if !identities.contains(text(route, "unit")?) || !status(text(route, "status")?) {

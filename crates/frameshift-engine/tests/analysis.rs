@@ -405,6 +405,63 @@ fn hostile_text_is_escaped_in_json_and_coordinates_are_original() {
     StoredReport::parse(document.into_bytes(), &Limits::default()).unwrap();
 }
 #[test]
+fn stored_reports_require_physical_units_in_their_own_files() {
+    fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
+        let Value::Object(o) = v else {
+            panic!("object required")
+        };
+        o
+    }
+    fn files(v: &mut Value) -> &mut Vec<Value> {
+        let Value::Array(a) = object(v).get_mut("files").unwrap() else {
+            panic!("files required")
+        };
+        a
+    }
+    let root = create("file-ownership", &[("app/page.tsx", PAGE)]);
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    for damage in ["move", "missing", "extra", "missing-file"] {
+        let mut value = original.value().clone();
+        for file in files(&mut value) {
+            let path = file.get("path").and_then(Value::text).unwrap().to_owned();
+            if path == "app/page.tsx" && damage != "extra" {
+                object(file).insert("units".into(), Value::Array(Vec::new()));
+                object(file).insert("class".into(), Value::String("verbatim".into()));
+            }
+            if path == "app/layout.tsx" && matches!(damage, "move" | "extra") {
+                let Value::Array(ids) = object(file).get_mut("units").unwrap() else {
+                    panic!("units required")
+                };
+                ids.push(Value::String("route:/".into()));
+            }
+        }
+        if damage == "missing-file" {
+            files(&mut value)
+                .retain(|f| f.get("path").and_then(Value::text) != Some("app/page.tsx"));
+        }
+        assert!(
+            StoredReport::parse(value.document().into_bytes(), &Limits::default()).is_err(),
+            "{damage}"
+        );
+    }
+    // Logical configuration concerns can span inherited files. They do not
+    // acquire an exclusive physical owner from one occurrence's path.
+    let mut value = original.value().clone();
+    for file in files(&mut value) {
+        if file.get("path").and_then(Value::text) == Some("app/layout.tsx") {
+            let Value::Array(ids) = object(file).get_mut("units").unwrap() else {
+                panic!("units required")
+            };
+            ids.push(Value::String("config:npm.manifest".into()));
+        }
+    }
+    StoredReport::parse(value.document().into_bytes(), &Limits::default()).unwrap();
+}
+#[test]
 fn stored_reports_validate_nested_records_and_relationships() {
     fn object(value: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
         let Value::Object(o) = value else {
