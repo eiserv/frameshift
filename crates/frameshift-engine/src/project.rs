@@ -109,6 +109,29 @@ pub fn build(
     config: Option<&ConfigFile>,
     limits: &Limits,
 ) -> Result<Project, ProjectError> {
+    build_with(
+        snapshot,
+        package,
+        app,
+        extensions,
+        config,
+        limits,
+        &mut |_, _, _| {},
+    )
+}
+
+/// Builds the source model while sharing each strict parse with an in-memory
+/// consumer. The visitor must not execute source or perform filesystem I/O.
+/// Its observations have the same canonical path order as the module graph.
+pub fn build_with(
+    snapshot: &Snapshot,
+    package: Option<&SourcePath>,
+    app: &SourcePath,
+    extensions: &[&str],
+    config: Option<&ConfigFile>,
+    limits: &Limits,
+    visitor: &mut dyn FnMut(&SourcePath, &SyntaxTree<'_>, &Bindings),
+) -> Result<Project, ProjectError> {
     limits.validate().map_err(ProjectError::Limits)?;
     if !inside(app, package) {
         return Err(ProjectError::OutsidePackage);
@@ -127,6 +150,7 @@ pub fn build(
             evaluate: limits.evaluate,
         },
         &mut |path, tree, bindings| {
+            visitor(path, tree, bindings);
             semantics.push(module_facts(path, tree, bindings));
             summaries.push(summarize_components(path, tree, bindings));
             environments.push(summarize_environment(path, tree, bindings));

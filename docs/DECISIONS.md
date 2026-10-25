@@ -1144,6 +1144,17 @@ Statuses change through an edit to this file under the integration workflow in D
 
 ## Technique proposals and related accepted decisions
 
+
+### D-100: Complete M5 with read-only analysis and reporting
+
+- **Status:** Accepted (2026-10-25), confirmed by the owner through the Codex App question interface.
+- **Scope:** Build on PR #59 and implement M5 including the `analyze` CLI, assessment, counting units and file accounting, route readiness, knowledge, integer metrics, versioned analysis documents, stored-report rendering, explanations, and verdicts. Preserve explicit unknown evidence wherever a rule's preconditions cannot be established. This authorizes a complete analysis capability, not execution of analyzed code or migration output.
+- **Corpus (`Q-006`):** Reuse all twelve public, commit-pinned MIT/Apache-2.0 checkouts listed in `D-043`, for the reasons in that table. Read and analyze them outside the repository, without installing dependencies, building, or executing their code. The Next.js 13 sample is an out-of-range negative case, not supported-version evidence.
+- **Weights (`Q-002`):** Validate the proposed values of MIGRATION_REPORTING.md section 5.2 against this corpus and adopt them as `weights-v1` if the results are plausible. If evidence contradicts the proposal, present it before choosing different values. The values measure significance, not effort.
+- **Integration:** Create a new pull request based on PR #59, monitor its checks and reviews, address actionable feedback, and leave the new pull request open for owner integration. Do not extend `D-099`'s merge authorization to this pull request.
+- **Architecture (`D-033`):** Keep assessment in the engine above source facts and catalog data. Share strict parses with the source-model visitor. Keep rule evidence distinct from future transformation operations and rule coverage. No new runtime dependency is authorized. Report parsing treats stored reports as untrusted data and never executes them.
+
+
 ### P-001: Go as the single implementation language, CGO disabled
 
 - **Status:** Superseded by D-018 (2026-10-11). Kept for the record.
