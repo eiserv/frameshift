@@ -224,10 +224,125 @@ fn refs(v: &Value, key: &str, known: &BTreeSet<&str>) -> Result<(), AnalyzeError
     }
     Ok(())
 }
+fn nullable_text<'a>(v: &'a Value, key: &str) -> Result<Option<&'a str>, AnalyzeError> {
+    v.get(key).ok_or_else(invalid)?;
+    optional_text(v, key)
+}
+fn text_array<'a>(v: &'a Value, key: &str) -> Result<Vec<&'a str>, AnalyzeError> {
+    array(v, key)?
+        .iter()
+        .map(|v| v.text().ok_or_else(invalid))
+        .collect()
+}
+fn location(v: &Value, limits: &Limits, positions: bool) -> Result<(), AnalyzeError> {
+    match text(v, "scope")? {
+        "project" => Ok(()),
+        "file" => path(text(v, "path")?, limits),
+        "text" => {
+            path(text(v, "path")?, limits)?;
+            let (start, end) = if positions {
+                let position = |key| -> Result<_, AnalyzeError> {
+                    let p = v.get(key).ok_or_else(invalid)?;
+                    let line = number(p, "line")?;
+                    let column = number(p, "column")?;
+                    if line == 0 || column == 0 {
+                        return Err(invalid());
+                    }
+                    Ok((number(p, "offset")?, line, column))
+                };
+                let start = position("start")?;
+                let end = position("end")?;
+                if (start.1, start.2) > (end.1, end.2) {
+                    return Err(invalid());
+                }
+                (start.0, end.0)
+            } else {
+                (number(v, "start")?, number(v, "end")?)
+            };
+            if start > end {
+                return Err(invalid());
+            }
+            Ok(())
+        }
+        _ => Err(invalid()),
+    }
+}
+fn nested_records(
+    v: &Value,
+    limits: &Limits,
+    units: &BTreeSet<&str>,
+    findings: &BTreeSet<&str>,
+) -> Result<(), AnalyzeError> {
+    let mut names = BTreeSet::new();
+    for dependency in array(v, "dependencies")? {
+        if !names.insert(text(dependency, "name")?)
+            || !matches!(
+                text(dependency, "class")?,
+                "framework"
+                    | "compatible"
+                    | "compat"
+                    | "compat-unverified"
+                    | "incompatible"
+                    | "unknown"
+            )
+        {
+            return Err(invalid());
+        }
+        text_array(dependency, "fields")?;
+        text_array(dependency, "declared")?;
+        nullable_text(dependency, "resolved")?;
+        text(dependency, "evidence")?;
+        for p in text_array(dependency, "usedIn")? {
+            path(p, limits)?;
+        }
+    }
+    for config in array(v, "config")? {
+        if crate::catalog::feature(text(config, "feature")?).is_none()
+            || nullable_text(config, "status")?.is_some_and(|s| !status(s))
+            || optional_text(config, "unit")?.is_some_and(|id| !units.contains(id))
+        {
+            return Err(invalid());
+        }
+        text(config, "reason")?;
+    }
+    let mut rules = BTreeSet::new();
+    for rule in array(v, "rules")? {
+        if !rules.insert(text(rule, "id")?)
+            || number(rule, "version")? != 1
+            || text(rule, "phase")? != "assessment"
+        {
+            return Err(invalid());
+        }
+    }
+    for record in array(v, "occurrences")?.iter().chain(array(v, "findings")?) {
+        if optional_text(record, "rule")?.is_some_and(|id| !rules.contains(id)) {
+            return Err(invalid());
+        }
+    }
+    for task in array(v, "tasks")? {
+        if !findings.contains(text(task, "finding")?) {
+            return Err(invalid());
+        }
+        text(task, "instruction")?;
+    }
+    let mut names = BTreeSet::new();
+    for limit in array(v, "limits")? {
+        if !names.insert(text(limit, "name")?) {
+            return Err(invalid());
+        }
+        number(limit, "value")?;
+    }
+    // Version 1 intentionally leaves these item schemas open. They remain
+    // inert report data, including when future producers add records.
+    array(v, "verification")?;
+    array(v, "helpers")?;
+    Ok(())
+}
 fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     if text(v, "kind")? != "frameshift.analysis"
         || number(v, "schemaVersion")? != 1
         || text(v, "target")? != "astro-preact"
+        || text(v, "weights")? != "weights-v1"
     {
         return Err(invalid());
     }
@@ -244,6 +359,8 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     if text(source, "adapter")? != "nextjs" {
         return Err(invalid());
     }
+    nullable_text(source, "version")?;
+    number(v, "unrepresentableEntries")?;
     if text(source, "package")? != "." {
         path(text(source, "package")?, limits)?;
     }
@@ -477,10 +594,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         for key in ["message", "explanation", "remediation"] {
             text(finding, key)?;
         }
-        let location = finding.get("location").ok_or_else(invalid)?;
-        if text(location, "scope")? != "project" {
-            path(text(location, "path")?, limits)?;
-        }
+        location(finding.get("location").ok_or_else(invalid)?, limits, true)?;
     }
     for unit in units {
         refs(unit, "findings", &finding_ids)?
@@ -491,12 +605,12 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         return Err(invalid());
     }
     for occurrence in occurrences {
-        if let Some(s) = optional_text(occurrence, "status")?
+        if let Some(s) = nullable_text(occurrence, "status")?
             && !status(s)
         {
             return Err(invalid());
         }
-        if let Some(id) = optional_text(occurrence, "unit")?
+        if let Some(id) = nullable_text(occurrence, "unit")?
             && !identities.contains(id)
         {
             return Err(invalid());
@@ -504,6 +618,14 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         if crate::catalog::feature(text(occurrence, "feature")?).is_none() {
             return Err(invalid());
         }
+        nullable_text(occurrence, "rule")?;
+        text(occurrence, "reason")?;
+        text(occurrence, "detail")?;
+        location(
+            occurrence.get("location").ok_or_else(invalid)?,
+            limits,
+            false,
+        )?;
     }
     let detected: BTreeSet<_> = occurrences
         .iter()
@@ -516,17 +638,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     {
         return Err(invalid());
     }
-    for key in [
-        "dependencies",
-        "config",
-        "rules",
-        "verification",
-        "tasks",
-        "helpers",
-    ] {
-        array(v, key)?;
-    }
-    Ok(())
+    nested_records(v, limits, &identities, &finding_ids)
 }
 fn check_metric(v: &Value) -> Result<(), AnalyzeError> {
     let n = number(v, "numerator")?;

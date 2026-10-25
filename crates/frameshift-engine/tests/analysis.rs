@@ -344,6 +344,108 @@ fn hostile_text_is_escaped_in_json_and_coordinates_are_original() {
     StoredReport::parse(document.into_bytes(), &Limits::default()).unwrap();
 }
 #[test]
+fn stored_reports_validate_nested_records_and_relationships() {
+    fn object(value: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
+        let Value::Object(o) = value else {
+            panic!("object required")
+        };
+        o
+    }
+    fn first<'a>(value: &'a mut Value, section: &str) -> &'a mut Value {
+        let Value::Array(a) = object(value).get_mut(section).unwrap() else {
+            panic!("array required")
+        };
+        &mut a[0]
+    }
+    let root = create(
+        "nested-reader",
+        &[
+            ("app/page.tsx", PAGE),
+            ("next.config.mjs", "export default {output:'export'}"),
+        ],
+    );
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    // Every published field in these records is required, including nullable
+    // fields. A missing field must not become an empty renderer fallback.
+    for section in [
+        "dependencies",
+        "config",
+        "rules",
+        "tasks",
+        "limits",
+        "occurrences",
+    ] {
+        let mut baseline = original.value().clone();
+        let keys: Vec<_> = object(first(&mut baseline, section))
+            .keys()
+            .cloned()
+            .collect();
+        for key in keys {
+            // Config's unit is an optional additive association.
+            if section == "config" && key == "unit" {
+                continue;
+            }
+            let mut damaged = original.value().clone();
+            object(first(&mut damaged, section)).remove(&key);
+            assert!(
+                StoredReport::parse(damaged.document().into_bytes(), &Limits::default()).is_err(),
+                "{section}.{key}"
+            );
+        }
+    }
+    for (section, key, bad) in [
+        ("tasks", "finding", Value::String("F9999".into())),
+        ("tasks", "instruction", Value::Bool(true)),
+        ("dependencies", "class", Value::String("guessed".into())),
+        (
+            "dependencies",
+            "usedIn",
+            Value::Array(vec![Value::String("../outside.ts".into())]),
+        ),
+        ("dependencies", "fields", Value::Array(vec![Value::Null])),
+        ("dependencies", "resolved", Value::Bool(false)),
+        ("config", "unit", Value::String("module:missing.ts".into())),
+        ("config", "status", Value::String("complete".into())),
+        ("rules", "phase", Value::String("execution".into())),
+        ("rules", "version", Value::Number("2".into())),
+        ("limits", "value", Value::Number("-1".into())),
+        ("occurrences", "rule", Value::String("missing/rule".into())),
+        (
+            "occurrences",
+            "location",
+            Value::Object(std::collections::BTreeMap::from([
+                ("scope".into(), Value::String("file".into())),
+                ("path".into(), Value::String("a/../outside.ts".into())),
+            ])),
+        ),
+    ] {
+        let mut damaged = original.value().clone();
+        object(first(&mut damaged, section)).insert(key.into(), bad);
+        assert!(
+            StoredReport::parse(damaged.document().into_bytes(), &Limits::default()).is_err(),
+            "{section}.{key}"
+        );
+    }
+    let mut additive = original.value().clone();
+    for section in [
+        "dependencies",
+        "config",
+        "rules",
+        "tasks",
+        "limits",
+        "occurrences",
+    ] {
+        object(first(&mut additive, section)).insert("futureEvidence".into(), Value::Bool(true));
+    }
+    let accepted =
+        StoredReport::parse(additive.document().into_bytes(), &Limits::default()).unwrap();
+    assert_eq!(accepted.value(), &additive);
+}
+#[test]
 fn stored_reports_enforce_the_local_occurrence_bound() {
     let root = create("stored-occurrence-limit", &[("app/page.tsx", PAGE)]);
     let document = run(&root).document().unwrap();
