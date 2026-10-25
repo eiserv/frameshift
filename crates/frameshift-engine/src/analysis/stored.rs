@@ -590,7 +590,11 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     let mut finding_ids = BTreeSet::new();
     for finding in array(v, "findings")? {
         let id = text(finding, "id")?;
-        if !finding_ids.insert(id) {
+        if id.len() < 5
+            || !id.starts_with('F')
+            || !id[1..].bytes().all(|b| b.is_ascii_digit())
+            || !finding_ids.insert(id)
+        {
             return Err(invalid());
         }
         if let Some(id) = optional_text(finding, "unit")?

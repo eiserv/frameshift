@@ -436,6 +436,59 @@ fn hostile_text_is_escaped_in_json_and_coordinates_are_original() {
     StoredReport::parse(document.into_bytes(), &Limits::default()).unwrap();
 }
 #[test]
+fn stored_finding_ids_follow_the_published_grammar() {
+    fn rename(value: &mut Value, old: &str, new: &str) {
+        match value {
+            Value::String(s) => {
+                if s == old {
+                    *s = new.to_owned();
+                }
+            }
+            Value::Array(a) => {
+                for v in a {
+                    rename(v, old, new);
+                }
+            }
+            Value::Object(o) => {
+                for v in o.values_mut() {
+                    rename(v, old, new);
+                }
+            }
+            Value::Null | Value::Bool(_) | Value::Number(_) => {}
+        }
+    }
+    let root = create("finding-id-grammar", &[("app/page.tsx", PAGE)]);
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let first_id = original.value().get("findings").unwrap().array()[0]
+        .get("id")
+        .and_then(Value::text)
+        .unwrap();
+    for (id, valid) in [
+        ("F0001", true),
+        ("F12345", true),
+        ("", false),
+        ("x", false),
+        ("F1", false),
+        ("F001", false),
+        ("F000A", false),
+        ("F１２３４", false),
+        ("F0001\n", false),
+    ] {
+        let mut changed = original.value().clone();
+        // Rename references too, so dangling links cannot mask an ID defect.
+        rename(&mut changed, first_id, id);
+        assert_eq!(
+            StoredReport::parse(changed.document().into_bytes(), &Limits::default()).is_ok(),
+            valid,
+            "{id:?}"
+        );
+    }
+}
+#[test]
 fn stored_reports_require_physical_units_in_their_own_files() {
     fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
         let Value::Object(o) = v else {
