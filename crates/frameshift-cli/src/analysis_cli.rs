@@ -346,8 +346,11 @@ pub(crate) fn run(
                 return explain(&id, stdout, stderr);
             }
             for feature in frameshift_engine::catalog::FEATURES {
+                let frameshift_engine::catalog::V1::Assessed(statuses) = feature.v1 else {
+                    continue;
+                };
                 if unsupported
-                    && !matches!(feature.v1,frameshift_engine::catalog::V1::Assessed(statuses) if statuses.contains(&frameshift_engine::catalog::Status::Unsupported))
+                    && !statuses.contains(&frameshift_engine::catalog::Status::Unsupported)
                 {
                     continue;
                 }
@@ -515,13 +518,22 @@ fn explain(id: &str, stdout: &mut impl Write, stderr: &mut impl Write) -> io::Re
         return Ok(0);
     }
     let feature = if let Some(name) = id.strip_prefix("nextjs-to-astro-preact/assessment.") {
-        frameshift_engine::catalog::FEATURES
-            .iter()
-            .find(|f| f.id.replace('.', "-") == name)
+        frameshift_engine::catalog::FEATURES.iter().find(|f| {
+            matches!(f.v1, frameshift_engine::catalog::V1::Assessed(_))
+                && f.id.replace('.', "-") == name
+        })
     } else {
         frameshift_engine::catalog::feature(id)
     };
     if let Some(feature) = feature {
+        if feature.v1 == frameshift_engine::catalog::V1::OutOfScope {
+            writeln!(
+                stdout,
+                "{}  {}\n\nOutside V1 application assessment. No assessment rule is shipped for this feature.\nSpecification: MIGRATION_SPEC.md section 17",
+                feature.id, feature.name
+            )?;
+            return Ok(0);
+        }
         writeln!(
             stdout,
             "{}  {}\n\nV1 statuses: {:?}\nAssessment rule version: 1\nSpecification: MIGRATION_SPEC.md section 17\n\nPredicates use strict binding, route, configuration, and render-context evidence.\nMissing preconditions are unknown. This is an assessment rule; no output is emitted.\nReview and unsupported results are explained in the report's occurrence reasons.",

@@ -213,6 +213,42 @@ fn invalid_options_and_reports_fail_without_echoing_untrusted_arguments() {
     assert!(String::from_utf8_lossy(&result.stdout).contains("frameshift.error"));
 }
 #[test]
+fn assessment_rule_metadata_excludes_out_of_scope_features() {
+    use frameshift_engine::catalog::{FEATURES, PATH, Status, V1};
+    let root = fixture("rule-metadata");
+    for (args, unsupported_only) in [
+        (vec!["rules"], false),
+        (vec!["rules", "--unsupported"], true),
+    ] {
+        let output = call(&root, &args);
+        assert!(output.status.success());
+        let text = String::from_utf8(output.stdout).unwrap();
+        let actual: Vec<_> = text
+            .lines()
+            .map(|l| l.split_whitespace().next().unwrap())
+            .collect();
+        let expected: Vec<_> = FEATURES.iter().filter(|f| matches!(f.v1, V1::Assessed(statuses) if !unsupported_only || statuses.contains(&Status::Unsupported)))
+            .map(|f| format!("{PATH}/assessment.{}", f.id.replace('.', "-"))).collect();
+        assert_eq!(actual, expected);
+    }
+    for feature in FEATURES.iter().filter(|f| f.v1 == V1::OutOfScope) {
+        let id = format!("{PATH}/assessment.{}", feature.id.replace('.', "-"));
+        for args in [
+            vec!["rules", "show", id.as_str()],
+            vec!["explain", id.as_str()],
+        ] {
+            let output = call(&root, &args);
+            assert_eq!(output.status.code(), Some(2));
+            assert!(output.stdout.is_empty());
+        }
+        let output = call(&root, &["explain", feature.id]);
+        assert!(output.status.success());
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("Outside V1 application assessment"));
+        assert!(!text.contains("Assessment rule version"));
+    }
+}
+#[test]
 fn explanations_and_help_are_available_without_a_source_project() {
     let root = fixture("explain");
     for args in [

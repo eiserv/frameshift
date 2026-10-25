@@ -228,7 +228,7 @@ frameshift rules [--to <target>] [--unsupported]
 frameshift rules show <rule-id>
 ```
 
-**Implemented for assessment metadata (`D-100`).** Lists the feature predicates with their version, feature, and allowed catalog statuses. These predicates assess source; they emit no operations and do not count as transformation rule coverage. Transformation-rule listing and the detailed transformation examples below remain planned. `--unsupported` lists features that are detected but not migratable in the current stage. `show` prints a rule's documentation, preconditions, examples, and verification requirements.
+**Implemented for assessment metadata (`D-100`).** Lists only `V1::Assessed` feature predicates with their version, feature, and allowed catalog statuses. Out-of-scope features have no assessment rule: their invented full rule IDs are rejected, while `explain <feature-id>` describes the scope exclusion. These predicates assess source; they emit no operations and do not count as transformation rule coverage. Transformation-rule listing and the detailed transformation examples below remain planned. `--unsupported` lists features that are detected but not migratable in the current stage. `show` prints the assessment predicate's catalog statuses, version, specification, and evidence boundary; detailed transformation examples and verification requirements remain planned.
 
 ```text
 $ frameshift rules --to astro-preact
