@@ -120,7 +120,7 @@ frameshift analyze [<source>] --to <target> [--from <source-adapter>]
 | --- | --- |
 | `--to <target>` | Required. Target identifier, for example `astro-preact`. Required even while only one target exists, so commands stay unambiguous later. |
 | `--from <adapter>` | Override source detection, for example `nextjs`. Normally detected. |
-| `--fail-on <conditions>` | Comma-separated: `unknown`, `unsupported`, `review`, `blocked-routes`. The command exits with 1 if any listed condition occurs. |
+| `--fail-on <conditions>` | Comma-separated: `unknown`, `unsupported`, `review`, `blocked-routes`. The command exits with 1 if any listed condition occurs in a unit or finding, including findings without a unit. Finding severities `blocker`, `unknown`, and `review` match `unsupported`, `unknown`, and `review`; `blocked-routes` considers route readiness only. |
 | `--unweighted` | Show unweighted unit counts as the primary view |
 | `--all` | List all findings instead of the top entries |
 

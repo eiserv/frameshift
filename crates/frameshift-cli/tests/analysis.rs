@@ -118,6 +118,41 @@ fn analysis_json_exit_conditions_and_stored_report_projections() {
     let _ = fs::remove_file(document);
 }
 #[test]
+fn fail_on_review_includes_findings_without_a_counting_unit() {
+    let root = fixture("unowned-review");
+    let report = call(&root, &["analyze", "--to=astro-preact", "--format=json"]);
+    assert!(report.status.success());
+    let parsed = frameshift_engine::analysis::stored::StoredReport::parse(
+        report.stdout,
+        &frameshift_engine::limits::Limits::default(),
+    )
+    .unwrap();
+    let value = parsed.value();
+    assert!(
+        value
+            .get("units")
+            .unwrap()
+            .array()
+            .iter()
+            .all(|u| u.get("status").and_then(|s| s.text()) == Some("auto"))
+    );
+    assert!(value.get("findings").unwrap().array().iter().any(|f| {
+        f.get("code").and_then(|s| s.text()) == Some("FS1042") && matches!(f.get("unit"), None)
+    }));
+    let failed = call(&root, &["analyze", "--to=astro-preact", "--fail-on=review"]);
+    assert_eq!(failed.status.code(), Some(1));
+    assert!(!failed.stdout.is_empty());
+    let unmatched = call(
+        &root,
+        &[
+            "analyze",
+            "--to=astro-preact",
+            "--fail-on=unsupported,unknown,blocked-routes",
+        ],
+    );
+    assert_eq!(unmatched.status.code(), Some(0));
+}
+#[test]
 fn blockers_are_successful_assessments_until_fail_on_requests_failure() {
     let root = fixture("blocker");
     fs::write(root.join("app/page.tsx"),"import {cookies} from 'next/headers';export default function Page(){cookies();return <p/>}").unwrap();

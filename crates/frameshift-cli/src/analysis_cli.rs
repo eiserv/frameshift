@@ -413,11 +413,26 @@ pub(crate) fn run(
                             "blocked-routes" => result.assessment.routes.iter().any(|r| {
                                 r.status == frameshift_engine::catalog::Status::Unsupported
                             }),
-                            s => result
-                                .assessment
-                                .units
-                                .iter()
-                                .any(|u| u.status.as_str() == s),
+                            s => {
+                                result
+                                    .assessment
+                                    .units
+                                    .iter()
+                                    .any(|u| u.status.as_str() == s)
+                                    || result.findings.iter().any(|(_, f)| match f.severity() {
+                                        frameshift_engine::foundation::Severity::Blocker => {
+                                            s == "unsupported"
+                                        }
+                                        frameshift_engine::foundation::Severity::Unknown => {
+                                            s == "unknown"
+                                        }
+                                        frameshift_engine::foundation::Severity::Review => {
+                                            s == "review"
+                                        }
+                                        frameshift_engine::foundation::Severity::Error
+                                        | frameshift_engine::foundation::Severity::Info => false,
+                                    })
+                            }
                         });
                     render(&stored, &options, stdout)?;
                     Ok(if failed { 1 } else { 0 })
