@@ -1077,6 +1077,7 @@ pub(crate) fn assess(
     files.sort_by(|a, b| a.path.cmp(&b.path));
     let mut routes = Vec::new();
     let mut work = conversion_work;
+    let unit_index = UnitIndex::new(&units);
     for (index, route) in project.nextjs().routes.routes.iter().enumerate() {
         let dependencies = project.route_dependencies(index).map_err(failure)?;
         work = work
@@ -1090,14 +1091,7 @@ pub(crate) fn assess(
         };
         let route_id =
             UnitId::for_route(kind, &route.pattern, limits.identifier).map_err(failure)?;
-        let closure: Vec<_> = units
-            .iter()
-            .filter(|u| {
-                u.path.as_ref().is_some_and(|p| files.contains(p))
-                    || u.kind == UnitKind::Config
-                    || u.id == route_id
-            })
-            .collect();
+        let closure = unit_index.closure(&files, &route_id, &mut work)?;
         let status = closure.iter().fold(Status::Auto, |s, u| s.max(u.status));
         let witness = closure.iter().find(|u| {
             u.status == status && matches!(status, Status::Unknown | Status::Unsupported)
@@ -1155,6 +1149,57 @@ pub(crate) fn assess(
         routes,
         unrepresentable: snapshot.inventory().unrepresentable(),
     })
+}
+struct UnitIndex<'a> {
+    units: &'a [Unit],
+    paths: BTreeMap<&'a SourcePath, Vec<usize>>,
+    config: Vec<usize>,
+    identities: BTreeMap<&'a str, usize>,
+}
+impl<'a> UnitIndex<'a> {
+    fn new(units: &'a [Unit]) -> Self {
+        let mut index = Self {
+            units,
+            paths: BTreeMap::new(),
+            config: Vec::new(),
+            identities: BTreeMap::new(),
+        };
+        for (i, unit) in units.iter().enumerate() {
+            if let Some(path) = &unit.path {
+                index.paths.entry(path).or_default().push(i);
+            }
+            if unit.kind == UnitKind::Config {
+                index.config.push(i);
+            }
+            index.identities.insert(unit.id.as_str(), i);
+        }
+        index
+    }
+    fn closure(
+        &self,
+        files: &BTreeSet<&SourcePath>,
+        route: &UnitId,
+        work: &mut u64,
+    ) -> Result<Vec<&'a Unit>, AnalyzeError> {
+        let mut selected = BTreeSet::new();
+        for &i in self
+            .config
+            .iter()
+            .chain(
+                files
+                    .iter()
+                    .flat_map(|p| self.paths.get(*p).into_iter().flatten()),
+            )
+            .chain(self.identities.get(route.as_str()))
+        {
+            if selected.insert(i) {
+                *work = work
+                    .checked_sub(1)
+                    .ok_or_else(|| super::limit("assessment dependency work limit reached"))?;
+            }
+        }
+        Ok(selected.into_iter().map(|i| &self.units[i]).collect())
+    }
 }
 fn runtime_files(project: &Project, work: &mut u64) -> Result<BTreeSet<SourcePath>, AnalyzeError> {
     let mut pending: BTreeSet<_> = project
@@ -1349,4 +1394,64 @@ fn witness_path(
         }
     }
     Vec::new()
+}
+
+#[cfg(test)]
+mod unit_index_tests {
+    use super::*;
+    #[test]
+    fn closures_visit_only_indexed_owners_and_charge_each_selected_unit() {
+        let limits = Limits::default();
+        let path = SourcePath::new("app/page.tsx", limits.path).unwrap();
+        let route = UnitId::for_route(UnitKind::Route, "/", limits.identifier).unwrap();
+        let mut units = Vec::new();
+        add(
+            &mut units,
+            route.clone(),
+            UnitKind::Route,
+            Some(path.clone()),
+            Vec::new(),
+            false,
+            Strategy::Astro,
+        );
+        add(
+            &mut units,
+            config_id("nextjs.config", &limits).unwrap(),
+            UnitKind::Config,
+            Some(path.clone()),
+            Vec::new(),
+            false,
+            Strategy::NotApplicable,
+        );
+        for i in 0..2000 {
+            let other = SourcePath::new(&format!("lib/unrelated-{i}.ts"), limits.path).unwrap();
+            add(
+                &mut units,
+                file_id(UnitKind::Module, &other, None, &limits).unwrap(),
+                UnitKind::Module,
+                Some(other),
+                Vec::new(),
+                false,
+                Strategy::NotApplicable,
+            );
+        }
+        units.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+        let index = UnitIndex::new(&units);
+        let files = BTreeSet::from([&path]);
+        let mut work = 2;
+        let closure = index.closure(&files, &route, &mut work).unwrap();
+        assert_eq!(work, 0);
+        assert_eq!(closure.len(), 2);
+        assert!(closure.iter().all(|u| u.path.as_ref() == Some(&path)));
+        assert!(
+            closure
+                .windows(2)
+                .all(|p| p[0].id.as_str() < p[1].id.as_str())
+        );
+        let mut work = 1;
+        assert_eq!(
+            index.closure(&files, &route, &mut work).unwrap_err().kind(),
+            super::super::AnalyzeErrorKind::Limit
+        );
+    }
 }

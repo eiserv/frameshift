@@ -1859,6 +1859,8 @@ Link assessment recognizes string hrefs and literal objects with static property
 
 Test/tooling filename exclusions apply only outside the runtime graph rooted in routes and their convention chains. A test-like path reached through a runtime edge retains counting ownership and all blocker/unknown evidence. A single canonical traversal establishes this reachability and shares the cumulative assessment dependency-work budget; type-only edges and declaration implementations are not traversed.
 
+Route closures select owners through one path-to-unit index plus configuration and route-identity indexes, without scanning unrelated units for each route. Every selected unit, including shared configuration concerns, consumes cumulative assessment dependency work. Duplicate ownership candidates are counted once and closure/witness order remains canonical by unit ID.
+
 **Validation.** `tests/analysis.rs` covers read-only and deterministic analysis, ownership partitioning, the conversion fixed point, shared blockers and witness paths, request-dependent handlers, boundary props, dependency usage, hostile text, original coordinates, workspace selection, colliding routes, resource boundaries, stored-report tampering, and finding explanation coverage. `tests/golden/analysis.json` is LF-pinned and changes only through `cargo test -p frameshift-engine --offline --locked --test analysis -- --ignored update_analysis_golden`. CLI process tests cover streams, exit codes, filters, explanations, output refusal, and source containment. The opt-in commands are:
 
 ```sh
