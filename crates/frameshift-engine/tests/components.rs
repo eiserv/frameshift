@@ -5,7 +5,7 @@ use frameshift_engine::bindings::ImportedName;
 use frameshift_engine::foundation::{FindingCollector, FindingLimits, PathLimits, SourcePath};
 use frameshift_engine::input::{Snapshot, snapshot};
 use frameshift_engine::limits::Limits;
-use frameshift_engine::modules::{GraphLimits, UnresolvedReason};
+use frameshift_engine::modules::UnresolvedReason;
 use frameshift_engine::nextjs::{
     ComponentError, ComponentGraph, Convention, DefinitionKind, Rendered, Resolved, Site,
     SsrOption, UnknownReason, Wrapper, analyze_app_with, link_components, summarize_components,
@@ -702,13 +702,7 @@ fn linking_is_repeatable_and_its_work_boundary_inclusive() {
         None,
         &path("app"),
         EXTENSIONS,
-        GraphLimits {
-            modules: limits.modules,
-            text: limits.text,
-            parse: limits.parse,
-            json: limits.json,
-            path: limits.path,
-        },
+        limits.modules(),
         &mut |path, tree, bindings| {
             summaries.push(summarize_components(path, tree, bindings));
             Ok(())

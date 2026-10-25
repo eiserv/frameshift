@@ -1,12 +1,14 @@
 use std::collections::BTreeSet;
 
-use frameshift_core::{PathLimits, SourcePath, SourceText, Span, TextLimits};
+use frameshift_core::{FindingLimits, PathLimits, SourcePath, SourceText, Span, TextLimits};
 use frameshift_input::{EntryKind, FileRead, Snapshot};
+use frameshift_package::LoadLimits;
 use frameshift_syntax::{
     JsDialect, JsonLimits, NodeId, ParseError, ParseLimits, SourceGoal, SyntaxNodeKind as N,
     SyntaxTree, TypeScriptKind as T, parse_js_program,
 };
 
+use crate::extends::Links;
 use crate::{
     ConfigIssue, ConfigProblem, FileKind, ModuleError, ModuleLimits, PackageManifest, Resolution,
     ResolutionConfig, ResolutionMode, Resolver, UnresolvedReason, Work, below, config, parent,
@@ -25,6 +27,12 @@ pub struct GraphLimits {
     pub json: JsonLimits,
     /// Canonical configuration path bounds.
     pub path: PathLimits,
+    /// Workspace loading bounds for package-based configuration inheritance
+    /// (`D-098`).
+    pub package: LoadLimits,
+    /// Storage bounds of the workspace loader's findings, which the graph
+    /// does not retain.
+    pub finding: FindingLimits,
 }
 
 /// Syntactic origin of a dependency reference.
@@ -120,6 +128,11 @@ impl ModuleGraph {
     /// Modules in canonical path order, independently of discovery order.
     pub fn nodes(&self) -> &[ModuleNode] {
         &self.nodes
+    }
+
+    /// The selected configuration with its inheritance.
+    pub fn configuration(&self) -> &ResolutionConfig {
+        &self.config
     }
 
     /// Configuration problems that prevented resolution.
@@ -594,7 +607,14 @@ fn resolver_and_config(
         let path = SourcePath::new(&format!("{prefix}{filename}"), limits.path)
             .map_err(|_| ModuleError::InvalidRoot)?;
         if inventory.files().find(&path).is_some() {
-            configuration = config::load(snapshot, &path, limits, &mut Vec::new(), &mut work)?;
+            configuration = config::load(
+                snapshot,
+                &path,
+                limits,
+                &mut Vec::new(),
+                &mut Links::new(),
+                &mut work,
+            )?;
             break;
         }
         if inventory.entry(&path).is_some() {

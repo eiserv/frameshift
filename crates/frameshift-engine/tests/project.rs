@@ -434,7 +434,7 @@ fn update_project_golden() {
 
 #[test]
 fn strict_tree_visitor_runs_once_and_propagates_failure() {
-    use frameshift_engine::modules::{GraphLimits, ModuleError};
+    use frameshift_engine::modules::ModuleError;
     use frameshift_engine::nextjs::{AppError, analyze_app_with};
     let limits = Limits::default();
     let snap = open(
@@ -449,13 +449,7 @@ fn strict_tree_visitor_runs_once_and_propagates_failure() {
         ],
         &limits,
     );
-    let graph = GraphLimits {
-        modules: limits.modules,
-        text: limits.text,
-        parse: limits.parse,
-        json: limits.json,
-        path: limits.path,
-    };
+    let graph = limits.modules();
     let mut visited = Vec::new();
     analyze_app_with(
         &snap,

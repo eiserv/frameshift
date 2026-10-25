@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 frameshift-core = { path = "../frameshift-core" }
 frameshift-input = { path = "../frameshift-input" }
+frameshift-package = { path = "../frameshift-package" }
 frameshift-syntax = { path = "../frameshift-syntax" }
 
 [lints]
