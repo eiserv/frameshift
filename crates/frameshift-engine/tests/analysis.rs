@@ -723,3 +723,49 @@ fn duplicate_route_patterns_are_source_evidence_rather_than_an_engine_error() {
     assert_eq!(a.assessment.routes[0].status, Status::Unknown);
     StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
 }
+
+#[test]
+fn implicit_layout_rendering_participates_in_conversion_demotion() {
+    let root = create(
+        "implicit-layout",
+        &[
+            (
+                "app/layout.tsx",
+                "import {Children} from 'react';export default function Layout({children}){return <html><body>{Children.toArray(children)}</body></html>}",
+            ),
+            (
+                "app/page.tsx",
+                "export default async function Page(){return <p>Page</p>}",
+            ),
+        ],
+    );
+    let a = run(&root);
+    assert_eq!(
+        a.assessment
+            .units
+            .iter()
+            .find(|u| u.kind == UnitKind::Route)
+            .unwrap()
+            .status,
+        Status::Unsupported
+    );
+}
+#[test]
+fn a_proven_next_link_mapping_does_not_block_async_astro_conversion() {
+    let root = create(
+        "async-link",
+        &[(
+            "app/page.tsx",
+            "import Link from 'next/link';export default async function Page(){return <Link href=\"/about\">About</Link>}",
+        )],
+    );
+    let a = run(&root);
+    let page = a
+        .assessment
+        .units
+        .iter()
+        .find(|u| u.kind == UnitKind::Route)
+        .unwrap();
+    assert_eq!(page.strategy, Strategy::Astro);
+    assert_ne!(page.status, Status::Unsupported);
+}

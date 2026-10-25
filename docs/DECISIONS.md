@@ -1142,9 +1142,6 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale and evolution (`D-033`):** Catalog data apart from detection lets a later migration path ship its own matrix over the same source facts, and lets assessment rules, `explain` texts, and coverage tracking refer to one validated list. Fixed statuses from single-status entries are deterministic consequences of the matrix, while every conditional status waits for a rule with explicit preconditions. A generic unknown occurrence with a typed cause keeps the fail-closed rule observable: what detection cannot classify becomes visible input for assessment rather than an absence.
 - **Integration:** Open a draft pull request early, push each committed increment, and monitor checks and reviews. The agent squash-merges this pull request after green CI and addressed feedback; this authorization covers this pull request only.
 
-## Technique proposals and related accepted decisions
-
-
 ### D-100: Complete M5 with read-only analysis and reporting
 
 - **Status:** Accepted (2026-10-25), confirmed by the owner through the Codex App question interface.
@@ -1154,6 +1151,8 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Implementation defaults within this scope:** The initial curated knowledge entries cover exact `clsx` 2.1.1 and `classnames` 2.5.1. External fixtures use the existing inline Node oracle pattern, with Preact 10.29.8 and `preact-render-to-string` 6.6.1, to check the actual JavaScript behavior and SSR output that Rust cannot substitute for. The packages are pinned, installed outside the repository with scripts disabled, and never shipped as dependencies. This adds no product implementation language. CI workflows are inventory-only `tooling.workflow` entries, and unknown boundary prop types have `boundary.dynamic-props` review evidence, matching the existing reporting and migration policies.
 - **Integration:** Create a new pull request based on PR #59, monitor its checks and reviews, address actionable feedback, and leave the new pull request open for owner integration. Do not extend `D-099`'s merge authorization to this pull request.
 - **Architecture (`D-033`):** Keep assessment in the engine above source facts and catalog data. Share strict parses with the source-model visitor. Keep rule evidence distinct from future transformation operations and rule coverage. No new runtime dependency is authorized. Report parsing treats stored reports as untrusted data and never executes them.
+
+## Technique proposals and related accepted decisions
 
 
 ### P-001: Go as the single implementation language, CGO disabled

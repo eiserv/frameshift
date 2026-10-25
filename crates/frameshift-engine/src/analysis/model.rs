@@ -343,6 +343,60 @@ pub(crate) fn assess(
             }
         }
     }
+    // Convention composition also renders a child, even though it has no
+    // explicit JSX import site in the layout's source.
+    let entries: BTreeMap<_, _> = graph
+        .entries
+        .iter()
+        .filter_map(|entry| {
+            if let Rendered::Definition(id) = entry.resolved.rendered {
+                Some((&entry.path, id))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let mut conversion_work = limits.analysis.max_dependency_work;
+    for route in &project.nextjs().routes.routes {
+        if route.kind != RouteKind::Page {
+            continue;
+        }
+        let chain: Vec<_> = route
+            .chain
+            .iter()
+            .filter(|f| matches!(f.convention, Convention::Layout | Convention::Template))
+            .filter_map(|f| entries.get(&f.path).copied())
+            .chain(entries.get(&route.file).copied())
+            .collect();
+        for pair in chain.windows(2) {
+            conversion_work = conversion_work
+                .checked_sub(1)
+                .ok_or_else(|| super::limit("assessment dependency work limit reached"))?;
+            incoming[pair[0]].push(pair[1]);
+        }
+    }
+    let mapped: BTreeSet<_> = occurrences
+        .iter()
+        .filter(|o| {
+            matches!(
+                o.feature.id,
+                "nextjs.api.link" | "nextjs.api.image" | "nextjs.api.script"
+            )
+        })
+        .filter(|o| {
+            matches!(
+                assess::classify((*o).clone(), project, syntax).status,
+                Some(Status::Auto | Status::Review)
+            )
+        })
+        .filter_map(|o| {
+            if let Location::Text { path, span } = &o.location {
+                Some((path.clone(), *span))
+            } else {
+                None
+            }
+        })
+        .collect();
     // Third-party, intrinsic-unknown, and unsupported render values keep the
     // containing definition in Preact. Intrinsic elements are already checked
     // against the printer while the strict tree was available.
@@ -352,6 +406,7 @@ pub(crate) fn assess(
                 site.resolved.rendered,
                 Rendered::External { .. } | Rendered::Unknown { .. }
             )
+            && !mapped.contains(&(site.path.clone(), site.span))
             && candidates[parent]
         {
             candidates[parent] = false;
@@ -1008,7 +1063,7 @@ pub(crate) fn assess(
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     let mut routes = Vec::new();
-    let mut work = limits.analysis.max_dependency_work;
+    let mut work = conversion_work;
     for (index, route) in project.nextjs().routes.routes.iter().enumerate() {
         let dependencies = project.route_dependencies(index).map_err(failure)?;
         work = work
