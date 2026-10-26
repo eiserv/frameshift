@@ -490,6 +490,73 @@ fn stored_finding_ids_follow_the_published_grammar() {
     }
 }
 #[test]
+fn stored_routes_match_route_and_endpoint_units_exactly_once() {
+    fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
+        let Value::Object(o) = v else {
+            panic!("object required")
+        };
+        o
+    }
+    let root = create(
+        "stored-route-population",
+        &[
+            ("app/page.tsx", PAGE),
+            (
+                "app/api/route.ts",
+                "export function GET(request){return new Response(request.url)}",
+            ),
+        ],
+    );
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let routes = original.value().get("routes").unwrap().array();
+    assert_eq!(routes.len(), 2);
+    assert!(
+        routes
+            .iter()
+            .any(|r| r.get("status").and_then(Value::text) == Some("auto"))
+    );
+    assert!(
+        routes
+            .iter()
+            .any(|r| r.get("status").and_then(Value::text) == Some("unsupported"))
+    );
+    for index in 0..routes.len() {
+        for duplicate in [false, true] {
+            let mut value = original.value().clone();
+            let mut changed = routes.to_vec();
+            if duplicate {
+                changed.push(changed[index].clone());
+            } else {
+                changed.remove(index);
+            }
+            // Keep summary counts consistent so they cannot mask the defect.
+            let readiness = object(object(&mut value).get_mut("summary").unwrap())
+                .get_mut("routeReadiness")
+                .unwrap();
+            let Value::Array(rows) = readiness else {
+                panic!("readiness required")
+            };
+            for row in rows {
+                let status = row.get("status").and_then(Value::text).unwrap();
+                let count = changed
+                    .iter()
+                    .filter(|r| r.get("status").and_then(Value::text) == Some(status))
+                    .count();
+                object(row).insert("count".into(), Value::Number(count.to_string()));
+            }
+            object(&mut value).insert("routes".into(), Value::Array(changed));
+            assert!(
+                StoredReport::parse(value.document().into_bytes(), &Limits::default()).is_err(),
+                "route {index}, duplicate {duplicate}"
+            );
+        }
+    }
+}
+#[test]
 fn stored_reports_require_physical_units_in_their_own_files() {
     fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
         let Value::Object(o) = v else {

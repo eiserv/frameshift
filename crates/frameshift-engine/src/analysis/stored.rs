@@ -660,7 +660,11 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     if associated.len() != physical_owners.len() {
         return Err(invalid());
     }
+    let mut route_units = BTreeSet::new();
     for route in array(v, "routes")? {
+        if !route_units.insert(text(route, "unit")?) {
+            return Err(invalid());
+        }
         if !identities.contains(text(route, "unit")?) || !status(text(route, "status")?) {
             return Err(invalid());
         }
@@ -705,6 +709,9 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         if !text(route, "pattern")?.starts_with('/') {
             return Err(invalid());
         }
+    }
+    if route_units.len() != route_patterns.len() {
+        return Err(invalid());
     }
     let mut readiness = BTreeMap::new();
     for route in array(v, "routes")? {
