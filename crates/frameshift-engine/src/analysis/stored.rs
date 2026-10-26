@@ -491,7 +491,6 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         path(text(source, "package")?, limits)?;
     }
     let summary = v.get("summary").ok_or_else(invalid)?;
-    text(summary, "verdict")?;
     let units = array(v, "units")?;
     if units.len() > limits.analysis.max_units {
         return Err(invalid());
@@ -794,6 +793,35 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             limits,
             false,
         )?;
+    }
+    let request_units: BTreeSet<_> = occurrences
+        .iter()
+        .filter(|o| {
+            o.get("feature")
+                .and_then(Value::text)
+                .is_some_and(super::report::request_feature)
+        })
+        .filter_map(|o| o.get("unit").and_then(Value::text))
+        .collect();
+    let routes = array(v, "routes")?;
+    let request_blocked = routes
+        .iter()
+        .filter(|r| {
+            r.get("closure")
+                .unwrap()
+                .array()
+                .iter()
+                .any(|u| request_units.contains(u.text().unwrap()))
+        })
+        .count();
+    let verdict = super::report::project_verdict(
+        routes.len(),
+        readiness.get("unsupported").copied().unwrap_or(0) as usize,
+        readiness.get("unknown").copied().unwrap_or(0) as usize,
+        request_blocked,
+    );
+    if text(summary, "verdict")? != verdict {
+        return Err(invalid());
     }
     let detected: BTreeSet<_> = occurrences
         .iter()

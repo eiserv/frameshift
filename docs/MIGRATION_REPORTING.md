@@ -187,6 +187,8 @@ Rules for weights:
 
 Implemented (`D-100`): a strict majority of routes with request-time blockers is a poor candidate for static migration; other definite blockers require manual work. With no blocker, unknown readiness yields an explicit uncertainty verdict. A positive verdict requires routes and no blocked or uncertain closure. The finalized finding IDs are retained as verdict evidence. These rules use facts and route counts, never feasibility thresholds.
 
+Stored schema-v1 reports must contain the same verdict derived from their validated route records and request-time occurrences. A changed headline that disagrees with that evidence is rejected before rendering.
+
 A verdict summarizes the project in one or two sentences. It is derived from facts, not percentage thresholds:
 
 - **Good candidate:** no blocked routes, or blocked routes affect only isolated features.

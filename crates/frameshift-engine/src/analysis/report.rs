@@ -52,6 +52,28 @@ fn distribution(analysis: &Analysis, weighted: bool) -> V {
             .collect(),
     )
 }
+pub(super) fn request_feature(feature: &str) -> bool {
+    matches!(
+        feature,
+        "nextjs.api.request" | "nextjs.api.server-action" | "nextjs.segment.dynamic"
+    )
+}
+pub(super) fn project_verdict(
+    routes: usize,
+    blocked: usize,
+    uncertain: usize,
+    request_blocked: usize,
+) -> &'static str {
+    if request_blocked > routes / 2 {
+        "Poor candidate for a static migration: most routes depend on request-time features."
+    } else if blocked > 0 {
+        "Good candidate with manual work: recognized features block the listed routes; review all unknown evidence."
+    } else if uncertain > 0 || routes == 0 {
+        "Suitability is uncertain: static evidence does not establish route readiness."
+    } else {
+        "Good candidate: no blocked or uncertain routes; review the listed mapping changes."
+    }
+}
 impl Analysis {
     /// Renders version 1 of `frameshift.analysis`: original root-relative
     /// coordinates, integer-only metrics, no source snippets or host paths,
@@ -72,29 +94,18 @@ impl Analysis {
             .iter()
             .filter(|r| r.status == Status::Unknown)
             .count();
+        let request_units: BTreeSet<_> = self
+            .assessment
+            .occurrences
+            .iter()
+            .filter(|o| request_feature(o.occurrence.feature.id))
+            .filter_map(|o| o.unit.as_deref())
+            .collect();
         let request_blocked = routes
             .iter()
-            .filter(|r| {
-                self.assessment.occurrences.iter().any(|o| {
-                    o.unit.as_ref().is_some_and(|u| r.closure.contains(u))
-                        && matches!(
-                            o.occurrence.feature.id,
-                            "nextjs.api.request"
-                                | "nextjs.api.server-action"
-                                | "nextjs.segment.dynamic"
-                        )
-                })
-            })
+            .filter(|r| r.closure.iter().any(|u| request_units.contains(u.as_str())))
             .count();
-        if request_blocked > routes.len() / 2 {
-            "Poor candidate for a static migration: most routes depend on request-time features."
-        } else if blocked > 0 {
-            "Good candidate with manual work: recognized features block the listed routes; review all unknown evidence."
-        } else if uncertain > 0 || routes.is_empty() {
-            "Suitability is uncertain: static evidence does not establish route readiness."
-        } else {
-            "Good candidate: no blocked or uncertain routes; review the listed mapping changes."
-        }
+        project_verdict(routes.len(), blocked, uncertain, request_blocked)
     }
     pub(crate) fn value(&self) -> V {
         let units = &self.assessment.units;

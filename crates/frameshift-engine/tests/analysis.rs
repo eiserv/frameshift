@@ -490,6 +490,144 @@ fn stored_finding_ids_follow_the_published_grammar() {
     }
 }
 #[test]
+fn stored_verdicts_are_derived_from_route_and_request_evidence() {
+    const REQUEST: &str = "import {cookies} from 'next/headers';export default function Page(){cookies();return <p/>}";
+    const MANUAL: &str = "import Script from 'next/script';export default function Page(){return <Script strategy='worker'/>}";
+    type Case = (
+        &'static str,
+        &'static [(&'static str, &'static str)],
+        &'static str,
+    );
+    let cases: &[Case] = &[
+        ("automatic", &[("app/page.tsx", PAGE)], "Good candidate:"),
+        ("empty", &[], "Suitability is uncertain:"),
+        (
+            "unknown",
+            &[(
+                "app/page.tsx",
+                "export default function Page(){return <Missing/>}",
+            )],
+            "Suitability is uncertain:",
+        ),
+        (
+            "manual",
+            &[("app/page.tsx", MANUAL)],
+            "Good candidate with manual work:",
+        ),
+        ("request", &[("app/page.tsx", REQUEST)], "Poor candidate"),
+        (
+            "dynamic",
+            &[(
+                "app/page.tsx",
+                "export const dynamic='force-dynamic';export default function Page(){return <p/>}",
+            )],
+            "Poor candidate",
+        ),
+        (
+            "server-action",
+            &[
+                (
+                    "app/page.tsx",
+                    "import {save} from '../lib/action';export default function Page(){return <form action={save}/>}",
+                ),
+                (
+                    "lib/action.ts",
+                    "'use server';export async function save(){}",
+                ),
+            ],
+            "Poor candidate",
+        ),
+        (
+            "tie",
+            &[("app/page.tsx", REQUEST), ("app/other/page.tsx", PAGE)],
+            "Good candidate with manual work:",
+        ),
+        (
+            "majority",
+            &[
+                ("app/page.tsx", REQUEST),
+                ("app/other/page.tsx", REQUEST),
+                ("app/static/page.tsx", PAGE),
+            ],
+            "Poor candidate",
+        ),
+        (
+            "unreached-request",
+            &[
+                ("app/page.tsx", PAGE),
+                (
+                    "lib/request.ts",
+                    "import {cookies} from 'next/headers';export const read=()=>cookies()",
+                ),
+            ],
+            "Good candidate:",
+        ),
+        (
+            "shared-request",
+            &[
+                (
+                    "app/page.tsx",
+                    "import {read} from '../lib/request';export default function Page(){return <p>{read()}</p>}",
+                ),
+                (
+                    "app/other/page.tsx",
+                    "import {read} from '../../lib/request';export default function Page(){return <p>{read()}</p>}",
+                ),
+                (
+                    "lib/request.ts",
+                    "import {cookies} from 'next/headers';export const read=()=>cookies()",
+                ),
+            ],
+            "Poor candidate",
+        ),
+    ];
+    let mut originals = Vec::new();
+    let mut verdicts = std::collections::BTreeSet::new();
+    for &(name, files, prefix) in cases {
+        let root = create(&format!("stored-verdict-{name}"), files);
+        let analysis = run(&root);
+        assert!(
+            analysis.verdict().starts_with(prefix),
+            "{name}: {}",
+            analysis.verdict()
+        );
+        verdicts.insert(analysis.verdict().to_owned());
+        let original = StoredReport::parse(
+            analysis.document().unwrap().into_bytes(),
+            &Limits::default(),
+        )
+        .unwrap();
+        originals.push((name, original));
+    }
+    assert_eq!(verdicts.len(), 4);
+    verdicts.insert("Unsubstantiated suitability claim".into());
+    for (name, original) in originals {
+        let expected = original
+            .value()
+            .get("summary")
+            .unwrap()
+            .get("verdict")
+            .unwrap()
+            .text()
+            .unwrap();
+        for verdict in &verdicts {
+            let mut value = original.value().clone();
+            let Value::Object(top) = &mut value else {
+                panic!("object required")
+            };
+            let Value::Object(summary) = top.get_mut("summary").unwrap() else {
+                panic!("summary required")
+            };
+            summary.insert("verdict".into(), Value::String(verdict.clone()));
+            assert_eq!(
+                StoredReport::parse(value.document().into_bytes(), &Limits::default()).is_ok(),
+                verdict == expected,
+                "{name}: {verdict}"
+            );
+        }
+    }
+}
+#[test]
 fn stored_routes_match_route_and_endpoint_units_exactly_once() {
     fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
         let Value::Object(o) = v else {
