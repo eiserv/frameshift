@@ -114,6 +114,36 @@ fn independent_dynamic_routes_do_not_trigger_fail_on_review() {
     }
 }
 #[test]
+fn excluded_computed_links_do_not_trigger_base_path_review() {
+    let root = fixture("base-path-excluded-links");
+    fs::write(root.join("package-lock.json"), format!(
+        "{{\"lockfileVersion\":3,\"packages\":{{\"\":{{\"name\":\"fictional-site\",\"dependencies\":{{\"{0}\":\"16.2.0\"}}}},\"node_modules/{0}\":{{\"version\":\"16.2.0\"}}}}}}", "next"
+    )).unwrap();
+    fs::write(
+        root.join("next.config.mjs"),
+        "export default {basePath:'/docs'}",
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("tests")).unwrap();
+    fs::write(root.join("tests/links.spec.tsx"), "import Link from 'next/link';const destination='/about';export function Widget(){return <Link href={destination}/>}").unwrap();
+    for (page, expected) in [
+        ("export default function Page(){return <p/>}", 0),
+        (
+            "import {Widget} from '../tests/links.spec';export default function Page(){return <Widget/>}",
+            1,
+        ),
+    ] {
+        fs::write(root.join("app/page.tsx"), page).unwrap();
+        let output = call(&root, &["analyze", "--to=astro-preact", "--fail-on=review"]);
+        assert_eq!(
+            output.status.code(),
+            Some(expected),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+#[test]
 fn literal_object_links_do_not_trigger_fail_on_review() {
     let root = fixture("link-object");
     fs::write(root.join("package-lock.json"), format!(

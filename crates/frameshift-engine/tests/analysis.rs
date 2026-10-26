@@ -2165,6 +2165,76 @@ fn independent_single_segment_enumeration_is_automatic() {
     );
 }
 #[test]
+fn base_path_ignores_excluded_links_and_retains_runtime_reachable_tests() {
+    for path in ["tests/links.spec.tsx", "vitest.config.tsx", "lib/links.tsx"] {
+        for reached in [false, true] {
+            let import = format!("../{path}");
+            let page = if reached {
+                format!(
+                    "import {{Widget}} from '{import}';export default function Page(){{return <Widget/>}}"
+                )
+            } else {
+                PAGE.to_owned()
+            };
+            let root = create(
+                &format!("base-path-scope-{}-{reached}", path.replace('/', "-")),
+                &[
+                    ("app/page.tsx", &page),
+                    (
+                        path,
+                        "import Link from 'next/link';const destination='/about';export function Widget(){return <Link href={destination}/>}",
+                    ),
+                    ("next.config.mjs", "export default {basePath:'/docs'}"),
+                ],
+            );
+            let a = run(&root);
+            let excluded = !reached && path != "lib/links.tsx";
+            let expected = if excluded {
+                Status::Auto
+            } else {
+                Status::Review
+            };
+            let base = a
+                .assessment
+                .occurrences
+                .iter()
+                .find(|o| o.occurrence.feature.id == "nextjs.config.base-path")
+                .unwrap();
+            assert_eq!(base.status, Some(expected), "{path}: {reached}");
+            assert_eq!(
+                a.assessment
+                    .units
+                    .iter()
+                    .find(|u| Some(u.id.as_str()) == base.unit.as_deref())
+                    .unwrap()
+                    .status,
+                expected
+            );
+            let link = a
+                .assessment
+                .occurrences
+                .iter()
+                .find(|o| o.occurrence.feature.id == "nextjs.api.link")
+                .unwrap();
+            assert_eq!(link.status, (!excluded).then_some(Status::Review));
+            assert_eq!(
+                a.assessment
+                    .files
+                    .iter()
+                    .find(|f| f.path.as_str() == path)
+                    .unwrap()
+                    .class,
+                if excluded {
+                    FileClass::OutOfScope
+                } else {
+                    FileClass::Units
+                }
+            );
+            StoredReport::parse(a.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+        }
+    }
+}
+#[test]
 fn base_path_uses_only_binding_proven_next_link_sites() {
     for (body, expected) in [
         ("return <a href={destination}>Native</a>", Status::Auto),

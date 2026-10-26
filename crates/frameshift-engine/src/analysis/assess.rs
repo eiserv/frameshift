@@ -129,10 +129,19 @@ impl Syntax {
             .and_then(|p| self.automatic_routes.get(p))
             .is_some_and(|routes| routes.contains(pattern))
     }
-    pub fn correlate_links(&mut self, occurrences: &[Occurrence]) {
+    pub fn correlate_links(
+        &mut self,
+        occurrences: &[Occurrence],
+        excluded_files: &std::collections::BTreeSet<&SourcePath>,
+    ) {
         self.link_hrefs_need_review = occurrences
             .iter()
             .filter(|o| o.feature.id == "nextjs.api.link")
+            .filter(|o| {
+                !o.location
+                    .path()
+                    .is_some_and(|p| excluded_files.contains(p))
+            })
             .any(|o| {
                 self.tag(&o.location)
                     .is_none_or(|tag| tag.spread || !tag.literal_href)

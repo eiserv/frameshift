@@ -244,7 +244,7 @@ pub(crate) fn assess(
     project: &Project,
     detection: &Detection,
     occurrences: Vec<Occurrence>,
-    syntax: &Syntax,
+    syntax: &mut Syntax,
     dependencies: &[Dependency],
     manifest_automatic: bool,
     limits: &Limits,
@@ -621,6 +621,12 @@ pub(crate) fn assess(
             }
         }
     }
+    let excluded_files: BTreeSet<_> = files
+        .iter()
+        .filter(|f| f.class == FileClass::OutOfScope)
+        .map(|f| &f.path)
+        .collect();
+    syntax.correlate_links(&occurrences, &excluded_files);
     let owners = Ownership::new(&units);
     let mut assessed: Vec<_> = occurrences
         .into_iter()
@@ -734,11 +740,6 @@ pub(crate) fn assess(
     if assessed.len() > limits.analysis.max_occurrences {
         return Err(super::limit("analysis occurrence limit reached"));
     }
-    let excluded_files: BTreeSet<_> = files
-        .iter()
-        .filter(|f| f.class == FileClass::OutOfScope)
-        .map(|f| &f.path)
-        .collect();
     let astro_sites: BTreeSet<_> = graph
         .sites
         .iter()

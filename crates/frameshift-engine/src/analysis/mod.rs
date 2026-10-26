@@ -179,7 +179,6 @@ pub fn analyze(root: &Path, options: &AnalyzeOptions) -> Result<Analysis, Analyz
         return Err(limit("analysis occurrence limit reached"));
     }
     let dependencies = knowledge::dependencies(&selected, &workspace, &project);
-    syntax.correlate_links(&occurrences);
     syntax.correlate_routes(&project);
     syntax.correlate_images(&project);
     let manifest_automatic = matches!(selected.manifest(),ManifestState::Analyzed(manifest) if manifest.scripts.iter().all(|entry|matches!(entry.value.as_ref(),"next dev"|"next build")));
@@ -188,7 +187,7 @@ pub fn analyze(root: &Path, options: &AnalyzeOptions) -> Result<Analysis, Analyz
         &project,
         &detection,
         occurrences,
-        &syntax,
+        &mut syntax,
         &dependencies,
         manifest_automatic,
         limits,
