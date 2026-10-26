@@ -740,6 +740,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             return Err(invalid());
         }
     }
+    let mut evidence_status: BTreeMap<_, _> = identities.iter().map(|&id| (id, "auto")).collect();
     let mut finding_ids = BTreeSet::new();
     for finding in array(v, "findings")? {
         let id = text(finding, "id")?;
@@ -762,11 +763,20 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         {
             return Err(invalid());
         }
-        if !matches!(
-            text(finding, "severity")?,
-            "error" | "blocker" | "unknown" | "review" | "info"
-        ) {
-            return Err(invalid());
+        let status = match text(finding, "severity")? {
+            "error" => None,
+            "blocker" => Some("unsupported"),
+            "unknown" => Some("unknown"),
+            "review" => Some("review"),
+            "info" => Some("auto"),
+            _ => return Err(invalid()),
+        };
+        if let Some(id) = optional_text(finding, "unit")? {
+            let status = status.ok_or_else(invalid)?;
+            let derived = evidence_status.get_mut(id).ok_or_else(invalid)?;
+            if rank(status) > rank(derived) {
+                *derived = status;
+            }
         }
         for key in ["message", "explanation", "remediation"] {
             text(finding, key)?;
@@ -803,6 +813,15 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             limits,
             false,
         )?;
+        if let (Some(id), Some(status)) = (
+            nullable_text(occurrence, "unit")?,
+            nullable_text(occurrence, "status")?,
+        ) {
+            let derived = evidence_status.get_mut(id).ok_or_else(invalid)?;
+            if rank(status) > rank(derived) {
+                *derived = status;
+            }
+        }
         let feature = text(occurrence, "feature")?;
         if super::report::request_feature(feature) {
             let status = nullable_text(occurrence, "status")?;
@@ -838,6 +857,9 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
                 }
             }
         }
+    }
+    if evidence_status != unit_status {
+        return Err(invalid());
     }
     let request_units: BTreeSet<_> = occurrences
         .iter()

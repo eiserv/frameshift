@@ -490,6 +490,91 @@ fn stored_finding_ids_follow_the_published_grammar() {
     }
 }
 #[test]
+fn stored_unit_statuses_match_occurrences_and_unit_level_findings() {
+    for (name, source, expected) in [
+        (
+            "blocker",
+            "import Script from 'next/script';export default function Page(){return <Script strategy='worker'/>}",
+            Status::Unsupported,
+        ),
+        (
+            "unknown",
+            "export default function Page(){return <Missing/>}",
+            Status::Unknown,
+        ),
+        (
+            "review",
+            "import Link from 'next/link';const destination='/about';export default function Page(){return <Link href={destination}/>}",
+            Status::Review,
+        ),
+    ] {
+        let root = create(
+            &format!("stored-unit-status-{name}"),
+            &[("app/page.tsx", source)],
+        );
+        for evidence in ["both", "occurrence", "finding"] {
+            let mut analysis = run(&root);
+            assert_eq!(analysis.assessment.routes[0].status, expected);
+            StoredReport::parse(
+                analysis.document().unwrap().into_bytes(),
+                &Limits::default(),
+            )
+            .unwrap();
+            // Recompute every dependent metric and headline from the lowered
+            // statuses, retaining the original contradictory evidence.
+            for unit in &mut analysis.assessment.units {
+                unit.status = Status::Auto;
+            }
+            for route in &mut analysis.assessment.routes {
+                route.status = Status::Auto;
+                route.blocker = None;
+                route.dependency_path.clear();
+            }
+            if evidence == "finding" {
+                for occurrence in &mut analysis.assessment.occurrences {
+                    occurrence.status = None;
+                    occurrence.unit = None;
+                }
+            }
+            let document = analysis.document().unwrap();
+            let source = frameshift_engine::foundation::SourceText::from_bytes(
+                document.into_bytes(),
+                frameshift_engine::foundation::TextLimits::default(),
+            )
+            .unwrap();
+            // Parse as plain JSON, since the stored reader must reject it.
+            let parsed = frameshift_engine::syntax::parse_json(
+                &source,
+                frameshift_engine::syntax::JsonDialect::Json,
+                Limits::default().json,
+            )
+            .unwrap();
+            let mut document = source.as_str().to_owned();
+            if evidence == "occurrence" {
+                // All status evidence still belongs to the occurrences;
+                // remove only the finding ownership associations.
+                let mut edits = Vec::new();
+                for id in parsed.ids() {
+                    if let Some(frameshift_engine::syntax::JsonValue::Object(o)) = parsed.value(id)
+                        && o.get("severity").is_some()
+                        && let Some(unit) = o.get("unit")
+                    {
+                        edits.push(parsed.span(unit).unwrap());
+                    }
+                }
+                edits.sort_by_key(|s| std::cmp::Reverse(s.start()));
+                for span in edits {
+                    document.replace_range(span.start()..span.end(), "null");
+                }
+            }
+            assert!(
+                StoredReport::parse(document.into_bytes(), &Limits::default()).is_err(),
+                "{name}: {evidence}"
+            );
+        }
+    }
+}
+#[test]
 fn stored_analysis_reports_cannot_claim_migration_outputs() {
     fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
         let Value::Object(o) = v else {
