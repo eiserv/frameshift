@@ -490,6 +490,136 @@ fn stored_finding_ids_follow_the_published_grammar() {
     }
 }
 #[test]
+fn stored_request_evidence_requires_consistent_status_rule_and_owner() {
+    fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
+        let Value::Object(o) = v else {
+            panic!("object required")
+        };
+        o
+    }
+    let root = create(
+        "stored-request-evidence",
+        &[
+            (
+                "app/page.tsx",
+                "import {cookies} from 'next/headers';import {read} from '../lib/request';export default function Page(){cookies();read();return <p/>}",
+            ),
+            (
+                "lib/request.ts",
+                "import {headers} from 'next/headers';export const read=()=>headers()",
+            ),
+            (
+                "tests/request.spec.ts",
+                "import {cookies} from 'next/headers';cookies()",
+            ),
+        ],
+    );
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let occurrences = original.value().get("occurrences").unwrap().array();
+    assert!(occurrences.iter().any(|o| {
+        o.get("feature").and_then(Value::text) == Some("nextjs.api.request")
+            && o.get("status") == Some(&Value::Null)
+    }));
+    let index = occurrences
+        .iter()
+        .position(|o| {
+            o.get("feature").and_then(Value::text) == Some("nextjs.api.request")
+                && o.get("unit").and_then(Value::text) == Some("route:/")
+        })
+        .unwrap();
+    let other = occurrences
+        .iter()
+        .find(|o| {
+            o.get("feature").and_then(Value::text) == Some("nextjs.api.request")
+                && o.get("unit")
+                    .and_then(Value::text)
+                    .is_some_and(|u| u != "route:/")
+        })
+        .unwrap()
+        .get("unit")
+        .unwrap()
+        .clone();
+    let different_rule = occurrences
+        .iter()
+        .find_map(|o| {
+            let rule = o.get("rule")?.text()?;
+            (o.get("feature").and_then(Value::text) != Some("nextjs.api.request")).then_some(rule)
+        })
+        .unwrap();
+    for (key, bad) in [
+        ("status", Value::String("auto".into())),
+        ("status", Value::String("review".into())),
+        ("status", Value::String("unknown".into())),
+        ("status", Value::Null),
+        ("rule", Value::String(different_rule.into())),
+        ("rule", Value::Null),
+        ("unit", other),
+        ("unit", Value::Null),
+    ] {
+        let mut value = original.value().clone();
+        let Value::Array(records) = object(&mut value).get_mut("occurrences").unwrap() else {
+            panic!("occurrences required")
+        };
+        object(&mut records[index]).insert(key.into(), bad);
+        assert!(
+            StoredReport::parse(value.document().into_bytes(), &Limits::default()).is_err(),
+            "{key}"
+        );
+    }
+    let root = create("stored-request-relabel", &[("app/page.tsx", PAGE)]);
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    for feature in [
+        "nextjs.api.request",
+        "nextjs.api.server-action",
+        "nextjs.segment.dynamic",
+    ] {
+        for status in ["auto", "unsupported"] {
+            let mut value = original.value().clone();
+            let Value::Array(records) = object(&mut value).get_mut("occurrences").unwrap() else {
+                panic!("occurrences required")
+            };
+            let occurrence = records
+                .iter_mut()
+                .find(|o| {
+                    o.get("unit").and_then(Value::text) == Some("route:/")
+                        && o.get("status").and_then(Value::text) == Some("auto")
+                })
+                .unwrap();
+            object(occurrence).insert("feature".into(), Value::String(feature.into()));
+            object(occurrence).insert("status".into(), Value::String(status.into()));
+            let rule = format!(
+                "nextjs-to-astro-preact/assessment.{}",
+                feature.replace('.', "-")
+            );
+            object(occurrence).insert("rule".into(), Value::String(rule.clone()));
+            let Value::Array(rules) = object(&mut value).get_mut("rules").unwrap() else {
+                panic!("rules required")
+            };
+            rules.push(Value::Object(std::collections::BTreeMap::from([
+                ("id".into(), Value::String(rule)),
+                ("phase".into(), Value::String("assessment".into())),
+                ("version".into(), Value::Number("1".into())),
+            ])));
+            object(object(&mut value).get_mut("summary").unwrap()).insert(
+                "verdict".into(),
+                Value::String("Poor candidate for a static migration: most routes depend on request-time features.".into()),
+            );
+            assert!(
+                StoredReport::parse(value.document().into_bytes(), &Limits::default()).is_err(),
+                "{feature}: {status}"
+            );
+        }
+    }
+}
+#[test]
 fn stored_verdicts_are_derived_from_route_and_request_evidence() {
     const REQUEST: &str = "import {cookies} from 'next/headers';export default function Page(){cookies();return <p/>}";
     const MANUAL: &str = "import Script from 'next/script';export default function Page(){return <Script strategy='worker'/>}";

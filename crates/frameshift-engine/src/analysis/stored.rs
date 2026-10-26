@@ -624,6 +624,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             .unwrap_or(usize::MAX)
     };
     let mut paths = BTreeSet::new();
+    let mut excluded_paths = BTreeSet::new();
     let mut physical_owners = BTreeMap::new();
     for unit in units {
         if text(unit, "kind")? != "config"
@@ -642,6 +643,9 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         let class = text(file, "class")?;
         if !matches!(class, "units" | "verbatim" | "out-of-scope" | "ignored") {
             return Err(invalid());
+        }
+        if class == "out-of-scope" {
+            excluded_paths.insert(p);
         }
         refs(file, "units", &identities)?;
         if (class == "units") == array(file, "units")?.is_empty() {
@@ -793,6 +797,41 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             limits,
             false,
         )?;
+        let feature = text(occurrence, "feature")?;
+        if super::report::request_feature(feature) {
+            let status = nullable_text(occurrence, "status")?;
+            let unit = nullable_text(occurrence, "unit")?;
+            let rule = nullable_text(occurrence, "rule")?;
+            let location = occurrence.get("location").ok_or_else(invalid)?;
+            let path = optional_text(location, "path")?;
+            if text(location, "scope")? == "project" {
+                return Err(invalid());
+            }
+            if status.is_none() {
+                // Detected runtime APIs may be inventory-only in excluded tests.
+                if unit.is_some()
+                    || rule.is_some()
+                    || path.is_none_or(|p| !excluded_paths.contains(p))
+                {
+                    return Err(invalid());
+                }
+            } else {
+                let owner = unit.ok_or_else(invalid)?;
+                let expected_rule = format!(
+                    "{}/assessment.{}",
+                    crate::catalog::PATH,
+                    feature.replace('.', "-")
+                );
+                if status != Some("unsupported")
+                    || unit_status[owner] != "unsupported"
+                    || rule != Some(expected_rule.as_str())
+                    || path != physical_owners.get(owner).copied()
+                    || path.is_none()
+                {
+                    return Err(invalid());
+                }
+            }
+        }
     }
     let request_units: BTreeSet<_> = occurrences
         .iter()
