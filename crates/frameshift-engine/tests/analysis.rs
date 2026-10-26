@@ -490,6 +490,70 @@ fn stored_finding_ids_follow_the_published_grammar() {
     }
 }
 #[test]
+fn stored_analysis_reports_cannot_claim_migration_outputs() {
+    fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
+        let Value::Object(o) = v else {
+            panic!("object required")
+        };
+        o
+    }
+    let root = create("stored-output-claims", &[("app/page.tsx", PAGE)]);
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    for (section, field, invalid) in [
+        (
+            "routes",
+            "outputPath",
+            vec![
+                None,
+                Some(Value::String("src/pages/index.astro".into())),
+                Some(Value::Bool(false)),
+                Some(Value::Array(Vec::new())),
+            ],
+        ),
+        (
+            "files",
+            "outputPaths",
+            vec![
+                None,
+                Some(Value::Array(vec![Value::String(
+                    "src/pages/index.astro".into(),
+                )])),
+                Some(Value::Null),
+                Some(Value::String("src/pages/index.astro".into())),
+            ],
+        ),
+    ] {
+        for replacement in invalid {
+            let mut value = original.value().clone();
+            let Value::Array(records) = object(&mut value).get_mut(section).unwrap() else {
+                panic!("records required")
+            };
+            if let Some(replacement) = replacement {
+                object(&mut records[0]).insert(field.into(), replacement);
+            } else {
+                object(&mut records[0]).remove(field);
+            }
+            assert!(
+                StoredReport::parse(value.document().into_bytes(), &Limits::default()).is_err(),
+                "{section}.{field}"
+            );
+        }
+    }
+    // Unknown additive metadata remains supported without inventing output.
+    let mut value = original.value().clone();
+    for section in ["routes", "files"] {
+        let Value::Array(records) = object(&mut value).get_mut(section).unwrap() else {
+            panic!("records required")
+        };
+        object(&mut records[0]).insert("futureEvidence".into(), Value::Bool(true));
+    }
+    StoredReport::parse(value.document().into_bytes(), &Limits::default()).unwrap();
+}
+#[test]
 fn stored_request_evidence_requires_consistent_status_rule_and_owner() {
     fn object(v: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
         let Value::Object(o) = v else {

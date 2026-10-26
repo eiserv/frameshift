@@ -635,6 +635,9 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     }
     let mut associated = BTreeSet::new();
     for file in array(v, "files")? {
+        if !array(file, "outputPaths")?.is_empty() {
+            return Err(invalid());
+        }
         let p = text(file, "path")?;
         path(p, limits)?;
         if !paths.insert(p) {
@@ -665,6 +668,9 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     }
     let mut route_units = BTreeSet::new();
     for route in array(v, "routes")? {
+        if route.get("outputPath") != Some(&Value::Null) {
+            return Err(invalid());
+        }
         if !route_units.insert(text(route, "unit")?) {
             return Err(invalid());
         }

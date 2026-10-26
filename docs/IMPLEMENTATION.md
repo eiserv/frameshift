@@ -1855,6 +1855,8 @@ Stored unit IDs are reconstructed through the canonical `UnitId` constructors un
 
 Stored route records must cover every route and endpoint unit exactly once. Missing or duplicate records are rejected even when the route-readiness summary is adjusted to match the supplied list.
 
+Stored schema-v1 analysis documents require each route's `outputPath` to be null and each file's `outputPaths` to be an empty array. Populated, missing, or incorrectly typed output fields are rejected; read-only analysis cannot claim generated migration output. The published file schema also enforces the empty-array constraint.
+
 The stored summary verdict must equal the schema-v1 derivation used by fresh analysis, including request-time occurrence ownership in route closures, the strict-majority boundary, blocked and unknown readiness, and an empty route population. Request-related units are indexed once before checking closures; verdict derivation does not rescan every occurrence for each route.
 
 Stored request, Server Action, and force-dynamic occurrences must carry unsupported status, their matching assessment rule, and an unsupported physical owner at the occurrence's source path before they can establish request-blocking verdict evidence. The validated closure maximum then requires every containing route to be blocked. Inventory-only occurrences remain permitted in explicitly out-of-scope files with no status, rule, or owner.
