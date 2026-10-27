@@ -802,10 +802,10 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         {
             return Err(invalid());
         }
-        if crate::catalog::feature(text(occurrence, "feature")?).is_none() {
-            return Err(invalid());
-        }
-        nullable_text(occurrence, "rule")?;
+        let feature = crate::catalog::feature(text(occurrence, "feature")?).ok_or_else(invalid)?;
+        let status = nullable_text(occurrence, "status")?;
+        let rule = nullable_text(occurrence, "rule")?;
+        let unit = nullable_text(occurrence, "unit")?;
         text(occurrence, "reason")?;
         text(occurrence, "detail")?;
         location(
@@ -813,48 +813,61 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             limits,
             false,
         )?;
-        if let (Some(id), Some(status)) = (
-            nullable_text(occurrence, "unit")?,
-            nullable_text(occurrence, "status")?,
-        ) {
+        match (feature.v1, status) {
+            (crate::catalog::V1::OutOfScope, None) => {
+                if unit.is_some() || rule.is_some() {
+                    return Err(invalid());
+                }
+            }
+            (crate::catalog::V1::Assessed(_), None) => {
+                let location = occurrence.get("location").ok_or_else(invalid)?;
+                if unit.is_some()
+                    || rule.is_some()
+                    || text(location, "scope")? == "project"
+                    || optional_text(location, "path")?.is_none_or(|p| !excluded_paths.contains(p))
+                {
+                    return Err(invalid());
+                }
+            }
+            (crate::catalog::V1::Assessed(allowed), Some(status)) => {
+                // Missing preconditions are unknown, never a claimed mapping.
+                if !allowed.iter().any(|s| s.as_str() == status)
+                    && !(status == "unknown" && rule.is_none())
+                {
+                    return Err(invalid());
+                }
+                let expected_rule = format!(
+                    "{}/assessment.{}",
+                    crate::catalog::PATH,
+                    feature.id.replace('.', "-")
+                );
+                if rule.is_some_and(|r| r != expected_rule)
+                    || (status != "unknown" && rule.is_none())
+                {
+                    return Err(invalid());
+                }
+            }
+            (crate::catalog::V1::OutOfScope, Some(_)) => return Err(invalid()),
+        }
+        if let (Some(id), Some(status)) = (unit, status) {
             let derived = evidence_status.get_mut(id).ok_or_else(invalid)?;
             if rank(status) > rank(derived) {
                 *derived = status;
             }
         }
-        let feature = text(occurrence, "feature")?;
-        if super::report::request_feature(feature) {
-            let status = nullable_text(occurrence, "status")?;
-            let unit = nullable_text(occurrence, "unit")?;
-            let rule = nullable_text(occurrence, "rule")?;
+        if super::report::request_feature(feature.id) && status.is_some() {
             let location = occurrence.get("location").ok_or_else(invalid)?;
             let path = optional_text(location, "path")?;
             if text(location, "scope")? == "project" {
                 return Err(invalid());
             }
-            if status.is_none() {
-                // Detected runtime APIs may be inventory-only in excluded tests.
-                if unit.is_some()
-                    || rule.is_some()
-                    || path.is_none_or(|p| !excluded_paths.contains(p))
-                {
-                    return Err(invalid());
-                }
-            } else {
-                let owner = unit.ok_or_else(invalid)?;
-                let expected_rule = format!(
-                    "{}/assessment.{}",
-                    crate::catalog::PATH,
-                    feature.replace('.', "-")
-                );
-                if status != Some("unsupported")
-                    || unit_status[owner] != "unsupported"
-                    || rule != Some(expected_rule.as_str())
-                    || path != physical_owners.get(owner).copied()
-                    || path.is_none()
-                {
-                    return Err(invalid());
-                }
+            let owner = unit.ok_or_else(invalid)?;
+            if status != Some("unsupported")
+                || unit_status[owner] != "unsupported"
+                || path != physical_owners.get(owner).copied()
+                || path.is_none()
+            {
+                return Err(invalid());
             }
         }
     }

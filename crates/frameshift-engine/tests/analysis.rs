@@ -530,12 +530,6 @@ fn stored_unit_statuses_match_occurrences_and_unit_level_findings() {
                 route.blocker = None;
                 route.dependency_path.clear();
             }
-            if evidence == "finding" {
-                for occurrence in &mut analysis.assessment.occurrences {
-                    occurrence.status = None;
-                    occurrence.unit = None;
-                }
-            }
             let document = analysis.document().unwrap();
             let source = frameshift_engine::foundation::SourceText::from_bytes(
                 document.into_bytes(),
@@ -550,6 +544,30 @@ fn stored_unit_statuses_match_occurrences_and_unit_level_findings() {
             )
             .unwrap();
             let mut document = source.as_str().to_owned();
+            if evidence == "finding" {
+                let Some(frameshift_engine::syntax::JsonValue::Object(root)) =
+                    parsed.value(parsed.root())
+                else {
+                    panic!("object required")
+                };
+                let Some(frameshift_engine::syntax::JsonValue::Object(summary)) =
+                    parsed.value(root.get("summary").unwrap())
+                else {
+                    panic!("summary required")
+                };
+                // Retain rule records because findings still reference them.
+                let mut edits = [
+                    (parsed.span(root.get("occurrences").unwrap()).unwrap(), "[]"),
+                    (
+                        parsed.span(summary.get("ruleCoverage").unwrap()).unwrap(),
+                        "{\"numerator\":0,\"denominator\":0,\"basisPoints\":null}",
+                    ),
+                ];
+                edits.sort_by_key(|(s, _)| std::cmp::Reverse(s.start()));
+                for (span, replacement) in edits {
+                    document.replace_range(span.start()..span.end(), replacement);
+                }
+            }
             if evidence == "occurrence" {
                 // All status evidence still belongs to the occurrences;
                 // remove only the finding ownership associations.
@@ -573,6 +591,122 @@ fn stored_unit_statuses_match_occurrences_and_unit_level_findings() {
             );
         }
     }
+}
+#[test]
+fn stored_occurrences_respect_catalog_statuses_rules_and_scope() {
+    for (name, path, source, feature) in [
+        (
+            "proxy",
+            "proxy.ts",
+            "export function proxy(){}",
+            "nextjs.file.proxy",
+        ),
+        (
+            "script",
+            "app/page.tsx",
+            "import Script from 'next/script';export default function Page(){return <Script strategy='worker'/>}",
+            "nextjs.api.script",
+        ),
+    ] {
+        let root = create(
+            &format!("stored-catalog-{name}"),
+            &[("app/page.tsx", PAGE), (path, source)],
+        );
+        let mut analysis = run(&root);
+        assert!(
+            analysis.assessment.occurrences.iter().any(
+                |o| o.occurrence.feature.id == feature && o.status == Some(Status::Unsupported)
+            )
+        );
+        StoredReport::parse(
+            analysis.document().unwrap().into_bytes(),
+            &Limits::default(),
+        )
+        .unwrap();
+        for unit in &mut analysis.assessment.units {
+            unit.status = Status::Auto;
+        }
+        for route in &mut analysis.assessment.routes {
+            route.status = Status::Auto;
+            route.blocker = None;
+            route.dependency_path.clear();
+        }
+        for occurrence in &mut analysis.assessment.occurrences {
+            if occurrence.status.is_some() {
+                occurrence.status = Some(Status::Auto);
+            }
+        }
+        // Preserve the feature and its matching rule while making every
+        // dependent status, finding, metric and headline agree on automatic.
+        let document = analysis
+            .document()
+            .unwrap()
+            .replace("\"severity\": \"blocker\"", "\"severity\": \"info\"")
+            .replace("\"severity\": \"unknown\"", "\"severity\": \"info\"")
+            .replace("\"severity\": \"review\"", "\"severity\": \"info\"");
+        assert!(
+            StoredReport::parse(document.into_bytes(), &Limits::default()).is_err(),
+            "{feature}"
+        );
+    }
+    let root = create("stored-catalog-null", &[("app/page.tsx", PAGE)]);
+    let mut analysis = run(&root);
+    let occurrence = analysis
+        .assessment
+        .occurrences
+        .iter_mut()
+        .find(|o| o.occurrence.feature.id == "nextjs.route.page")
+        .unwrap();
+    occurrence.status = None;
+    occurrence.rule = None;
+    occurrence.unit = None;
+    assert!(
+        StoredReport::parse(
+            analysis.document().unwrap().into_bytes(),
+            &Limits::default()
+        )
+        .is_err()
+    );
+    let root = create(
+        "stored-catalog-unknown",
+        &[
+            (
+                "app/page.tsx",
+                "import Script from 'next/script';export default function Page(){return <Script strategy={choice}/>}",
+            ),
+            (".github/workflows/build.yml", "name: fictional\n"),
+        ],
+    );
+    let mut analysis = run(&root);
+    assert!(
+        analysis
+            .assessment
+            .occurrences
+            .iter()
+            .any(|o| o.occurrence.feature.id == "nextjs.api.script"
+                && o.status == Some(Status::Unknown)
+                && o.rule.is_none())
+    );
+    StoredReport::parse(
+        analysis.document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let occurrence = analysis
+        .assessment
+        .occurrences
+        .iter_mut()
+        .find(|o| o.occurrence.feature.id == "tooling.workflow")
+        .unwrap();
+    assert_eq!(occurrence.status, None);
+    occurrence.status = Some(Status::Auto);
+    assert!(
+        StoredReport::parse(
+            analysis.document().unwrap().into_bytes(),
+            &Limits::default()
+        )
+        .is_err()
+    );
 }
 #[test]
 fn stored_analysis_reports_cannot_claim_migration_outputs() {
