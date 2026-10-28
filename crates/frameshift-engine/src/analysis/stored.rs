@@ -393,11 +393,7 @@ fn location(v: &Value, limits: &Limits, positions: bool) -> Result<(), AnalyzeEr
         _ => Err(invalid()),
     }
 }
-fn nested_records(
-    v: &Value,
-    limits: &Limits,
-    findings: &BTreeSet<&str>,
-) -> Result<(), AnalyzeError> {
+fn nested_records(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     let mut names = BTreeSet::new();
     for dependency in array(v, "dependencies")? {
         if !names.insert(text(dependency, "name")?)
@@ -458,11 +454,19 @@ fn nested_records(
             return Err(invalid());
         }
     }
+    let mut required_tasks = BTreeMap::new();
+    for finding in array(v, "findings")? {
+        if text(finding, "severity")? != "info" {
+            required_tasks.insert(text(finding, "id")?, text(finding, "remediation")?);
+        }
+    }
     for task in array(v, "tasks")? {
-        if !findings.contains(text(task, "finding")?) {
+        if required_tasks.remove(text(task, "finding")?) != Some(text(task, "instruction")?) {
             return Err(invalid());
         }
-        text(task, "instruction")?;
+    }
+    if !required_tasks.is_empty() {
+        return Err(invalid());
     }
     let mut names = BTreeSet::new();
     for limit in array(v, "limits")? {
@@ -927,7 +931,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     {
         return Err(invalid());
     }
-    nested_records(v, limits, &finding_ids)
+    nested_records(v, limits)
 }
 fn check_metric(v: &Value) -> Result<(), AnalyzeError> {
     let n = number(v, "numerator")?;

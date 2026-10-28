@@ -33,6 +33,87 @@ fn run(root: &std::path::Path) -> analysis::Analysis {
     analysis::analyze(root, &AnalyzeOptions::default()).unwrap()
 }
 const PAGE: &str = "export default function Page() { return <h1>Welcome</h1> }\n";
+fn object_mut(value: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
+    let Value::Object(object) = value else {
+        panic!("object required")
+    };
+    object
+}
+fn records_mut<'a>(value: &'a mut Value, section: &str) -> &'a mut Vec<Value> {
+    let Value::Array(records) = object_mut(value).get_mut(section).unwrap() else {
+        panic!("array required")
+    };
+    records
+}
+#[test]
+fn stored_tasks_exactly_project_non_info_finding_remediations() {
+    let root = create(
+        "task-projection",
+        &[(
+            "app/page.tsx",
+            "import {cookies} from 'next/headers';export default function Page(){cookies();return <Missing/>}",
+        )],
+    );
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let findings = original.value().get("findings").unwrap().array();
+    for severity in ["blocker", "unknown", "review", "info"] {
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.get("severity").and_then(Value::text) == Some(severity)),
+            "{severity}"
+        );
+    }
+    let tasks = original.value().get("tasks").unwrap().array();
+    assert!(tasks.len() > 1);
+    for index in 0..tasks.len() {
+        let mut damaged = original.value().clone();
+        records_mut(&mut damaged, "tasks").remove(index);
+        assert!(StoredReport::parse(damaged.document().into_bytes(), &Limits::default()).is_err());
+    }
+    let info = findings
+        .iter()
+        .find(|f| f.get("severity").and_then(Value::text) == Some("info"))
+        .unwrap();
+    for change in ["empty", "duplicate", "instruction", "replacement", "info"] {
+        let mut damaged = original.value().clone();
+        let records = records_mut(&mut damaged, "tasks");
+        match change {
+            "empty" => records.clear(),
+            "duplicate" => records.push(records[0].clone()),
+            "instruction" => {
+                object_mut(&mut records[0]).insert(
+                    "instruction".into(),
+                    Value::String("Invented instruction".into()),
+                );
+            }
+            "replacement" => records[0] = records[1].clone(),
+            "info" => records.push(Value::Object(std::collections::BTreeMap::from([
+                ("finding".into(), info.get("id").unwrap().clone()),
+                (
+                    "instruction".into(),
+                    info.get("remediation").unwrap().clone(),
+                ),
+            ]))),
+            _ => unreachable!(),
+        }
+        assert!(
+            StoredReport::parse(damaged.document().into_bytes(), &Limits::default()).is_err(),
+            "{change}"
+        );
+    }
+    let mut additive = original.value().clone();
+    let records = records_mut(&mut additive, "tasks");
+    records.reverse();
+    object_mut(&mut records[0]).insert("futureEvidence".into(), Value::Bool(true));
+    let accepted =
+        StoredReport::parse(additive.document().into_bytes(), &Limits::default()).unwrap();
+    assert_eq!(accepted.value(), &additive);
+}
 #[test]
 fn stored_config_is_an_exact_projection_of_occurrence_assessments() {
     fn object(value: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
