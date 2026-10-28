@@ -361,6 +361,17 @@ pub(crate) fn astro(
     let source = SourceId(0);
     let analysis = analyze(context, path, &tree, output, role)?;
     check_other_edges(context, path, &tree)?;
+    let generated: Vec<&str> = match role {
+        Role::Page { layout_name, .. } => vec![layout_name],
+        Role::NestedLayout {
+            parent_name, props, ..
+        } => props.iter().copied().chain([*parent_name]).collect(),
+        Role::RootLayout => layout_props(analysis.metadata.as_ref()),
+        Role::Component => Vec::new(),
+    };
+    if binds_any(&tree, tree.root(), &generated)? {
+        return refuse("the file already binds a name that the conversion generates");
+    }
     let anchor = |span: Span| Anchor { source, span };
     let function_anchor = anchor(analysis.function);
     let mut frontmatter = Vec::new();
@@ -533,6 +544,25 @@ pub(crate) fn astro(
         .map_err(|error| format!("emitted provenance is inconsistent ({error})"))?;
     check_comments(&tree, source, &emitted)?;
     Ok((emitted, assumptions))
+}
+
+// Whether any binding identifier below `id` spells one of `names`, which
+// the conversion would declare again in the same frontmatter scope.
+fn binds_any(tree: &SyntaxTree<'_>, id: NodeId, names: &[&str]) -> Result<bool> {
+    if names.is_empty() {
+        return Ok(false);
+    }
+    if matches!(kind(tree, id)?, SyntaxNodeKind::BindingIdentifier { .. })
+        && names.contains(&node_text(tree, id)?)
+    {
+        return Ok(true);
+    }
+    for child in tree.child_nodes(id).into_iter().flatten() {
+        if binds_any(tree, child, names)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 // Only static import declarations are rewritten. Any other runtime edge to
@@ -1327,9 +1357,8 @@ pub(crate) fn relocate(
     for edge in &node.edges {
         match &edge.resolution {
             Resolution::Local { path: target, .. } => {
-                if edge.type_only {
-                    continue;
-                }
+                // Type-only edges move too: the generated tsconfig has no
+                // path aliases, so their specifiers must also be rewritten.
                 let Some(target) = context.targets.get(target) else {
                     return refuse("it imports a file that migrate v0 does not migrate");
                 };
