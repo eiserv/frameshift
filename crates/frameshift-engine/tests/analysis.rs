@@ -2315,7 +2315,8 @@ fn duplicate_route_patterns_are_source_evidence_rather_than_an_engine_error() {
 
 #[test]
 fn convention_strategy_uses_its_entry_and_combines_owned_helpers_in_any_order() {
-    let helper = "function Helper(){const text='Hello';return <p>{text}</p>}";
+    // An early return keeps the helper outside the Astro subset.
+    let helper = "function Helper(){const text='Hello';if(!text)return null;return <p>{text}</p>}";
     for (name, path, entry, helper, expected) in [
         (
             "page",
@@ -2341,7 +2342,7 @@ fn convention_strategy_uses_its_entry_and_combines_owned_helpers_in_any_order() 
         (
             "preact-page",
             "app/page.tsx",
-            "export default function Page(){const text='Hello';return <Helper text={text}/>}",
+            "export default function Page(){const text='Hello';if(!text)return null;return <Helper text={text}/>}",
             "function Helper({text}){return <p>{text}</p>}",
             Strategy::PreactStatic,
         ),
@@ -2349,7 +2350,7 @@ fn convention_strategy_uses_its_entry_and_combines_owned_helpers_in_any_order() 
             "unmapped-helper",
             "app/page.tsx",
             "export default function Page(){return <Helper/>}",
-            "async function Helper(){const text='Hello';return <p>{text}</p>}",
+            "async function Helper(){const text='Hello';if(!text)return null;return <p>{text}</p>}",
             Strategy::Preserve,
         ),
     ] {
@@ -2469,7 +2470,7 @@ fn image_assessment_requires_local_source_provenance_and_astro_context() {
             "{}",
             "import photo from '../assets/photo.png';",
             "src={photo}",
-            "const value=1;return <Image SRC/>",
+            "if(!photo)return null;return <Image SRC/>",
             Status::Review,
         ),
         (
@@ -2562,7 +2563,7 @@ fn image_assessment_requires_local_source_provenance_and_astro_context() {
     }
     for source in [
         "'use client';import Image from 'next/image';import photo from '../assets/photo.png';export default function Page(){return <Image src={photo}/>}",
-        "import Image from 'next/image';import photo from '../assets/photo.png';export default function Page(){return <Helper/>}function Helper(){const n=1;return <Image src={photo}/>}",
+        "import Image from 'next/image';import photo from '../assets/photo.png';export default function Page(){return <Helper/>}function Helper(){const n=1;if(!n)return null;return <Image src={photo}/>}",
         "import Image from 'next/image';import photo from '../assets/photo.png';export default function Page(){const photo='/photo.png';return <Image src={photo}/>}",
     ] {
         let root = create(
@@ -3012,4 +3013,152 @@ fn a_proven_next_link_mapping_does_not_block_async_astro_conversion() {
         .unwrap();
     assert_eq!(page.strategy, Strategy::Astro);
     assert_ne!(page.status, Status::Unsupported);
+}
+#[test]
+fn async_pages_with_body_statements_convert_only_inside_the_printer_subset() {
+    const POSTS: &str = "export const posts=[{slug:'a',title:'A'}];";
+    const IMPORT: &str = "import {posts} from '../../../lib/posts';";
+    const GENERATOR: &str =
+        "export function generateStaticParams(){return posts.map((p)=>({slug:p.slug}))}";
+    const FIND: &str = "const post=posts.find((p)=>p.slug===slug);";
+    for (name, segment, imports, body, strategy, status) in [
+        // The page of the problem report; `{post.title}` may be `true`, which
+        // the printer records as an assumption.
+        (
+            "example",
+            "[slug]",
+            "",
+            format!("async function Post({{params}}){{const {{slug}}=await params;{FIND}return <article><h1>{{post.title}}</h1></article>}}"),
+            Strategy::Astro,
+            Status::Review,
+        ),
+        (
+            "example-literal",
+            "[slug]",
+            "",
+            format!("async function Post({{params}}){{const {{slug}}=await params;{FIND}return <article><h1>{{`${{post.title}}`}}</h1></article>}}"),
+            Strategy::Astro,
+            Status::Auto,
+        ),
+        (
+            "direct-member",
+            "[slug]",
+            "",
+            "function Post({params}){const post=posts.find((p)=>p.slug===params.slug);return <h1>{`${post.title}`}</h1>}".to_owned(),
+            Strategy::Astro,
+            Status::Auto,
+        ),
+        (
+            "early-return",
+            "[slug]",
+            "",
+            format!("async function Post({{params}}){{const {{slug}}=await params;{FIND}if(!post)return null;return <h1>{{`${{post.title}}`}}</h1>}}"),
+            Strategy::Preserve,
+            Status::Unsupported,
+        ),
+        (
+            "conditional-return",
+            "[slug]",
+            "",
+            format!("async function Post({{params}}){{const {{slug}}=await params;{FIND}return post?<h1>{{`${{post.title}}`}}</h1>:<p>Missing</p>}}"),
+            Strategy::Preserve,
+            Status::Unsupported,
+        ),
+        (
+            "hook",
+            "[slug]",
+            "import {useId} from 'react';",
+            format!("async function Post({{params}}){{const {{slug}}=await params;const id=useId();{FIND}return <h1 id={{id}}>{{`${{post.title}}`}}</h1>}}"),
+            Strategy::Preserve,
+            Status::Unsupported,
+        ),
+        (
+            "react-value",
+            "[slug]",
+            "import * as React from 'react';",
+            format!("async function Post({{params}}){{const {{slug}}=await params;const n=React.Children.count(null);{FIND}return <h1>{{`${{n}}${{post.title}}`}}</h1>}}"),
+            Strategy::Preserve,
+            Status::Unsupported,
+        ),
+        (
+            "module-write",
+            "[slug]",
+            "let renders=0;",
+            format!("async function Post({{params}}){{const {{slug}}=await params;renders+=1;{FIND}return <h1>{{`${{post.title}}`}}</h1>}}"),
+            Strategy::Preserve,
+            Status::Unsupported,
+        ),
+        (
+            "unrecognized-params",
+            "[slug]",
+            "",
+            "async function Post({params}){const p=await params;const post=posts.find((x)=>x.slug===p.slug);return <h1>{`${post.title}`}</h1>}".to_owned(),
+            Strategy::Preserve,
+            Status::Unsupported,
+        ),
+        (
+            "catch-all",
+            "[...slug]",
+            "",
+            format!("async function Post({{params}}){{const {{slug}}=await params;{FIND}return <h1>{{`${{post.title}}`}}</h1>}}"),
+            Strategy::Preserve,
+            Status::Unsupported,
+        ),
+        (
+            "sync-early-return",
+            "[slug]",
+            "",
+            "function Post({params}){const post=posts.find((p)=>p.slug===params.slug);if(!post)return null;return <h1>{`${post.title}`}</h1>}".to_owned(),
+            Strategy::PreactStatic,
+            Status::Auto,
+        ),
+    ] {
+        let path = format!("app/blog/{segment}/page.tsx");
+        let generator = if segment == "[slug]" {
+            GENERATOR.to_owned()
+        } else {
+            "export function generateStaticParams(){return posts.map((p)=>({slug:[p.slug]}))}".to_owned()
+        };
+        let page = format!("{IMPORT}{imports}{generator}export default {body}");
+        let root = create(
+            &format!("async-page-{name}"),
+            &[("app/page.tsx", PAGE), ("lib/posts.ts", POSTS), (&path, &page)],
+        );
+        let analysis = run(&root);
+        let unit = analysis
+            .assessment
+            .units
+            .iter()
+            .find(|u| u.kind == UnitKind::Route && u.path.as_ref().is_some_and(|p| p.as_str() == path))
+            .unwrap();
+        assert_eq!(unit.strategy, strategy, "{name}");
+        let component = analysis
+            .assessment
+            .occurrences
+            .iter()
+            .find(|o| {
+                o.occurrence.feature.id == "react.server-component"
+                    && o.occurrence.location.path().is_some_and(|p| p.as_str() == path)
+            })
+            .unwrap();
+        let expected = if strategy == Strategy::Preserve {
+            Status::Unsupported
+        } else {
+            Status::Auto
+        };
+        assert_eq!(component.status, Some(expected), "{name}");
+        let route = analysis
+            .assessment
+            .routes
+            .iter()
+            .find(|r| r.pattern == format!("/blog/{segment}"))
+            .unwrap();
+        // Catch-all enumeration and its review are separate route evidence.
+        if segment == "[slug]" {
+            assert_eq!(route.status, status, "{name}");
+        } else {
+            assert_eq!(route.status, Status::Unsupported, "{name}");
+        }
+        StoredReport::parse(analysis.document().unwrap().into_bytes(), &Limits::default()).unwrap();
+    }
 }
