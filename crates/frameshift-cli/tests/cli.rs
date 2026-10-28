@@ -114,7 +114,6 @@ fn invalid_arguments_and_planned_commands_fail_without_echoing_input() {
         &["migrate"],
         &["verify"],
         &["report"],
-        &["rules"],
         &["explain"],
         &["help", "migrate"],
         &["version", "extra"],

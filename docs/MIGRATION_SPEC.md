@@ -79,7 +79,7 @@ Implemented (`D-074`, section 31 of [IMPLEMENTATION.md](IMPLEMENTATION.md)). A p
 
 ### 5.2 Next.js configuration
 
-The fact API under `D-097` (IMPLEMENTATION.md section 47) now retains evaluated configuration, loading uncertainty, known properties, unknown property-set causes, and unmodeled webpack/Turbopack concerns. It assigns no migration status. The mappings in this section remain planned assessment/transformation rules.
+The fact API under `D-097` (IMPLEMENTATION.md section 47) now retains evaluated configuration, loading uncertainty, known properties, unknown property-set causes, and unmodeled webpack/Turbopack concerns. It assigns no migration status. `D-100` assessment predicates now consume these facts, retaining unknown preconditions; transformation operations remain planned.
 
 `next.config.js`, `.mjs`, and `.ts` are executable modules. Frameshift never executes them. The static evaluator extracts the exported configuration object where it is a literal or built from constants. Each recognized key has a mapping:
 
@@ -125,7 +125,7 @@ Path aliases keep their keys and are retargeted to the moved code (section 16.1)
 
 ### 5.5 Environment variables
 
-Environment files are never read and never copied (see [SECURITY.md](SECURITY.md)). Analysis uses only references in code. The implemented environment classification (`D-096`, section 46 of [IMPLEMENTATION.md](IMPLEMENTATION.md)) records these references, including aliases and destructuring of `process.env`, and whether each module runs during the build, in the browser, or both; the mappings below remain planned.
+Environment files are never read and never copied (see [SECURITY.md](SECURITY.md)). Analysis uses only references in code. The implemented environment classification (`D-096`, section 46 of [IMPLEMENTATION.md](IMPLEMENTATION.md)) records these references, including aliases and destructuring of `process.env`, and whether each module runs during the build, in the browser, or both; `D-100` now assesses the mappings below from these facts; rewriting remains planned.
 
 | Source reference | Mapping | Status |
 | --- | --- | --- |
@@ -198,7 +198,7 @@ Next.js performs client-side navigation between routes and preserves client comp
 | `fetch` with `next: { revalidate }` or `cache: 'no-store'` | The Next.js option is removed. The data becomes a build-time snapshot. | `review` |
 | Segment `revalidate` (ISR) | Content is fixed at build time and needs rebuilds to refresh | `review` |
 | `dynamic = 'force-dynamic'` | | `unsupported` |
-| `cookies()`, `headers()`, `draftMode()` | Request-time APIs (`FS3101`, `FS3102`) | `unsupported` |
+| `cookies()`, `headers()`, `draftMode()` | Request-time APIs (`FS3101` for cookies, `FS3102` for headers, `FS3100` for draft mode) | `unsupported` |
 | `searchParams` in a server page | Not available at build time | `unsupported` |
 | Server Actions (`'use server'`) | No server in static output (`FS3120`) | `unsupported` |
 | `import 'server-only'` | Removed. Astro frontmatter is server-only by construction. | `auto` |
@@ -448,6 +448,7 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 
 | Feature | Feature ID | V1 | Notes |
 | --- | --- | --- | --- |
+| Repository CI workflows | `tooling.workflow` | Out of scope | Listed in file accounting; no application-unit weight |
 | App Router project | `nextjs.project.app-router` | A | Section 5.1 |
 | Pages Router project | `nextjs.project.pages-router` | U | Analysis only. Later: V2. |
 | Static configuration keys | `nextjs.config.*` | A, R, or U | Per key, section 5.2 |
@@ -458,7 +459,7 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 | Bun binary lockfile | `npm.lockfile.bun-binary` | R | Not parsed. Declared ranges used instead. |
 | Monorepo workspace package | `npm.workspace` | R | `D-022` |
 | Environment variable references | `env.reference` | A or R | Section 5.5 |
-| Deployment configuration (`vercel.json`, `netlify.toml`, CI workflows) | `deploy.config` | U | Manual tasks (build command, output directory `out/` to `dist/`) |
+| Deployment configuration (`vercel.json`, `netlify.toml`) | `deploy.config` | U | Manual tasks (build command, output directory `out/` to `dist/`) |
 | Test setup (Jest, Vitest, Playwright) | `test.setup` | Out of scope | Reported separately, not migrated in V1 |
 
 ### 17.2 Routing
@@ -492,7 +493,7 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 | ISR `revalidate` | `nextjs.segment.revalidate` | R | |
 | `force-dynamic` | `nextjs.segment.dynamic` | U | |
 | `export const runtime` | `nextjs.segment.runtime` | A | Dropped (section 8) |
-| `cookies`, `headers`, `draftMode` | `nextjs.api.request` | U | `FS3101`, `FS3102` |
+| `cookies`, `headers`, `draftMode` | `nextjs.api.request` | U | `FS3101` for cookies, `FS3102` for headers, `FS3100` for draft mode |
 | Server `searchParams` | `nextjs.api.search-params-server` | U | |
 | Server Actions | `nextjs.api.server-action` | U | `FS3120`. Later: V3. |
 | `server-only`, `client-only` | `nextjs.guard` | A | Removed |
@@ -510,6 +511,7 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 | `next/dynamic` with `ssr: false` | `nextjs.api.dynamic-no-ssr` | A | `client:only` |
 | Other `next/dynamic` calls | `nextjs.api.dynamic` | R | Regular imports (section 10) |
 | Serializable props across the boundary | `boundary.props` | A | |
+| Boundary props with statically unknown types | `boundary.dynamic-props` | R | Section 9.5; literals and plain data remain A |
 | JSX props across the boundary | `boundary.jsx-props` | R | Named slots |
 | Promise props across the boundary | `boundary.promise-props` | U | |
 | Compat-covered hooks and APIs | `react.hook.*`, `react.api.*` | A | Section 9.6 |

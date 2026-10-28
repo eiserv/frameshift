@@ -130,6 +130,12 @@ pub static FEATURES: &[Feature] = &[
     f("asset.import", "Static asset import", P, A),
     f("asset.json-import", "JSON module import", P, A),
     f("asset.public", "Public directory asset", P, A),
+    f(
+        "boundary.dynamic-props",
+        "Props with statically unknown value types",
+        C,
+        R,
+    ),
     f("boundary.jsx-props", "JSX props across the boundary", C, R),
     f(
         "boundary.promise-props",
@@ -374,6 +380,12 @@ pub static FEATURES: &[Feature] = &[
         UNKNOWN_ONLY,
     ),
     f("test.setup", "Test setup", J, V1::OutOfScope),
+    f(
+        "tooling.workflow",
+        "Repository CI workflow",
+        J,
+        V1::OutOfScope,
+    ),
     f("ts.config", "TypeScript or JavaScript configuration", J, A),
 ];
 

@@ -396,7 +396,7 @@ fn detection_maps_facts_to_catalog_features() {
         ("nextjs.project.pages-router", "pages"),
         ("npm.lockfile.bun-binary", "bun.lockb"),
         ("deploy.config", "vercel.json"),
-        ("deploy.config", ".github/workflows/ci.yml"),
+        ("tooling.workflow", ".github/workflows/ci.yml"),
         ("test.setup", "jest.config.js"),
         ("css.tailwind", "tailwind.config.ts"),
         ("ts.config", "tsconfig.json"),

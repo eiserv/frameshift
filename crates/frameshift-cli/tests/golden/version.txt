@@ -1,6 +1,6 @@
 Frameshift @ENGINE_VERSION@
-Rulesets: none (not implemented)
-Knowledge bases: none (not implemented)
-Target profiles: none (not implemented)
+Rulesets: nextjs-to-astro-preact/assessment-v1
+Knowledge bases: 2026.10.1
+Target profiles: astro7-preact10
 Build commit: @BUILD_COMMIT_TEXT@
 Toolchain: @TOOLCHAIN@

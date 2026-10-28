@@ -1,0 +1,1029 @@
+{
+  "kind": "frameshift.analysis",
+  "schemaVersion": 1,
+  "engineVersion": "@ENGINE_VERSION@",
+  "ruleset": "nextjs-to-astro-preact/assessment-v1",
+  "knowledgeBase": "2026.10.1",
+  "targetProfile": "astro7-preact10",
+  "weights": "weights-v1",
+  "source": {
+    "adapter": "nextjs",
+    "version": "16.2.0",
+    "package": "."
+  },
+  "target": "astro-preact",
+  "limits": [
+    {
+      "name": "analysis.max-dependency-work",
+      "value": 16777216
+    },
+    {
+      "name": "analysis.max-occurrences",
+      "value": 100000
+    },
+    {
+      "name": "analysis.max-report-bytes",
+      "value": 67108864
+    },
+    {
+      "name": "analysis.max-units",
+      "value": 100000
+    },
+    {
+      "name": "css.max-tokens",
+      "value": 4194304
+    },
+    {
+      "name": "css.parser.max-depth",
+      "value": 128
+    },
+    {
+      "name": "css.parser.max-diagnostics",
+      "value": 256
+    },
+    {
+      "name": "css.parser.max-nodes",
+      "value": 4194304
+    },
+    {
+      "name": "css.parser.max-work",
+      "value": 16777216
+    },
+    {
+      "name": "edit.max-edits",
+      "value": 100000
+    },
+    {
+      "name": "edit.max-output-bytes",
+      "value": 67108864
+    },
+    {
+      "name": "emit.max-depth",
+      "value": 256
+    },
+    {
+      "name": "emit.max-output-bytes",
+      "value": 67108864
+    },
+    {
+      "name": "evaluate.max-depth",
+      "value": 64
+    },
+    {
+      "name": "evaluate.max-value-size",
+      "value": 1048576
+    },
+    {
+      "name": "evaluate.max-work",
+      "value": 16777216
+    },
+    {
+      "name": "finding.max-findings",
+      "value": 100000
+    },
+    {
+      "name": "finding.max-text-bytes",
+      "value": 65536
+    },
+    {
+      "name": "hash.max-bytes",
+      "value": 2305843009213693951
+    },
+    {
+      "name": "identifier.max-bytes",
+      "value": 131072
+    },
+    {
+      "name": "ignore.max-match-work",
+      "value": 17179869184
+    },
+    {
+      "name": "ignore.max-total-bytes",
+      "value": 4194304
+    },
+    {
+      "name": "json.max-depth",
+      "value": 256
+    },
+    {
+      "name": "json.max-nodes",
+      "value": 4194304
+    },
+    {
+      "name": "modules.max-config-depth",
+      "value": 32
+    },
+    {
+      "name": "modules.max-edges",
+      "value": 1000000
+    },
+    {
+      "name": "modules.max-files",
+      "value": 100000
+    },
+    {
+      "name": "modules.max-work",
+      "value": 268435456
+    },
+    {
+      "name": "package.max-lockfile-bytes",
+      "value": 67108864
+    },
+    {
+      "name": "parse.lexical.max-comments",
+      "value": 100000
+    },
+    {
+      "name": "parse.lexical.max-identifier-bytes",
+      "value": 1048576
+    },
+    {
+      "name": "parse.lexical.max-jsx-text-bytes",
+      "value": 1048576
+    },
+    {
+      "name": "parse.lexical.max-number-bytes",
+      "value": 1048576
+    },
+    {
+      "name": "parse.lexical.max-regexp-bytes",
+      "value": 1048576
+    },
+    {
+      "name": "parse.lexical.max-string-bytes",
+      "value": 1048576
+    },
+    {
+      "name": "parse.lexical.max-template-bytes",
+      "value": 1048576
+    },
+    {
+      "name": "parse.max-nesting-depth",
+      "value": 256
+    },
+    {
+      "name": "parse.max-nodes",
+      "value": 100000
+    },
+    {
+      "name": "parse.max-tokens",
+      "value": 200000
+    },
+    {
+      "name": "parse.recovery.max-diagnostics",
+      "value": 256
+    },
+    {
+      "name": "parse.recovery.max-work",
+      "value": 1048576
+    },
+    {
+      "name": "path.max-components",
+      "value": 256
+    },
+    {
+      "name": "path.max-path-bytes",
+      "value": 32768
+    },
+    {
+      "name": "run.max-directory-depth",
+      "value": 255
+    },
+    {
+      "name": "run.max-entries",
+      "value": 1000000
+    },
+    {
+      "name": "run.max-file-bytes",
+      "value": 67108864
+    },
+    {
+      "name": "run.max-files",
+      "value": 100000
+    },
+    {
+      "name": "run.max-total-bytes",
+      "value": 1073741824
+    },
+    {
+      "name": "sass.max-depth",
+      "value": 128
+    },
+    {
+      "name": "sass.max-nodes",
+      "value": 1000000
+    },
+    {
+      "name": "sass.max-work",
+      "value": 16777216
+    },
+    {
+      "name": "text.max-source-bytes",
+      "value": 16777216
+    },
+    {
+      "name": "workspace.max-alternatives",
+      "value": 256
+    },
+    {
+      "name": "workspace.max-match-work",
+      "value": 100000000
+    },
+    {
+      "name": "workspace.max-pattern-bytes",
+      "value": 4096
+    },
+    {
+      "name": "workspace.max-patterns",
+      "value": 1024
+    },
+    {
+      "name": "yaml.max-depth",
+      "value": 128
+    },
+    {
+      "name": "yaml.max-nodes",
+      "value": 4194304
+    },
+    {
+      "name": "yarn.max-depth",
+      "value": 64
+    },
+    {
+      "name": "yarn.max-nodes",
+      "value": 4194304
+    }
+  ],
+  "summary": {
+    "verdict": "Good candidate with manual work: recognized features block the listed routes; review all unknown evidence.",
+    "evidence": [
+      "F0001",
+      "F0002",
+      "F0003"
+    ],
+    "unitCount": 8,
+    "totalWeight": 34,
+    "distribution": [
+      {
+        "status": "auto",
+        "count": 6,
+        "metric": {
+          "numerator": 24,
+          "denominator": 34,
+          "basisPoints": 7058
+        }
+      },
+      {
+        "status": "review",
+        "count": 1,
+        "metric": {
+          "numerator": 2,
+          "denominator": 34,
+          "basisPoints": 588
+        }
+      },
+      {
+        "status": "unknown",
+        "count": 0,
+        "metric": {
+          "numerator": 0,
+          "denominator": 34,
+          "basisPoints": 0
+        }
+      },
+      {
+        "status": "unsupported",
+        "count": 1,
+        "metric": {
+          "numerator": 8,
+          "denominator": 34,
+          "basisPoints": 2352
+        }
+      }
+    ],
+    "unweightedDistribution": [
+      {
+        "status": "auto",
+        "count": 6,
+        "metric": {
+          "numerator": 6,
+          "denominator": 8,
+          "basisPoints": 7500
+        }
+      },
+      {
+        "status": "review",
+        "count": 1,
+        "metric": {
+          "numerator": 1,
+          "denominator": 8,
+          "basisPoints": 1250
+        }
+      },
+      {
+        "status": "unknown",
+        "count": 0,
+        "metric": {
+          "numerator": 0,
+          "denominator": 8,
+          "basisPoints": 0
+        }
+      },
+      {
+        "status": "unsupported",
+        "count": 1,
+        "metric": {
+          "numerator": 1,
+          "denominator": 8,
+          "basisPoints": 1250
+        }
+      }
+    ],
+    "analysisCoverage": {
+      "numerator": 34,
+      "denominator": 34,
+      "basisPoints": 10000
+    },
+    "automaticFeasibility": {
+      "numerator": 24,
+      "denominator": 34,
+      "basisPoints": 7058
+    },
+    "feasibilityWithReview": {
+      "numerator": 26,
+      "denominator": 34,
+      "basisPoints": 7647
+    },
+    "ruleCoverage": {
+      "numerator": 0,
+      "denominator": 14,
+      "basisPoints": 0
+    },
+    "routeReadiness": [
+      {
+        "status": "auto",
+        "count": 0
+      },
+      {
+        "status": "review",
+        "count": 1
+      },
+      {
+        "status": "unknown",
+        "count": 0
+      },
+      {
+        "status": "unsupported",
+        "count": 1
+      }
+    ]
+  },
+  "routes": [
+    {
+      "pattern": "/",
+      "unit": "route:/",
+      "status": "review",
+      "closure": [
+        "component:counter.tsx#Counter",
+        "config:nextjs.project.app-router",
+        "config:npm.manifest",
+        "config:source.analysis",
+        "layout:app/layout.tsx",
+        "module:counter.tsx",
+        "route:/"
+      ],
+      "blocker": null,
+      "dependencyPath": [],
+      "outputPath": null
+    },
+    {
+      "pattern": "/private",
+      "unit": "route:/private",
+      "status": "unsupported",
+      "closure": [
+        "config:nextjs.project.app-router",
+        "config:npm.manifest",
+        "config:source.analysis",
+        "layout:app/layout.tsx",
+        "route:/private"
+      ],
+      "blocker": "route:/private",
+      "dependencyPath": [
+        "app/private/page.tsx"
+      ],
+      "outputPath": null
+    }
+  ],
+  "units": [
+    {
+      "id": "component:counter.tsx#Counter",
+      "kind": "component",
+      "path": "counter.tsx",
+      "ranges": [
+        {
+          "start": 59,
+          "end": 171
+        }
+      ],
+      "client": true,
+      "weight": 5,
+      "status": "auto",
+      "strategy": "island",
+      "outcome": "not-run",
+      "verification": [],
+      "findings": []
+    },
+    {
+      "id": "config:nextjs.project.app-router",
+      "kind": "config",
+      "path": "app",
+      "ranges": [],
+      "client": false,
+      "weight": 2,
+      "status": "auto",
+      "strategy": "not-applicable",
+      "outcome": "not-run",
+      "verification": [],
+      "findings": []
+    },
+    {
+      "id": "config:npm.manifest",
+      "kind": "config",
+      "path": "package.json",
+      "ranges": [],
+      "client": false,
+      "weight": 2,
+      "status": "auto",
+      "strategy": "not-applicable",
+      "outcome": "not-run",
+      "verification": [],
+      "findings": []
+    },
+    {
+      "id": "config:source.analysis",
+      "kind": "config",
+      "path": null,
+      "ranges": [],
+      "client": false,
+      "weight": 2,
+      "status": "review",
+      "strategy": "not-applicable",
+      "outcome": "not-run",
+      "verification": [],
+      "findings": [
+        "F0002"
+      ]
+    },
+    {
+      "id": "layout:app/layout.tsx",
+      "kind": "layout",
+      "path": "app/layout.tsx",
+      "ranges": [],
+      "client": false,
+      "weight": 5,
+      "status": "auto",
+      "strategy": "astro",
+      "outcome": "not-run",
+      "verification": [],
+      "findings": []
+    },
+    {
+      "id": "module:counter.tsx",
+      "kind": "module",
+      "path": "counter.tsx",
+      "ranges": [
+        {
+          "start": 0,
+          "end": 59
+        }
+      ],
+      "client": true,
+      "weight": 2,
+      "status": "auto",
+      "strategy": "not-applicable",
+      "outcome": "not-run",
+      "verification": [],
+      "findings": []
+    },
+    {
+      "id": "route:/",
+      "kind": "route",
+      "path": "app/page.tsx",
+      "ranges": [],
+      "client": false,
+      "weight": 8,
+      "status": "auto",
+      "strategy": "astro",
+      "outcome": "not-run",
+      "verification": [],
+      "findings": []
+    },
+    {
+      "id": "route:/private",
+      "kind": "route",
+      "path": "app/private/page.tsx",
+      "ranges": [],
+      "client": false,
+      "weight": 8,
+      "status": "unsupported",
+      "strategy": "preserve",
+      "outcome": "not-run",
+      "verification": [],
+      "findings": [
+        "F0001"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "app/layout.tsx",
+      "class": "units",
+      "units": [
+        "layout:app/layout.tsx"
+      ],
+      "reason": "Owned by counting units.",
+      "outputPaths": []
+    },
+    {
+      "path": "app/page.tsx",
+      "class": "units",
+      "units": [
+        "route:/"
+      ],
+      "reason": "Owned by counting units.",
+      "outputPaths": []
+    },
+    {
+      "path": "app/private/page.tsx",
+      "class": "units",
+      "units": [
+        "route:/private"
+      ],
+      "reason": "Owned by counting units.",
+      "outputPaths": []
+    },
+    {
+      "path": "counter.tsx",
+      "class": "units",
+      "units": [
+        "component:counter.tsx#Counter",
+        "module:counter.tsx"
+      ],
+      "reason": "Owned by counting units.",
+      "outputPaths": []
+    },
+    {
+      "path": "package.json",
+      "class": "units",
+      "units": [
+        "config:npm.manifest"
+      ],
+      "reason": "Public asset or non-code data; excluded from headline weights.",
+      "outputPaths": []
+    },
+    {
+      "path": "public/logo.svg",
+      "class": "verbatim",
+      "units": [],
+      "reason": "Public asset or non-code data; excluded from headline weights.",
+      "outputPaths": []
+    }
+  ],
+  "unrepresentableEntries": 0,
+  "dependencies": [
+    {
+      "name": "next",
+      "fields": [
+        "dependencies"
+      ],
+      "declared": [
+        "16.2.0"
+      ],
+      "resolved": null,
+      "class": "framework",
+      "evidence": "MIGRATION_SPEC.md section 5.4: source-framework packages are replaced or removed.",
+      "usedIn": [
+        "app/private/page.tsx"
+      ]
+    },
+    {
+      "name": "react",
+      "fields": [
+        "dependencies"
+      ],
+      "declared": [
+        "19.2.0"
+      ],
+      "resolved": null,
+      "class": "framework",
+      "evidence": "MIGRATION_SPEC.md section 5.4: source-framework packages are replaced or removed.",
+      "usedIn": [
+        "counter.tsx"
+      ]
+    },
+    {
+      "name": "react-dom",
+      "fields": [
+        "dependencies"
+      ],
+      "declared": [
+        "19.2.0"
+      ],
+      "resolved": null,
+      "class": "framework",
+      "evidence": "MIGRATION_SPEC.md section 5.4: source-framework packages are replaced or removed.",
+      "usedIn": []
+    }
+  ],
+  "occurrences": [
+    {
+      "feature": "nextjs.navigation.client",
+      "unit": "config:source.analysis",
+      "status": "review",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-navigation-client",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "project"
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "nextjs.project.app-router",
+      "unit": "config:nextjs.project.app-router",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-project-app-router",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "file",
+        "path": "app"
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "nextjs.file.layout",
+      "unit": "layout:app/layout.tsx",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-file-layout",
+      "reason": "The layout remains in the static layout chain.",
+      "location": {
+        "scope": "file",
+        "path": "app/layout.tsx"
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "react.server-component",
+      "unit": "layout:app/layout.tsx",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.react-server-component",
+      "reason": "The component has an Astro or synchronous static Preact strategy.",
+      "location": {
+        "scope": "text",
+        "path": "app/layout.tsx",
+        "start": 15,
+        "end": 87
+      },
+      "detail": "Component { name: Some(\"Layout\") }"
+    },
+    {
+      "feature": "nextjs.route.page",
+      "unit": "route:/",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-route-page",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "file",
+        "path": "app/page.tsx"
+      },
+      "detail": "Route { pattern: \"/\" }"
+    },
+    {
+      "feature": "react.server-component",
+      "unit": "route:/",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.react-server-component",
+      "reason": "The component has an Astro or synchronous static Preact strategy.",
+      "location": {
+        "scope": "text",
+        "path": "app/page.tsx",
+        "start": 48,
+        "end": 96
+      },
+      "detail": "Component { name: Some(\"Page\") }"
+    },
+    {
+      "feature": "nextjs.route.page",
+      "unit": "route:/private",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-route-page",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "file",
+        "path": "app/private/page.tsx"
+      },
+      "detail": "Route { pattern: \"/private\" }"
+    },
+    {
+      "feature": "nextjs.route.segment",
+      "unit": "route:/private",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-route-segment",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "file",
+        "path": "app/private/page.tsx"
+      },
+      "detail": "Route { pattern: \"/private\" }"
+    },
+    {
+      "feature": "react.server-component",
+      "unit": "route:/private",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.react-server-component",
+      "reason": "The component has an Astro or synchronous static Preact strategy.",
+      "location": {
+        "scope": "text",
+        "path": "app/private/page.tsx",
+        "start": 52,
+        "end": 103
+      },
+      "detail": "Component { name: Some(\"Private\") }"
+    },
+    {
+      "feature": "nextjs.api.request",
+      "unit": "route:/private",
+      "status": "unsupported",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-api-request",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "text",
+        "path": "app/private/page.tsx",
+        "start": 71,
+        "end": 80
+      },
+      "detail": "Api { specifier: \"next/headers\", export: \"cookies\" }"
+    },
+    {
+      "feature": "component.island",
+      "unit": "module:counter.tsx",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.component-island",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "text",
+        "path": "counter.tsx",
+        "start": 0,
+        "end": 12
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "react.hook.use-state",
+      "unit": "component:counter.tsx#Counter",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.react-hook-use-state",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "text",
+        "path": "counter.tsx",
+        "start": 99,
+        "end": 110
+      },
+      "detail": "Api { specifier: \"react\", export: \"useState\" }"
+    },
+    {
+      "feature": "npm.manifest",
+      "unit": "config:npm.manifest",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.npm-manifest",
+      "reason": "The manifest has no custom scripts; standard Next.js script commands have deterministic Astro mappings.",
+      "location": {
+        "scope": "file",
+        "path": "package.json"
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "asset.public",
+      "unit": null,
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.asset-public",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "file",
+        "path": "public/logo.svg"
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "component.astro-convertible",
+      "unit": "layout:app/layout.tsx",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.component-astro-convertible",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "text",
+        "path": "app/layout.tsx",
+        "start": 15,
+        "end": 87
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "component.astro-convertible",
+      "unit": "route:/",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.component-astro-convertible",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "text",
+        "path": "app/page.tsx",
+        "start": 48,
+        "end": 96
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "component.preact-static",
+      "unit": "route:/private",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.component-preact-static",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "text",
+        "path": "app/private/page.tsx",
+        "start": 52,
+        "end": 103
+      },
+      "detail": "None"
+    },
+    {
+      "feature": "boundary.props",
+      "unit": "route:/",
+      "status": "auto",
+      "rule": "nextjs-to-astro-preact/assessment.boundary-props",
+      "reason": "The compatibility matrix fixes this feature's V1 status.",
+      "location": {
+        "scope": "text",
+        "path": "app/page.tsx",
+        "start": 71,
+        "end": 95
+      },
+      "detail": "None"
+    }
+  ],
+  "config": [],
+  "rules": [
+    {
+      "id": "nextjs-to-astro-preact/assessment.asset-public",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.boundary-props",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.component-astro-convertible",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.component-island",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.component-preact-static",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.nextjs-api-request",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.nextjs-file-layout",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.nextjs-navigation-client",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.nextjs-project-app-router",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.nextjs-route-page",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.nextjs-route-segment",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.npm-manifest",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.react-hook-use-state",
+      "version": 1,
+      "phase": "assessment"
+    },
+    {
+      "id": "nextjs-to-astro-preact/assessment.react-server-component",
+      "version": 1,
+      "phase": "assessment"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F0001",
+      "code": "FS3101",
+      "severity": "blocker",
+      "location": {
+        "scope": "text",
+        "path": "app/private/page.tsx",
+        "start": {
+          "offset": 71,
+          "line": 1,
+          "column": 72
+        },
+        "end": {
+          "offset": 80,
+          "line": 1,
+          "column": 81
+        }
+      },
+      "unit": "route:/private",
+      "feature": "nextjs.api.request",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-api-request",
+      "message": "cookies() requires request-time rendering",
+      "explanation": "Next.js cookies() reads request-specific cookie state, which static output cannot provide.",
+      "remediation": "Replace request-time data with build-time data or a separately hosted API."
+    },
+    {
+      "id": "F0002",
+      "code": "FS3210",
+      "severity": "review",
+      "location": {
+        "scope": "project"
+      },
+      "unit": "config:source.analysis",
+      "feature": "nextjs.navigation.client",
+      "rule": "nextjs-to-astro-preact/assessment.nextjs-navigation-client",
+      "message": "Navigation changes to full page loads",
+      "explanation": "The target static site uses browser navigation rather than the Next.js client router.",
+      "remediation": "Review state persistence, scroll behavior, and navigation-dependent interactions."
+    },
+    {
+      "id": "F0003",
+      "code": "FS1042",
+      "severity": "review",
+      "location": {
+        "scope": "file",
+        "path": "package.json"
+      },
+      "message": "Next.js version imprecise",
+      "explanation": "No lockfile was read, so the Next.js version is the lowest version of the declared range, or unknown. If this package is a member of a workspace, run Frameshift on the workspace root and select the package.",
+      "remediation": "Install the dependencies so that the lockfile resolves next, then run Frameshift again."
+    },
+    {
+      "id": "F0004",
+      "code": "FS1043",
+      "severity": "info",
+      "location": {
+        "scope": "file",
+        "path": "package.json"
+      },
+      "message": "Next.js configuration file not loaded as expected",
+      "explanation": "No next.config file exists in the package directory or above it inside the root. Next.js uses its defaults unless a directory above the analyzed root has one.",
+      "remediation": "Use next.config.js, next.config.mjs, or, from Next.js 15, next.config.ts."
+    }
+  ],
+  "verification": [],
+  "tasks": [
+    {
+      "finding": "F0001",
+      "instruction": "Replace request-time data with build-time data or a separately hosted API."
+    },
+    {
+      "finding": "F0002",
+      "instruction": "Review state persistence, scroll behavior, and navigation-dependent interactions."
+    },
+    {
+      "finding": "F0003",
+      "instruction": "Install the dependencies so that the lockfile resolves next, then run Frameshift again."
+    }
+  ],
+  "helpers": []
+}

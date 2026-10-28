@@ -402,9 +402,11 @@ fn files(out: &mut Out, snapshot: &Snapshot, project: &Project) {
                 Location::File(path.clone()),
                 Detail::None,
             ),
-            _ if name.starts_with(".github/workflows/") => {
-                out.push("deploy.config", Location::File(path.clone()), Detail::None)
-            }
+            _ if name.starts_with(".github/workflows/") => out.push(
+                "tooling.workflow",
+                Location::File(path.clone()),
+                Detail::None,
+            ),
             _ => {}
         }
     }

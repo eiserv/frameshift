@@ -1,5 +1,5 @@
 project nextjs.navigation.client review None
-.github/workflows/ci.yml deploy.config unsupported None
+.github/workflows/ci.yml tooling.workflow - None
 app nextjs.project.app-router auto None
 app/(marketing)/pricing/page.tsx nextjs.route.group auto Segment { pattern: "/pricing", name: "(marketing)" }
 app/(marketing)/pricing/page.tsx nextjs.route.page auto Route { pattern: "/pricing" }

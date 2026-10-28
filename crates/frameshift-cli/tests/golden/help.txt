@@ -3,14 +3,18 @@ Frameshift: deterministic framework migration engine
 Usage: frameshift <command> [options]
 
 Commands available in this build:
-  help [command]      Print usage for help, inspect, or version
+  help [command]      Print usage for available commands
   inspect [<source>]  Identify a project without changing it
+  analyze [<source>]  Assess migration to astro-preact
+  report <file>       Render a stored analysis report
+  explain <id>        Explain a finding, feature, or assessment rule
+  rules               List assessment rule metadata
   version             Print engine and build information
 
 Options:
   -h, --help          Print usage
   --version           Print the short version string
-  --format text|json  Select inspect or version output (default: text)
-  --package <dir>     Inspect one package of a workspace
+  --format text|json  Select command output (default: text)
+  --package <dir>     Select one workspace package
 
-Analysis, migration, and verification are not implemented.
+Migration and verification commands are not implemented.

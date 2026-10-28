@@ -554,3 +554,27 @@ fn runtime_declaration_targets_keep_parse_failures_without_traversal() {
             .all(|edge| edge.importer == &path("app/page.tsx"))
     );
 }
+
+#[test]
+fn composed_visitor_observes_each_strict_module_once_without_changing_the_model() {
+    let (snapshot, expected) = build("composed-visitor");
+    let mut visited = Vec::new();
+    let actual = project::build_with(
+        &snapshot,
+        None,
+        &path("app"),
+        EXTENSIONS,
+        None,
+        &Limits::default(),
+        &mut |path, tree, bindings| {
+            assert!(!tree.nodes().is_empty());
+            assert!(!bindings.scopes().is_empty());
+            visited.push(path.clone());
+        },
+    )
+    .unwrap();
+    assert_eq!(actual, expected);
+    let strict: Vec<_> = actual.semantics().iter().map(|m| m.path.clone()).collect();
+    assert_eq!(visited, strict);
+    assert!(visited.windows(2).all(|pair| pair[0] < pair[1]));
+}

@@ -1,0 +1,882 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frameshift analysis, version 1",
+  "description": "Read-only assessment evidence. Metrics do not establish behavioral equivalence. Additional fields are permitted; cross-reference and accounting invariants are also checked by the stored-report reader.",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "const": "frameshift.analysis"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "engineVersion": {
+      "type": "string"
+    },
+    "ruleset": {
+      "type": "string"
+    },
+    "knowledgeBase": {
+      "type": "string"
+    },
+    "targetProfile": {
+      "type": "string"
+    },
+    "weights": {
+      "const": "weights-v1"
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "const": "nextjs"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "package": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "adapter",
+        "version",
+        "package"
+      ],
+      "additionalProperties": true
+    },
+    "target": {
+      "const": "astro-preact"
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "routes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/route"
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unit"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    },
+    "unrepresentableEntries": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dependency"
+      }
+    },
+    "occurrences": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/occurrence"
+      }
+    },
+    "config": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "feature": {
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/status"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "feature",
+          "status",
+          "reason"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "const": 1
+          },
+          "phase": {
+            "const": "assessment"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "phase"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "verification": {
+      "type": "array",
+      "items": {}
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "finding": {
+            "type": "string"
+          },
+          "instruction": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding",
+          "instruction"
+        ],
+        "additionalProperties": true
+      }
+    },
+    "helpers": {
+      "type": "array",
+      "items": {}
+    },
+    "limits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": [
+    "kind",
+    "schemaVersion",
+    "engineVersion",
+    "ruleset",
+    "knowledgeBase",
+    "targetProfile",
+    "weights",
+    "source",
+    "target",
+    "limits",
+    "summary",
+    "routes",
+    "units",
+    "files",
+    "unrepresentableEntries",
+    "dependencies",
+    "occurrences",
+    "config",
+    "rules",
+    "findings",
+    "verification",
+    "tasks",
+    "helpers"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "status": {
+      "enum": [
+        "auto",
+        "review",
+        "unknown",
+        "unsupported"
+      ]
+    },
+    "metric": {
+      "type": "object",
+      "properties": {
+        "numerator": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "denominator": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "basisPoints": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator",
+        "basisPoints"
+      ],
+      "additionalProperties": true
+    },
+    "position": {
+      "type": "object",
+      "properties": {
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "offset",
+        "line",
+        "column"
+      ],
+      "additionalProperties": true
+    },
+    "finding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^F[0-9]{4,}$"
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^FS[0-9]{4}$"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "blocker",
+            "unknown",
+            "review",
+            "info"
+          ]
+        },
+        "location": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "const": "project"
+                }
+              },
+              "required": [
+                "scope"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "const": "file"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "scope",
+                "path"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "const": "text"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "start": {
+                  "$ref": "#/$defs/position"
+                },
+                "end": {
+                  "$ref": "#/$defs/position"
+                }
+              },
+              "required": [
+                "scope",
+                "path",
+                "start",
+                "end"
+              ],
+              "additionalProperties": true
+            }
+          ]
+        },
+        "unit": {
+          "type": "string"
+        },
+        "feature": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "remediation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "code",
+        "severity",
+        "location",
+        "message",
+        "explanation",
+        "remediation"
+      ],
+      "additionalProperties": true
+    },
+    "unit": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "route",
+            "layout",
+            "provider",
+            "endpoint",
+            "component",
+            "route-file",
+            "module",
+            "stylesheet",
+            "config"
+          ]
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "end": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "client": {
+          "type": "boolean"
+        },
+        "weight": {
+          "enum": [
+            2,
+            3,
+            4,
+            5,
+            8
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "strategy": {
+          "enum": [
+            "astro",
+            "preact-static",
+            "island",
+            "preserve",
+            "not-applicable"
+          ]
+        },
+        "outcome": {
+          "const": "not-run"
+        },
+        "verification": {
+          "type": "array",
+          "items": {}
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "ranges",
+        "client",
+        "weight",
+        "status",
+        "strategy",
+        "outcome",
+        "verification",
+        "findings"
+      ],
+      "additionalProperties": true
+    },
+    "route": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "closure": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "blocker": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dependencyPath": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outputPath": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "pattern",
+        "unit",
+        "status",
+        "closure",
+        "blocker",
+        "dependencyPath",
+        "outputPath"
+      ],
+      "additionalProperties": true
+    },
+    "file": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "class": {
+          "enum": [
+            "units",
+            "verbatim",
+            "out-of-scope",
+            "ignored"
+          ]
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason": {
+          "type": "string"
+        },
+        "outputPaths": {
+          "type": "array",
+          "maxItems": 0,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "path",
+        "class",
+        "units",
+        "reason",
+        "outputPaths"
+      ],
+      "additionalProperties": true
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unitCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalWeight": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "distribution": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "$ref": "#/$defs/status"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "metric": {
+                "$ref": "#/$defs/metric"
+              }
+            },
+            "required": [
+              "status",
+              "count",
+              "metric"
+            ],
+            "additionalProperties": true
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "unweightedDistribution": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "$ref": "#/$defs/status"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "metric": {
+                "$ref": "#/$defs/metric"
+              }
+            },
+            "required": [
+              "status",
+              "count",
+              "metric"
+            ],
+            "additionalProperties": true
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "analysisCoverage": {
+          "$ref": "#/$defs/metric"
+        },
+        "automaticFeasibility": {
+          "$ref": "#/$defs/metric"
+        },
+        "feasibilityWithReview": {
+          "$ref": "#/$defs/metric"
+        },
+        "ruleCoverage": {
+          "$ref": "#/$defs/metric"
+        },
+        "routeReadiness": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "$ref": "#/$defs/status"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "status",
+              "count"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "verdict",
+        "evidence",
+        "unitCount",
+        "totalWeight",
+        "distribution",
+        "unweightedDistribution",
+        "analysisCoverage",
+        "automaticFeasibility",
+        "feasibilityWithReview",
+        "ruleCoverage",
+        "routeReadiness"
+      ],
+      "additionalProperties": true
+    },
+    "occurrence": {
+      "type": "object",
+      "properties": {
+        "feature": {
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/status"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "location": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "const": "project"
+                }
+              },
+              "required": [
+                "scope"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "const": "file"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "scope",
+                "path"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "const": "text"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "scope",
+                "path",
+                "start",
+                "end"
+              ],
+              "additionalProperties": true
+            }
+          ]
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "feature",
+        "unit",
+        "status",
+        "rule",
+        "reason",
+        "location",
+        "detail"
+      ],
+      "additionalProperties": true
+    },
+    "dependency": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "declared": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resolved": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "class": {
+          "enum": [
+            "framework",
+            "compatible",
+            "compat",
+            "compat-unverified",
+            "incompatible",
+            "unknown"
+          ]
+        },
+        "evidence": {
+          "type": "string"
+        },
+        "usedIn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "fields",
+        "declared",
+        "resolved",
+        "class",
+        "evidence",
+        "usedIn"
+      ],
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Command-Line Interface
 
-**Status: help, version, and inspect implemented; remaining commands specified.** The `frameshift` executable provides `help`, `version`, `inspect`, `--help`/`-h`, `--version`, `--format` for `version` and `inspect`, and `--package` for `inspect` (`D-050`, `D-075`). The other project commands and options below remain planned and are rejected as usage errors. Samples for planned commands are fictional. The implemented commands are documented in sections 4.1 and 4.9 and in sections 12 and 32 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
+**Status: read-only inspection, analysis, and reporting implemented (`D-100`).** Available commands are `help`, `version`, `inspect`, `analyze`, `report`, `explain`, and assessment `rules`. Planning, migration, and verification commands and their options remain specified below and are rejected as usage errors. Analysis has no execution side effects; explicit report files are separate CLI artifacts. Exact contracts and limits are in IMPLEMENTATION.md sections 32 and 51.
 
 The CLI is Frameshift's only user interface in the current scope (`D-004`). It is meant to become a polished, production-quality developer tool, not a temporary prototype.
 
@@ -38,7 +38,7 @@ Commands that were considered and not included in V1:
 
 ## 3. Global options
 
-Only `--help`/`-h`, `--version`, `--format` for `version` and `inspect`, and the command option `--package` of `inspect` are implemented. `--format` accepts `text` or `json`, and `--package` its value, as a separate value or with `=`, before or after the command. Duplicate options, incompatible combinations, and every other option are usage errors. No presentation environment variable is needed by the uncolored, progress-free implemented commands; the remaining presentation options are planned.
+`--help`/`-h`, `--version`, `--format`, and the command options listed as implemented below exist. Analysis/report options accept separate values or `=`, before or after the command; native source and report paths need not be UTF-8. Duplicate or incompatible options are usage errors. Analysis and stored report output support `text` and `json`; stored reports also support `markdown`. `--report` on `analyze` and `--out` on `report` create a new file and never overwrite. An analysis report destination must be outside the source root; a stored-report destination may not replace any existing file. Color, snippets, verbosity, and progress controls in the table remain planned; current output is uncolored and has no progress stream.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
@@ -112,6 +112,7 @@ Language, styling, static export, and file accounting by unit, which an earlier 
 
 ```text
 frameshift analyze [<source>] --to <target> [--from <source-adapter>]
+                   [--package <dir>] [--format text|json] [--report <new-file>]
                    [--fail-on <conditions>] [--unweighted] [--all]
 ```
 
@@ -119,11 +120,13 @@ frameshift analyze [<source>] --to <target> [--from <source-adapter>]
 | --- | --- |
 | `--to <target>` | Required. Target identifier, for example `astro-preact`. Required even while only one target exists, so commands stay unambiguous later. |
 | `--from <adapter>` | Override source detection, for example `nextjs`. Normally detected. |
-| `--fail-on <conditions>` | Comma-separated: `unknown`, `unsupported`, `review`, `blocked-routes`. The command exits with 1 if any listed condition occurs. |
+| `--fail-on <conditions>` | Comma-separated: `unknown`, `unsupported`, `review`, `blocked-routes`. The command exits with 1 if any listed condition occurs in a unit or finding, including findings without a unit. Finding severities `blocker`, `unknown`, and `review` match `unsupported`, `unknown`, and `review`; `blocked-routes` considers route readiness only. |
 | `--unweighted` | Show unweighted unit counts as the primary view |
 | `--all` | List all findings instead of the top entries |
 
-Output: verdict, assessment distribution, route readiness, dependencies, rule coverage, and top findings. A full sample is in section 11.1 of [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md). Analysis finding unsupported features is a successful result, so the exit code is 0 unless `--fail-on` says otherwise.
+**Implemented (`D-100`).** The source is the workspace root; `--package <dir>` selects one proven member, and `--package .` selects the root. Without it, the root must itself contain an App Router directory. Unknown source versions and Pages Router evidence remain visible. `--from nextjs` is the only source override, and `--to astro-preact` is required. The output is `frameshift.analysis` v1 ([schema](../schemas/frameshift.analysis.schema.json)); there is no migration execution or verification evidence. `--report` writes that document only to a new destination outside the source.
+
+Output: verdict, assessment distribution, route readiness, dependencies, rule coverage, and top findings. The larger illustrative sample is in section 11.1 of [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md). Analysis finding unsupported features is a successful result, so the exit code is 0 unless `--fail-on` says otherwise.
 
 ### 4.3 `plan`
 
@@ -216,7 +219,7 @@ frameshift report <report.json | output-dir> [--format text|markdown|json] [--ou
                   [--unweighted] [--all]
 ```
 
-Renders a stored report document. It never re-analyzes. Given an output directory, it reads `.frameshift/report.json`. Samples are in section 11.2 of [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md).
+**Implemented for `frameshift.analysis` v1 (`D-100`).** Renders stored evidence, with bounded schema, accounting, metric, and cross-reference validation. It never re-analyzes or opens source paths from the document. Text summaries show at most ten findings unless `--all` is set; section views print escaped JSON records as text, Markdown uses a protected code block, and JSON emits the complete document by default or the selected/filtered records. `--route`, `--file`, `--severity`, and `--code` filter the available records; without a section, a filter selects findings. Execution reports from future milestones are not accepted yet. Given an output directory, it reads `.frameshift/report.json`. Samples are in section 11.2 of [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md).
 
 ### 4.7 `rules`
 
@@ -225,7 +228,7 @@ frameshift rules [--to <target>] [--unsupported]
 frameshift rules show <rule-id>
 ```
 
-Lists the rules of a migration path, with their versions, handled features, and possible statuses. `--unsupported` lists features that are detected but not migratable in the current stage. `show` prints a rule's documentation, preconditions, examples, and verification requirements.
+**Implemented for assessment metadata (`D-100`).** Lists only `V1::Assessed` feature predicates with their version, feature, and allowed catalog statuses. Out-of-scope features have no assessment rule: their invented full rule IDs are rejected, while `explain <feature-id>` describes the scope exclusion. These predicates assess source; they emit no operations and do not count as transformation rule coverage. Transformation-rule listing and the detailed transformation examples below remain planned. `--unsupported` lists features that are detected but not migratable in the current stage. `show` prints the assessment predicate's catalog statuses, version, specification, and evidence boundary; detailed transformation examples and verification requirements remain planned.
 
 ```text
 $ frameshift rules --to astro-preact
@@ -244,6 +247,8 @@ Detected but unsupported in this stage: 17 features (frameshift rules --unsuppor
 ```
 
 ### 4.8 `explain`
+
+**Implemented (`D-100`).** Finding codes, concrete feature IDs, and full assessment rule IDs have offline explanations. Unknown identifiers are usage errors and are never echoed into output.
 
 ```text
 frameshift explain <finding-code | rule-id | feature-id>
