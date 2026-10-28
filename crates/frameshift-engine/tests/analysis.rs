@@ -46,6 +46,82 @@ fn records_mut<'a>(value: &'a mut Value, section: &str) -> &'a mut Vec<Value> {
     records
 }
 #[test]
+fn stored_unit_finding_references_exactly_match_finding_ownership() {
+    let root = create(
+        "unit-finding-projection",
+        &[
+            (
+                "app/page.tsx",
+                "import {cookies} from 'next/headers';export default function Page(){cookies();return <Missing/>}",
+            ),
+            ("app/other/page.tsx", PAGE),
+        ],
+    );
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let units = original.value().get("units").unwrap().array();
+    let owner = units
+        .iter()
+        .position(|u| u.get("id").and_then(Value::text) == Some("route:/"))
+        .unwrap();
+    let other = units
+        .iter()
+        .position(|u| u.get("id").and_then(Value::text) == Some("route:/other"))
+        .unwrap();
+    let ids = units[owner].get("findings").unwrap().array();
+    assert!(ids.len() > 1);
+    let project_finding = original
+        .value()
+        .get("findings")
+        .unwrap()
+        .array()
+        .iter()
+        .find(|f| f.get("unit").is_none_or(|u| matches!(u, Value::Null)))
+        .unwrap()
+        .get("id")
+        .unwrap()
+        .clone();
+    for change in [
+        "missing",
+        "empty",
+        "duplicate",
+        "move",
+        "foreign",
+        "project",
+        "dangling",
+    ] {
+        let mut damaged = original.value().clone();
+        let records = records_mut(&mut damaged, "units");
+        match change {
+            "missing" => {
+                records_mut(&mut records[owner], "findings").remove(0);
+            }
+            "empty" => records_mut(&mut records[owner], "findings").clear(),
+            "duplicate" => records_mut(&mut records[owner], "findings").push(ids[0].clone()),
+            "move" => {
+                let id = records_mut(&mut records[owner], "findings").remove(0);
+                records_mut(&mut records[other], "findings").push(id);
+            }
+            "foreign" => records_mut(&mut records[other], "findings").push(ids[0].clone()),
+            "project" => records_mut(&mut records[other], "findings").push(project_finding.clone()),
+            "dangling" => {
+                records_mut(&mut records[other], "findings").push(Value::String("F9999".into()))
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            StoredReport::parse(damaged.document().into_bytes(), &Limits::default()).is_err(),
+            "{change}"
+        );
+    }
+    let mut reordered = original.value().clone();
+    records_mut(&mut records_mut(&mut reordered, "units")[owner], "findings").reverse();
+    StoredReport::parse(reordered.document().into_bytes(), &Limits::default()).unwrap();
+}
+#[test]
 fn stored_tasks_exactly_project_non_info_finding_remediations() {
     let root = create(
         "task-projection",

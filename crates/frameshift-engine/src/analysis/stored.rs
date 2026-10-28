@@ -758,6 +758,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         }
     }
     let mut evidence_status: BTreeMap<_, _> = identities.iter().map(|&id| (id, "auto")).collect();
+    let mut owned_findings = BTreeMap::<_, BTreeSet<_>>::new();
     let mut finding_ids = BTreeSet::new();
     for finding in array(v, "findings")? {
         let id = text(finding, "id")?;
@@ -788,9 +789,10 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
             "info" => Some("auto"),
             _ => return Err(invalid()),
         };
-        if let Some(id) = optional_text(finding, "unit")? {
+        if let Some(owner) = optional_text(finding, "unit")? {
+            owned_findings.entry(owner).or_default().insert(id);
             let status = status.ok_or_else(invalid)?;
-            let derived = evidence_status.get_mut(id).ok_or_else(invalid)?;
+            let derived = evidence_status.get_mut(owner).ok_or_else(invalid)?;
             if rank(status) > rank(derived) {
                 *derived = status;
             }
@@ -801,7 +803,12 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
         location(finding.get("location").ok_or_else(invalid)?, limits, true)?;
     }
     for unit in units {
-        refs(unit, "findings", &finding_ids)?
+        let expected = owned_findings.remove(text(unit, "id")?).unwrap_or_default();
+        let actual = text_array(unit, "findings")?;
+        if actual.len() != expected.len() || actual.into_iter().collect::<BTreeSet<_>>() != expected
+        {
+            return Err(invalid());
+        }
     }
     refs(summary, "evidence", &finding_ids)?;
     let occurrences = array(v, "occurrences")?;
