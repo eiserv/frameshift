@@ -307,10 +307,10 @@ pub(crate) fn component_name(path: &str, text: &SourceText, limits: &Limits) -> 
     let tree = parse(text, path, limits)?;
     let mut names = Vec::new();
     for item in program_body(&tree)? {
-        let declaration = match kind(&tree, item)? {
-            SyntaxNodeKind::ExportDefault { declaration }
-            | SyntaxNodeKind::ExportDeclaration { declaration } => declaration,
-            _ => continue,
+        let (SyntaxNodeKind::ExportDefault { declaration }
+        | SyntaxNodeKind::ExportDeclaration { declaration }) = kind(&tree, item)?
+        else {
+            continue;
         };
         if let SyntaxNodeKind::FunctionDeclaration {
             name: Some(name), ..
@@ -587,64 +587,62 @@ fn analyze(
             copies.push(comments);
         }
         previous_end = item_span.end();
-        match kind(tree, item)? {
-            SyntaxNodeKind::ImportDeclaration { .. } => {
-                imports.push(import(context, path, tree, item, output)?);
+        let item_kind = kind(tree, item)?;
+        if let SyntaxNodeKind::ImportDeclaration { .. } = item_kind {
+            imports.push(import(context, path, tree, item, output)?);
+        } else if let SyntaxNodeKind::TypeScript {
+            kind: TypeScriptKind::TypeOnly,
+            children,
+        } = item_kind
+        {
+            // Types have no runtime behavior; Astro strips them anyway.
+            let declaration = list(tree, children)?;
+            let [declaration] = declaration.as_slice() else {
+                return refuse("an unexpected type-only declaration");
+            };
+            if !matches!(
+                kind(tree, *declaration)?,
+                SyntaxNodeKind::ImportDeclaration { .. }
+            ) {
+                return refuse("only type-only imports are dropped");
             }
-            SyntaxNodeKind::TypeScript {
-                kind: TypeScriptKind::TypeOnly,
-                children,
-            } => {
-                // Types have no runtime behavior; Astro strips them anyway.
-                let declaration = list(tree, children)?;
-                let [declaration] = declaration.as_slice() else {
-                    return refuse("an unexpected type-only declaration");
-                };
-                if !matches!(
-                    kind(tree, *declaration)?,
-                    SyntaxNodeKind::ImportDeclaration { .. }
-                ) {
-                    return refuse("only type-only imports are dropped");
-                }
-                imports.push(Import::Dropped);
-            }
-            SyntaxNodeKind::ExportDeclaration { declaration } => {
-                if let SyntaxNodeKind::FunctionDeclaration { .. } = kind(tree, declaration)?
-                    && is_component
-                {
-                    if function.is_some() {
-                        return refuse("a component module exports several functions");
-                    }
-                    function = Some(declaration);
-                } else if is_dropped_segment_option(tree, declaration)? {
-                } else if let Some(found) =
-                    metadata_export(tree, declaration, matches!(role, Role::RootLayout))?
-                {
-                    if metadata.is_some() {
-                        return refuse("metadata is exported twice");
-                    }
-                    metadata = Some(found);
-                } else {
-                    return refuse("an export other than metadata or the component");
-                }
-            }
-            SyntaxNodeKind::ExportDefault { declaration } => {
+            imports.push(Import::Dropped);
+        } else if let SyntaxNodeKind::ExportDeclaration { declaration } = item_kind {
+            if let SyntaxNodeKind::FunctionDeclaration { .. } = kind(tree, declaration)?
+                && is_component
+            {
                 if function.is_some() {
-                    return refuse("a module exports several functions");
+                    return refuse("a component module exports several functions");
                 }
                 function = Some(declaration);
-            }
-            SyntaxNodeKind::VariableDeclaration {
-                kind: VariableKind::Const,
-                ..
-            }
-            | SyntaxNodeKind::FunctionDeclaration { .. } => {
-                if contains_jsx(tree, item)? {
-                    return refuse("module-level JSX is not converted by migrate v0");
+            } else if is_dropped_segment_option(tree, declaration)? {
+            } else if let Some(found) =
+                metadata_export(tree, declaration, matches!(role, Role::RootLayout))?
+            {
+                if metadata.is_some() {
+                    return refuse("metadata is exported twice");
                 }
-                copies.push(item_span);
+                metadata = Some(found);
+            } else {
+                return refuse("an export other than metadata or the component");
             }
-            _ => return refuse("a module item outside the converted subset"),
+        } else if let SyntaxNodeKind::ExportDefault { declaration } = item_kind {
+            if function.is_some() {
+                return refuse("a module exports several functions");
+            }
+            function = Some(declaration);
+        } else if let SyntaxNodeKind::VariableDeclaration {
+            kind: VariableKind::Const,
+            ..
+        }
+        | SyntaxNodeKind::FunctionDeclaration { .. } = item_kind
+        {
+            if contains_jsx(tree, item)? {
+                return refuse("module-level JSX is not converted by migrate v0");
+            }
+            copies.push(item_span);
+        } else {
+            return refuse("a module item outside the converted subset");
         }
     }
     if let Some(comments) = comments_between(tree, previous_end, tree.source().len()) {
@@ -793,24 +791,23 @@ fn import(
     let mut default = None;
     let mut named = Vec::new();
     for &specifier in &specifiers {
-        match kind(tree, specifier)? {
-            SyntaxNodeKind::ImportDefaultSpecifier { local } => {
-                default = Some(identifier(node_text(tree, local)?)?);
+        let specifier_kind = kind(tree, specifier)?;
+        if let SyntaxNodeKind::ImportDefaultSpecifier { local } = specifier_kind {
+            default = Some(identifier(node_text(tree, local)?)?);
+        } else if let SyntaxNodeKind::ImportSpecifier { imported, local } = specifier_kind {
+            let local = identifier(node_text(tree, local)?)?;
+            match imported {
+                Some(imported) => named.push(NamedImport {
+                    imported: identifier(node_text(tree, imported)?)?,
+                    local: Some(local),
+                }),
+                None => named.push(NamedImport {
+                    imported: local,
+                    local: None,
+                }),
             }
-            SyntaxNodeKind::ImportSpecifier { imported, local } => {
-                let local = identifier(node_text(tree, local)?)?;
-                match imported {
-                    Some(imported) => named.push(NamedImport {
-                        imported: identifier(node_text(tree, imported)?)?,
-                        local: Some(local),
-                    }),
-                    None => named.push(NamedImport {
-                        imported: local,
-                        local: None,
-                    }),
-                }
-            }
-            _ => return refuse("namespace and type-only import specifiers are not converted"),
+        } else {
+            return refuse("namespace and type-only import specifiers are not converted");
         }
     }
     match resolution(context.graph, path, tree, source)? {
