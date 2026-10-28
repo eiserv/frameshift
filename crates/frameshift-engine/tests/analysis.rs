@@ -3184,6 +3184,19 @@ fn route_values_outside_pages_and_evaluated_page_patterns_stay_outside_astro() {
             "export default async function Layout({children}){const n=await Promise.resolve(1);return <section>{children}<p>{`${n}`}</p></section>}",
             Strategy::Astro,
         ),
+        // The converted function's own binding does not exist in Astro.
+        (
+            "page-own-binding",
+            "app/blog/[slug]/page.tsx",
+            "const Page=async()=>{const label=Page.name;return <p>{label}</p>};export default Page;",
+            Strategy::Preserve,
+        ),
+        (
+            "page-nested-pattern",
+            "app/blog/[slug]/page.tsx",
+            "export default async function Page({missing:{unused}}){const n=1;return <p>{`${n}`}</p>}",
+            Strategy::Preserve,
+        ),
         // Dropping the page parameter would skip the default's call.
         (
             "page-evaluated-default",

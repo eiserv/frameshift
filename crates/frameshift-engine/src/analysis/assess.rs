@@ -543,6 +543,26 @@ fn portable_references(tree: &SyntaxTree<'_>, references: &References<'_>, id: N
                 if react && reference.meaning.overlaps(Meaning::VALUE) && !element_name {
                     return false;
                 }
+                // The converted function's own binding, such as the `const`
+                // that holds an arrow, does not exist in the Astro component.
+                let own = binding.declarations.iter().any(|d| {
+                    matches!(
+                        d.kind,
+                        DeclarationKind::Var
+                            | DeclarationKind::Let
+                            | DeclarationKind::Const
+                            | DeclarationKind::Function
+                            | DeclarationKind::AnnexBFunction
+                            | DeclarationKind::FunctionName
+                            | DeclarationKind::Class
+                            | DeclarationKind::ClassName
+                    ) && tree.node(d.node).is_some_and(|n| {
+                        n.span().start() <= span.start() && span.end() <= n.span().end()
+                    })
+                });
+                if own {
+                    return false;
+                }
                 let scope = references.bindings.scope(binding.scope);
                 let local = tree.node(scope.node).is_some_and(|n| {
                     span.start() <= n.span().start() && n.span().end() <= span.end()

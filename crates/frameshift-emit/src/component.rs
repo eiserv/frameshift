@@ -80,9 +80,9 @@ pub struct ConvertedComponent {
 /// the children binding of the markup and may not occur in the statements.
 ///
 /// The whole function fails on `this`, `super`, `arguments`, `new.target`,
-/// `import.meta`, the name `Astro`, and calls of functions named like React
-/// hooks, wherever they occur, and on any comment that the component would
-/// drop. These checks are conservative: they read spellings, never scopes.
+/// `import.meta`, the name `Astro`, the function's own name, and calls of
+/// functions named like React hooks, wherever they occur, and on any comment
+/// that the component would drop. These checks are conservative: they read spellings, never scopes.
 pub fn convert_component(
     tree: &SyntaxTree<'_>,
     source: SourceId,
@@ -153,7 +153,18 @@ pub fn convert_component(
         }
         (Some(_), PropsSource::AstroProps) | (None, _) => Vec::new(),
     };
-    checker.check_function(function, &substitutions, &dropped)?;
+    // The function's own binding does not exist in the Astro component.
+    let mut dropped = dropped;
+    let own_name = checker.own_name(function)?;
+    if let Some(name) = own_name {
+        dropped.push(
+            checker
+                .tree
+                .identifier_value(name)
+                .ok_or_else(|| checker.invalid())?,
+        );
+    }
+    checker.check_function(function, own_name, &substitutions, &dropped)?;
     for &statement in &statements {
         checker.check_statement(statement, children.as_deref())?;
     }
@@ -377,21 +388,28 @@ impl Checker<'_> {
         Ok(binding)
     }
 
-    // Rejects a pattern that evaluates code when it binds, a default value or
-    // a computed key, which dropping the pattern would skip.
+    // Rejects a pattern whose binding can run code or throw, which dropping
+    // the pattern would skip: a default value, a computed key, or a nested
+    // pattern, which destructures a value that may be absent.
     fn check_inert(&self, pattern: NodeId) -> Result<(), ConvertError> {
         let mut stack = vec![pattern];
         while let Some(id) = stack.pop() {
             let kind = self.kind(id)?;
-            let evaluates = matches!(
-                kind,
-                SyntaxNodeKind::AssignmentPattern { .. }
-                    | SyntaxNodeKind::ShorthandPatternProperty {
-                        default: Some(_),
-                        ..
-                    }
-                    | SyntaxNodeKind::PatternProperty { computed: true, .. }
-            );
+            let nested = id != pattern
+                && matches!(
+                    kind,
+                    SyntaxNodeKind::ObjectPattern { .. } | SyntaxNodeKind::ArrayPattern { .. }
+                );
+            let evaluates = nested
+                || matches!(
+                    kind,
+                    SyntaxNodeKind::AssignmentPattern { .. }
+                        | SyntaxNodeKind::ShorthandPatternProperty {
+                            default: Some(_),
+                            ..
+                        }
+                        | SyntaxNodeKind::PatternProperty { computed: true, .. }
+                );
             if evaluates {
                 return Err(self.error(ConvertErrorKind::UnsupportedFunction, self.span(id)?));
             }
@@ -424,11 +442,15 @@ impl Checker<'_> {
     fn check_function(
         &self,
         function: NodeId,
+        own_name: Option<NodeId>,
         substitutions: &[Span],
         dropped: &[String],
     ) -> Result<(), ConvertError> {
         let mut stack = vec![function];
         while let Some(id) = stack.pop() {
+            if Some(id) == own_name {
+                continue;
+            }
             let span = self.span(id)?;
             let kind = self.kind(id)?;
             let replaced = substitutions
@@ -469,6 +491,18 @@ impl Checker<'_> {
             stack.extend(self.tree.child_nodes(id).ok_or_else(|| self.invalid())?);
         }
         Ok(())
+    }
+
+    // The binding identifier of a function declaration or expression.
+    fn own_name(&self, function: NodeId) -> Result<Option<NodeId>, ConvertError> {
+        let kind = self.kind(function)?;
+        if let SyntaxNodeKind::FunctionDeclaration { name, .. }
+        | SyntaxNodeKind::FunctionExpression { name, .. } = kind
+        {
+            Ok(name)
+        } else {
+            Ok(None)
+        }
     }
 
     // The parameters and body of a function that is not a generator.

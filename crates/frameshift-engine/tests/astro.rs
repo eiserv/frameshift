@@ -645,6 +645,10 @@ fn unsupported_component_bodies_fail_closed() {
             ConvertErrorKind::ChildrenOutsideSlot,
         ),
         (
+            "function P() { const label = P.name; return <p>{label}</p>; }",
+            ConvertErrorKind::DroppedBinding,
+        ),
+        (
             "function P({ x }, y) { return <p />; }",
             ConvertErrorKind::UnsupportedFunction,
         ),
@@ -706,6 +710,8 @@ fn dropped_parameters_require_every_use_replaced() {
         "function P({ missing: unused = record() }) { return <p />; }",
         "function P({ unused = record() }) { return <p />; }",
         "function P({ [key()]: unused }) { return <p />; }",
+        "function P({ missing: { unused } }) { return <p />; }",
+        "function P({ missing: [unused] }) { return <p />; }",
     ] {
         assert_eq!(
             convert_function(&source(code), PropsSource::Dropped, &[]),

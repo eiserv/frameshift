@@ -200,7 +200,8 @@ pub enum ConvertErrorKind {
     TooDeep,
     /// A component function that is a generator, has more than one
     /// parameter, or a parameter other than an object pattern, or a dropped
-    /// parameter whose pattern evaluates a default or a computed key.
+    /// parameter whose pattern has a default, a computed key, or a nested
+    /// pattern.
     UnsupportedFunction,
     /// A component body that does not end in a single `return` of markup,
     /// or a statement before it that is not a `var`, `let`, or `const`
@@ -217,7 +218,8 @@ pub enum ConvertErrorKind {
     /// The name `Astro`, which generated frontmatter and templates use.
     ReservedName,
     /// A name declared by a dropped parameter remains outside every
-    /// replaced span.
+    /// replaced span, or the function refers to its own name, which the
+    /// component does not declare.
     DroppedBinding,
     /// A replaced span that is not inside the converted body, overlaps
     /// another replaced span or markup, or is never reached.
