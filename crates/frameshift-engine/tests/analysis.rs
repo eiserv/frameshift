@@ -46,6 +46,100 @@ fn records_mut<'a>(value: &'a mut Value, section: &str) -> &'a mut Vec<Value> {
     records
 }
 #[test]
+fn stored_rule_metadata_exactly_projects_shipped_evidence_rules() {
+    fn rule_id(feature: &str) -> String {
+        format!(
+            "{}/assessment.{}",
+            frameshift_engine::catalog::PATH,
+            feature.replace('.', "-")
+        )
+    }
+    fn rule_record(id: &str) -> Value {
+        Value::Object(std::collections::BTreeMap::from([
+            ("id".into(), Value::String(id.into())),
+            ("phase".into(), Value::String("assessment".into())),
+            ("version".into(), Value::Number("1".into())),
+        ]))
+    }
+    let root = create("rule-projection", &[("app/page.tsx", PAGE)]);
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let rules = original.value().get("rules").unwrap().array();
+    assert!(rules.len() > 1);
+    let unused = frameshift_engine::catalog::FEATURES
+        .iter()
+        .filter(|f| matches!(f.v1, frameshift_engine::catalog::V1::Assessed(_)))
+        .map(|f| rule_id(f.id))
+        .find(|id| {
+            !rules
+                .iter()
+                .any(|r| r.get("id").and_then(Value::text) == Some(id.as_str()))
+        })
+        .unwrap();
+    let excluded = rule_id(
+        frameshift_engine::catalog::FEATURES
+            .iter()
+            .find(|f| matches!(f.v1, frameshift_engine::catalog::V1::OutOfScope))
+            .unwrap()
+            .id,
+    );
+    for change in [
+        "missing",
+        "empty",
+        "duplicate",
+        "replacement",
+        "invented",
+        "unused",
+        "excluded",
+    ] {
+        let mut damaged = original.value().clone();
+        let records = records_mut(&mut damaged, "rules");
+        match change {
+            "missing" => {
+                records.remove(0);
+            }
+            "empty" => records.clear(),
+            "duplicate" => records.push(records[0].clone()),
+            "replacement" => records[0] = records[1].clone(),
+            "invented" => records.push(rule_record("invented")),
+            "unused" => records.push(rule_record(&unused)),
+            "excluded" => records.push(rule_record(&excluded)),
+            _ => unreachable!(),
+        }
+        assert!(
+            StoredReport::parse(damaged.document().into_bytes(), &Limits::default()).is_err(),
+            "{change}"
+        );
+    }
+    // A finding association also counts as retained rule evidence, but it
+    // cannot introduce a rule outside the shipped V1 assessment catalog.
+    for (id, valid) in [
+        (unused.as_str(), true),
+        ("invented", false),
+        (excluded.as_str(), false),
+    ] {
+        let mut changed = original.value().clone();
+        records_mut(&mut changed, "rules").push(rule_record(id));
+        object_mut(&mut records_mut(&mut changed, "findings")[0])
+            .insert("rule".into(), Value::String(id.into()));
+        assert_eq!(
+            StoredReport::parse(changed.document().into_bytes(), &Limits::default()).is_ok(),
+            valid,
+            "{id}"
+        );
+    }
+    let mut additive = original.value().clone();
+    let records = records_mut(&mut additive, "rules");
+    records.reverse();
+    object_mut(&mut records[0]).insert("futureEvidence".into(), Value::Bool(true));
+    let accepted =
+        StoredReport::parse(additive.document().into_bytes(), &Limits::default()).unwrap();
+    assert_eq!(accepted.value(), &additive);
+}
+#[test]
 fn stored_unit_finding_references_exactly_match_finding_ownership() {
     let root = create(
         "unit-finding-projection",

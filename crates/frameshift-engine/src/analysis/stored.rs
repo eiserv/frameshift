@@ -440,19 +440,36 @@ fn nested_records(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     if expected.values().any(|&count| count != 0) {
         return Err(invalid());
     }
+    let shipped_rules: BTreeSet<_> = crate::catalog::FEATURES
+        .iter()
+        .filter(|f| matches!(f.v1, crate::catalog::V1::Assessed(_)))
+        .map(|f| {
+            format!(
+                "{}/assessment.{}",
+                crate::catalog::PATH,
+                f.id.replace('.', "-")
+            )
+        })
+        .collect();
     let mut rules = BTreeSet::new();
     for rule in array(v, "rules")? {
-        if !rules.insert(text(rule, "id")?)
+        let id = text(rule, "id")?;
+        if !shipped_rules.contains(id)
+            || !rules.insert(id)
             || number(rule, "version")? != 1
             || text(rule, "phase")? != "assessment"
         {
             return Err(invalid());
         }
     }
+    let mut used_rules = BTreeSet::new();
     for record in array(v, "occurrences")?.iter().chain(array(v, "findings")?) {
-        if optional_text(record, "rule")?.is_some_and(|id| !rules.contains(id)) {
-            return Err(invalid());
+        if let Some(id) = optional_text(record, "rule")? {
+            used_rules.insert(id);
         }
+    }
+    if rules != used_rules {
+        return Err(invalid());
     }
     let mut required_tasks = BTreeMap::new();
     for finding in array(v, "findings")? {
