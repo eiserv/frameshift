@@ -2,6 +2,7 @@
 
 mod analysis_cli;
 mod args;
+mod migrate_cli;
 mod render;
 
 use std::io::{self, Write};
@@ -32,6 +33,7 @@ fn run(
 ) -> io::Result<u8> {
     let code = match request {
         Ok(Request::Extra(request)) => analysis_cli::run(*request, stdout, stderr)?,
+        Ok(Request::Migrate(request)) => migrate_cli::run(*request, stdout, stderr)?,
         Ok(Request::Help(topic)) => {
             stdout.write_all(render::help(topic).as_bytes())?;
             0

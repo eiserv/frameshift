@@ -1,0 +1,34 @@
+config     .frameshift/SUMMARY.md report.summary -
+preserve   .frameshift/unmigrated/app/blog/[slug]/page.tsx preserve.unmigrated app/blog/[slug]/page.tsx
+preserve   .frameshift/unmigrated/app/contact/page.tsx preserve.unmigrated app/contact/page.tsx
+preserve   .frameshift/unmigrated/tests/site.test.ts preserve.unmigrated tests/site.test.ts
+config     .gitignore config.gitignore .gitignore
+config     astro.config.mjs config.astro -
+config     package.json config.package-manifest -
+copy       public/paper.svg asset.verbatim public/paper.svg
+copy       public/robots.txt asset.verbatim public/robots.txt
+transform  src/components/Badge.tsx component.preact-static components/Badge.tsx
+create     src/components/SiteHeader.astro component.astro components/SiteHeader.tsx review
+create     src/layouts/DocsLayout.astro layout.chain app/docs/layout.tsx
+create     src/layouts/RootLayout.astro layout.chain app/layout.tsx
+transform  src/lib/site.ts module.relocate lib/site.ts
+transform  src/lib/types.ts module.relocate lib/types.ts
+create     src/pages/about.astro route.static-page app/about/page.tsx
+create     src/pages/docs.astro route.static-page app/docs/page.tsx
+create     src/pages/docs/intro.astro route.static-page app/docs/intro/page.tsx
+create     src/pages/index.astro route.static-page app/page.tsx review
+create     src/pages/pricing.astro route.static-page app/(marketing)/pricing/page.tsx
+copy       src/styles/globals.css style.relocate app/globals.css
+config     tsconfig.json config.tsconfig -
+
+task Project -: install dependencies with your package manager; lockfiles are not carried over
+task Project -: 4 Next.js and React dependencies were removed from package.json; check that nothing else needs them
+task Project -: configuration concern config:source.analysis (review) is not migrated by v0; see `frameshift analyze`
+task Preserved app/blog/[slug]/page.tsx: preserved for manual migration: the analysis rates this file's units unsupported
+task Preserved app/contact/page.tsx: preserved for manual migration: client components and islands are not converted by migrate v0
+task Preserved tests/site.test.ts: preserved for manual migration: tests and repository tooling are outside V1
+task Review app/page.tsx: converted; check the result, because the analysis rates it review, and the conversion assumes values that React and Astro render alike (child-not-true)
+task Review components/SiteHeader.tsx: converted; check the result, because the analysis rates it review, and the conversion assumes values that React and Astro render alike (child-not-true)
+task NotCopied next.config.mjs: replaced by the generated astro.config.mjs
+task NotCopied package.json: replaced by the generated package.json
+task NotCopied tsconfig.json: replaced by the generated tsconfig.json

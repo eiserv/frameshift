@@ -12,6 +12,7 @@ members = [
     "crates/frameshift-syntax",
     "crates/frameshift-transform",
     "crates/frameshift-emit",
+    "crates/frameshift-output",
     "crates/frameshift-engine",
     "tools/frameshift-bench",
     "tools/frameshift-corpus",

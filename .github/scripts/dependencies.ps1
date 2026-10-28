@@ -28,7 +28,8 @@ function Assert-CargoPolicy {
         'frameshift-catalog' = @()
         'frameshift-transform' = @('frameshift-core')
         'frameshift-emit' = @('frameshift-core', 'frameshift-syntax', 'frameshift-transform')
-        'frameshift-engine' = @('frameshift-core', 'frameshift-catalog', 'frameshift-syntax', 'frameshift-transform', 'frameshift-emit', 'frameshift-input', 'frameshift-package', 'frameshift-nextjs', 'frameshift-modules', 'frameshift-bindings', 'frameshift-evaluate')
+        'frameshift-output' = @('frameshift-core')
+        'frameshift-engine' = @('frameshift-core', 'frameshift-catalog', 'frameshift-syntax', 'frameshift-transform', 'frameshift-emit', 'frameshift-input', 'frameshift-output', 'frameshift-package', 'frameshift-nextjs', 'frameshift-modules', 'frameshift-bindings', 'frameshift-evaluate')
         'frameshift-cli' = @('frameshift-engine')
     }
     foreach ($package in $metadata.packages | Where-Object { $_.id -in $metadata.workspace_members }) {

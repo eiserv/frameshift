@@ -1,0 +1,27 @@
+config     .frameshift/SUMMARY.md report.summary -
+preserve   .frameshift/unmigrated/src/app/counter/page.tsx preserve.unmigrated src/app/counter/page.tsx
+preserve   .frameshift/unmigrated/src/app/lazy/page.tsx preserve.unmigrated src/app/lazy/page.tsx
+preserve   .frameshift/unmigrated/src/app/plain/page.tsx preserve.unmigrated src/app/plain/page.tsx
+preserve   .frameshift/unmigrated/src/app/shadow/page.tsx preserve.unmigrated src/app/shadow/page.tsx
+preserve   .frameshift/unmigrated/src/components/Counter.tsx preserve.unmigrated src/components/Counter.tsx
+preserve   .frameshift/unmigrated/src/lib/label.ts preserve.unmigrated src/lib/label.ts
+config     .gitignore config.gitignore -
+config     astro.config.mjs config.astro -
+config     package.json config.package-manifest -
+create     src/layouts/RootLayout.astro layout.chain src/app/layout.tsx
+transform  src/lib/greeting.ts module.relocate src/lib/greeting.ts
+create     src/pages/index.astro route.static-page src/app/page.tsx review
+config     tsconfig.json config.tsconfig -
+
+task Project -: install dependencies with your package manager; lockfiles are not carried over
+task Project -: 3 Next.js and React dependencies were removed from package.json; check that nothing else needs them
+task Project -: configuration concern config:source.analysis (review) is not migrated by v0; see `frameshift analyze`
+task Preserved src/app/counter/page.tsx: preserved for manual migration: it imports a file that migrate v0 does not migrate
+task Preserved src/app/lazy/page.tsx: preserved for manual migration: dynamic imports, re-exports, and require calls of project files are not converted
+task Preserved src/app/plain/page.tsx: preserved for manual migration: it imports a file that migrate v0 does not migrate
+task Preserved src/app/shadow/page.tsx: preserved for manual migration: the file already binds a name that the conversion generates
+task Preserved src/components/Counter.tsx: preserved for manual migration: client components and islands are not converted by migrate v0
+task Preserved src/lib/label.ts: preserved for manual migration: the analysis rates this file's units unsupported
+task Review src/app/page.tsx: converted; check the result, because the analysis rates it review, and the conversion assumes values that React and Astro render alike (child-not-true)
+task NotCopied package.json: replaced by the generated package.json
+task NotCopied tsconfig.json: replaced by the generated tsconfig.json

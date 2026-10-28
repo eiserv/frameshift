@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "jsx": "preserve",
+    "moduleResolution": "bundler",
+    "module": "esnext",
+    "paths": { "@/*": ["./*"] }
+  }
+}
