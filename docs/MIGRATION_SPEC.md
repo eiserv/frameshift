@@ -420,7 +420,7 @@ The output follows the conventional Astro project structure, so it reads like a 
 Rules:
 
 - Every import that refers to a moved file is rewritten deterministically. A component converted to an Astro component changes its extension (for example `Button.tsx` to `Button.astro`), and imports of it include the `.astro` extension, which Astro requires.
-- Path aliases keep their keys. If all targets of an alias move together, the alias is retargeted (for example `@/*` from `./*` to `./src/*`). Otherwise, affected imports become relative imports.
+- Path aliases keep their keys. If all targets of an alias move together, the alias is retargeted (for example `@/*` from `./*` to `./src/*`). Otherwise, affected imports become relative imports. Migrate v0 (proposed `D-101`) rewrites every resolved local import to a relative import and does not retarget aliases yet.
 - Collisions with existing files, including collisions that differ only in case, are detected at planning time (`FS4002`).
 
 ### 16.2 Generated and support files

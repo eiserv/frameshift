@@ -1,6 +1,6 @@
 # Command-Line Interface
 
-**Status: read-only inspection, analysis, and reporting implemented (`D-100`).** Available commands are `help`, `version`, `inspect`, `analyze`, `report`, `explain`, and assessment `rules`. Planning, migration, and verification commands and their options remain specified below and are rejected as usage errors. Analysis has no execution side effects; explicit report files are separate CLI artifacts. Exact contracts and limits are in IMPLEMENTATION.md sections 32 and 51.
+**Status: read-only inspection, analysis, and reporting implemented (`D-100`); migrate v0 implemented under the proposed `D-101`.** Available commands are `help`, `version`, `inspect`, `analyze`, `report`, `explain`, assessment `rules`, and a reduced `migrate` (section 4.4). Planning and verification commands, and the `migrate` options that section 4.4 marks as planned, remain specified below and are rejected as usage errors. Analysis has no execution side effects; explicit report files are separate CLI artifacts. Exact contracts and limits are in IMPLEMENTATION.md sections 32 and 51.
 
 The CLI is Frameshift's only user interface in the current scope (`D-004`). It is meant to become a polished, production-quality developer tool, not a temporary prototype.
 
@@ -20,7 +20,7 @@ The CLI is Frameshift's only user interface in the current scope (`D-004`). It i
 | `inspect` (implemented) | Identify a project: framework, version, router, package manager, structure | No | No |
 | `analyze` | Assess migratability to a target: units, statuses, metrics, findings | Only with `--report` | No |
 | `plan` | Compute the migration plan: operations, output paths, manual tasks | Only with `--out` or `--report` | No |
-| `migrate` | Execute the plan into a new output directory | Yes, output directory only | No |
+| `migrate` (v0 implemented) | Execute the plan into a new output directory | Yes, output directory only | No |
 | `verify` | Verify a migrated project at a chosen level | Only reports and temporary copies | Only with `--allow-exec` |
 | `report` | Render a stored report document in other formats or views | Only with `--out` | No |
 | `rules` | List and document migration rules and supported features | No | No |
@@ -175,6 +175,8 @@ frameshift migrate [<source>] --to <target> --out <dir>
 | `--config <file>`, `--no-config` | Use a specific configuration file, or none (section 5.1). Also accepted by `analyze` and `plan`. |
 | `--on-existing fail\|replace-managed` | `fail` (default) refuses an existing output. `replace-managed` replaces an existing output only if its manifest marks it as Frameshift output and no file in it was modified since generation. The previous output is moved aside, never deleted. |
 | `--clean-staging` | Remove a staging directory left by an interrupted run. Only directories carrying Frameshift's staging marker are removed. |
+
+**Implemented: migrate v0 (proposed `D-101`).** `frameshift migrate [<source>] --to astro-preact --out <dir> [--package <dir>] [--dry-run]` exists with text output only. `--out` must name a directory that does not exist, whose parent exists, and that is neither inside the source nor contains it. The command converts static pages, layouts, and components that the analysis rates `auto` or `review` with the `astro` or `preact-static` strategy, copies everything else unchanged below `.frameshift/unmigrated/`, and writes `.frameshift/SUMMARY.md` with the manual tasks. `--dry-run` prints every planned file with its operation kind, rule, and source, and writes nothing. A real run writes through a staging directory `.<name>.frameshift-staging` next to the output and prints counts; an existing staging directory refuses the run. `--plan`, `--strict`, `--on-existing`, `--clean-staging`, `--report`, `--show-files`, `--env-names`, `--config`, `--no-config`, and `--format json` remain planned and are usage errors. Exit statuses are 0, 2, 3, 4, 6, and 70 as in section 7; preserved files are reported results and do not produce 1 or 5. Structural verification, the manifest, and `report.json` are not implemented yet. Exact contracts are in section 52 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 Structural verification always runs as part of `migrate`, because its checks are rule postconditions. A sample is in section 11.4 of [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md).
 
@@ -340,7 +342,7 @@ V1 supports an optional project configuration file (`D-027`):
 | 1 | Completed, but a requested condition failed: `--fail-on` matched, `--strict` aborted the commit, or verification failed or found differences |
 | 2 | Usage error: invalid arguments, a missing required option, or a missing authorization flag for a requested action |
 | 3 | Input error: source missing or unreadable, a source that changed during the run, or an unknown `--package` (implemented for `inspect`); no supported framework for `analyze`, `plan`, or `migrate`, an invalid or stale plan document, or a source that no longer matches a plan or manifest (planned) |
-| 4 | Output refused: output location exists or is unsafe, a staging directory from an interrupted run is present, or managed output was modified |
+| 4 | Output refused: output location exists or is unsafe, a staging directory from an interrupted run is present, or managed output was modified. Implemented for `migrate` v0, which also uses it when writing the output fails. |
 | 5 | Completed with failures: output committed, but one or more units failed |
 | 6 | Environment error: a standard-stream write or flush failed (implemented), or a required external tool is missing or failed before its checks could run (planned) |
 | 70 | Internal error: an engine defect (finding `FS9001`). Results of this run are not trustworthy. 70 follows the BSD `sysexits` convention for internal software errors. `inspect` exits with 70 when the engine reports a defect (implemented). |
