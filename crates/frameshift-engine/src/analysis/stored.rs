@@ -396,7 +396,6 @@ fn location(v: &Value, limits: &Limits, positions: bool) -> Result<(), AnalyzeEr
 fn nested_records(
     v: &Value,
     limits: &Limits,
-    units: &BTreeSet<&str>,
     findings: &BTreeSet<&str>,
 ) -> Result<(), AnalyzeError> {
     let mut names = BTreeSet::new();
@@ -422,14 +421,28 @@ fn nested_records(
             path(p, limits)?;
         }
     }
-    for config in array(v, "config")? {
-        if crate::catalog::feature(text(config, "feature")?).is_none()
-            || nullable_text(config, "status")?.is_some_and(|s| !status(s))
-            || optional_text(config, "unit")?.is_some_and(|id| !units.contains(id))
-        {
-            return Err(invalid());
+    // Compare multisets so repeated concerns retain their multiplicity while
+    // record ordering and additive fields do not affect the projection.
+    let key = |record| {
+        Ok::<_, AnalyzeError>((
+            text(record, "feature")?,
+            optional_text(record, "unit")?,
+            nullable_text(record, "status")?,
+            text(record, "reason")?,
+        ))
+    };
+    let mut expected = BTreeMap::<_, usize>::new();
+    for occurrence in array(v, "occurrences")? {
+        if text(occurrence, "feature")?.starts_with("nextjs.config.") {
+            *expected.entry(key(occurrence)?).or_default() += 1;
         }
-        text(config, "reason")?;
+    }
+    for config in array(v, "config")? {
+        let count = expected.get_mut(&key(config)?).ok_or_else(invalid)?;
+        *count = count.checked_sub(1).ok_or_else(invalid)?;
+    }
+    if expected.values().any(|&count| count != 0) {
+        return Err(invalid());
     }
     let mut rules = BTreeSet::new();
     for rule in array(v, "rules")? {
@@ -914,7 +927,7 @@ fn validate(v: &Value, limits: &Limits) -> Result<(), AnalyzeError> {
     {
         return Err(invalid());
     }
-    nested_records(v, limits, &identities, &finding_ids)
+    nested_records(v, limits, &finding_ids)
 }
 fn check_metric(v: &Value) -> Result<(), AnalyzeError> {
     let n = number(v, "numerator")?;

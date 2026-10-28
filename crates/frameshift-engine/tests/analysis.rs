@@ -34,6 +34,116 @@ fn run(root: &std::path::Path) -> analysis::Analysis {
 }
 const PAGE: &str = "export default function Page() { return <h1>Welcome</h1> }\n";
 #[test]
+fn stored_config_is_an_exact_projection_of_occurrence_assessments() {
+    fn object(value: &mut Value) -> &mut std::collections::BTreeMap<String, Value> {
+        let Value::Object(o) = value else {
+            panic!("object required")
+        };
+        o
+    }
+    let root = create(
+        "config-projection",
+        &[
+            ("app/page.tsx", PAGE),
+            (
+                "next.config.mjs",
+                "export default {output:'export', headers: async () => []}",
+            ),
+        ],
+    );
+    let original = StoredReport::parse(
+        run(&root).document().unwrap().into_bytes(),
+        &Limits::default(),
+    )
+    .unwrap();
+    let configs = original.value().get("config").unwrap().array();
+    let index = configs
+        .iter()
+        .position(|c| c.get("feature").and_then(Value::text) == Some("nextjs.config.headers"))
+        .unwrap();
+    assert_eq!(
+        configs[index].get("status").and_then(Value::text),
+        Some("unsupported")
+    );
+    for (field, bad) in [
+        ("feature", Value::String("nextjs.config.output".into())),
+        ("feature", Value::String("npm.manifest".into())),
+        ("status", Value::String("auto".into())),
+        ("status", Value::Null),
+        ("reason", Value::String("Invented assessment".into())),
+        ("unit", Value::String("route:/".into())),
+        ("unit", Value::Null),
+    ] {
+        let mut damaged = original.value().clone();
+        let Value::Array(records) = object(&mut damaged).get_mut("config").unwrap() else {
+            panic!("array required")
+        };
+        object(&mut records[index]).insert(field.into(), bad);
+        assert!(
+            StoredReport::parse(damaged.document().into_bytes(), &Limits::default()).is_err(),
+            "{field}"
+        );
+    }
+    for change in [
+        "missing",
+        "empty",
+        "duplicate",
+        "replacement",
+        "missing-unit",
+    ] {
+        let mut damaged = original.value().clone();
+        let Value::Array(records) = object(&mut damaged).get_mut("config").unwrap() else {
+            panic!("array required")
+        };
+        match change {
+            "missing" => {
+                records.remove(index);
+            }
+            "empty" => records.clear(),
+            "duplicate" => records.push(records[index].clone()),
+            "replacement" => records[index] = records[(index + 1) % records.len()].clone(),
+            "missing-unit" => {
+                object(&mut records[index]).remove("unit");
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            StoredReport::parse(damaged.document().into_bytes(), &Limits::default()).is_err(),
+            "{change}"
+        );
+    }
+    // Additional fields and reordered records remain forward compatible.
+    let mut additive = original.value().clone();
+    let Value::Array(records) = object(&mut additive).get_mut("config").unwrap() else {
+        panic!("array required")
+    };
+    records.reverse();
+    object(&mut records[0]).insert("futureEvidence".into(), Value::Bool(true));
+    let accepted =
+        StoredReport::parse(additive.document().into_bytes(), &Limits::default()).unwrap();
+    assert_eq!(accepted.value(), &additive);
+    // Distinct evidence can project to identical concerns. Preserve counts.
+    let mut repeated = original.value().clone();
+    let occurrence = repeated
+        .get("occurrences")
+        .unwrap()
+        .array()
+        .iter()
+        .find(|o| o.get("feature").and_then(Value::text) == Some("nextjs.config.headers"))
+        .unwrap()
+        .clone();
+    let Value::Array(records) = object(&mut repeated).get_mut("occurrences").unwrap() else {
+        panic!("array required")
+    };
+    records.push(occurrence);
+    assert!(StoredReport::parse(repeated.document().into_bytes(), &Limits::default()).is_err());
+    let Value::Array(records) = object(&mut repeated).get_mut("config").unwrap() else {
+        panic!("array required")
+    };
+    records.push(configs[index].clone());
+    StoredReport::parse(repeated.document().into_bytes(), &Limits::default()).unwrap();
+}
+#[test]
 fn manifest_scripts_preserve_production_server_and_other_next_review() {
     let root = create("scripts", &[("app/page.tsx", PAGE)]);
     for (script, expected) in [
