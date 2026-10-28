@@ -128,6 +128,19 @@ pub struct Analysis {
 /// the network. A root with several workspace members requires explicit
 /// package selection when its own manifest has no App Router application.
 pub fn analyze(root: &Path, options: &AnalyzeOptions) -> Result<Analysis, AnalyzeError> {
+    analyze_parts(root, options).map(|parts| parts.analysis)
+}
+
+/// An analysis with the immutable inputs it was computed from, so that
+/// migration plans from the same evidence without reading the source again.
+pub(crate) struct Parts {
+    pub(crate) analysis: Analysis,
+    pub(crate) snapshot: frameshift_input::Snapshot,
+    pub(crate) project: project::Project,
+    pub(crate) manifest: frameshift_package::PackageManifest,
+}
+
+pub(crate) fn analyze_parts(root: &Path, options: &AnalyzeOptions) -> Result<Parts, AnalyzeError> {
     let limits = &options.limits;
     limits.validate().map_err(internal)?;
     let mut findings = FindingCollector::new(limits.finding);
@@ -199,16 +212,22 @@ pub fn analyze(root: &Path, options: &AnalyzeOptions) -> Result<Analysis, Analyz
         | frameshift_nextjs::VersionEvidence::LowerBound(v) => Some(v.to_string()),
         frameshift_nextjs::VersionEvidence::Unknown => None,
     };
-    if !matches!(selected.manifest(), ManifestState::Analyzed(_)) {
+    let ManifestState::Analyzed(manifest) = selected.manifest() else {
         return Err(failure("the selected package manifest cannot be analyzed"));
-    }
-    Ok(Analysis {
-        max_report_bytes: limits.analysis.max_report_bytes,
-        limits: *limits,
-        package: options.package.clone(),
-        source_version,
-        assessment,
-        dependencies,
-        findings: findings.finish(),
+    };
+    let manifest = (**manifest).clone();
+    Ok(Parts {
+        analysis: Analysis {
+            max_report_bytes: limits.analysis.max_report_bytes,
+            limits: *limits,
+            package: options.package.clone(),
+            source_version,
+            assessment,
+            dependencies,
+            findings: findings.finish(),
+        },
+        snapshot,
+        project,
+        manifest,
     })
 }

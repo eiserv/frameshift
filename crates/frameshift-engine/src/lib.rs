@@ -38,6 +38,7 @@ mod document;
 pub mod features;
 pub mod inspect;
 pub mod limits;
+pub mod migrate;
 pub mod project;
 pub mod version;
 
