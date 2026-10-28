@@ -47,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "frameshift-bench"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-corpus",
  "frameshift-engine",
@@ -55,46 +55,46 @@ dependencies = [
 
 [[package]]
 name = "frameshift-bindings"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-syntax",
 ]
 
 [[package]]
 name = "frameshift-catalog"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "frameshift-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-engine",
 ]
 
 [[package]]
 name = "frameshift-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "frameshift-corpus"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-engine",
 ]
 
 [[package]]
 name = "frameshift-e2"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-engine",
 ]
 
 [[package]]
 name = "frameshift-emit"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-core",
  "frameshift-syntax",
@@ -103,7 +103,7 @@ dependencies = [
 
 [[package]]
 name = "frameshift-engine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-bindings",
  "frameshift-catalog",
@@ -120,11 +120,11 @@ dependencies = [
 
 [[package]]
 name = "frameshift-entity-gen"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "frameshift-evaluate"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-bindings",
  "frameshift-core",
@@ -135,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "frameshift-fuzz"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-corpus",
  "frameshift-engine",
@@ -144,18 +144,18 @@ dependencies = [
 
 [[package]]
 name = "frameshift-fuzz-sections"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "frameshift-input"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-core",
 ]
 
 [[package]]
 name = "frameshift-modules"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-core",
  "frameshift-input",
@@ -165,7 +165,7 @@ dependencies = [
 
 [[package]]
 name = "frameshift-nextjs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-bindings",
  "frameshift-core",
@@ -178,7 +178,7 @@ dependencies = [
 
 [[package]]
 name = "frameshift-package"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-core",
  "frameshift-input",
@@ -187,21 +187,21 @@ dependencies = [
 
 [[package]]
 name = "frameshift-syntax"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-core",
 ]
 
 [[package]]
 name = "frameshift-transform"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frameshift-core",
 ]
 
 [[package]]
 name = "frameshift-unicode-gen"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "hybrid-array"

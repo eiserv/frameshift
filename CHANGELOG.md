@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.2.0](https://github.com/eiserv/frameshift/compare/v0.1.0...v0.2.0) (2026-10-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **analyzer:** callers using explicit `Limits` struct literals must provide the new `analysis` resource limits. No planning, migration execution, or behavioral-equivalence claim is added.
+* **features:** close M4 and detect V1 feature catalog occurrences ([#59](https://github.com/eiserv/frameshift/issues/59))
+* **nextjs:** extract configuration, convention, and API facts ([#55](https://github.com/eiserv/frameshift/issues/55))
+
+### Features
+
+* **analyzer:** complete M5 analysis and reporting ([74d41b1](https://github.com/eiserv/frameshift/commit/74d41b1cca545a6ee03810817cdabb273f70d528))
+* **features:** close M4 and detect V1 feature catalog occurrences ([#59](https://github.com/eiserv/frameshift/issues/59)) ([51084ac](https://github.com/eiserv/frameshift/commit/51084ac0a28455efa39af951ee6e27657f852a3b))
+* **model:** assemble source project facts and route dependencies ([#53](https://github.com/eiserv/frameshift/issues/53)) ([c30110c](https://github.com/eiserv/frameshift/commit/c30110c454591401d4294041d5bc8629768a864f))
+* **model:** resolve JSX render sites to component definitions ([#54](https://github.com/eiserv/frameshift/issues/54)) ([d5162fc](https://github.com/eiserv/frameshift/commit/d5162fcdedc861e35bf8098a0bb60d9d66cc5e6a))
+* **modules:** resolve configuration inheritance from linked workspace packages ([#57](https://github.com/eiserv/frameshift/issues/57)) ([18eba93](https://github.com/eiserv/frameshift/commit/18eba93b72ba3052c45764fa541f9ec7bed98483))
+* **modules:** resolve ordered module filename suffixes ([#52](https://github.com/eiserv/frameshift/issues/52)) ([06de5a7](https://github.com/eiserv/frameshift/commit/06de5a7f452b99d3877b91996a7918b8673f645b))
+* **nextjs:** build the App Router route tree and render contexts ([#46](https://github.com/eiserv/frameshift/issues/46)) ([cbbcdfe](https://github.com/eiserv/frameshift/commit/cbbcdfe27a4add826b966b92e38e074e9630950a))
+* **nextjs:** extract configuration, convention, and API facts ([#55](https://github.com/eiserv/frameshift/issues/55)) ([95caf82](https://github.com/eiserv/frameshift/commit/95caf8227970be822256d9d312681271c692bc79))
+* **semantics:** analyze scopes, bindings, references, and exports ([#45](https://github.com/eiserv/frameshift/issues/45)) ([234d49a](https://github.com/eiserv/frameshift/commit/234d49ab72beaadb64e68ccc01745672f9390be9))
+* **semantics:** evaluate configuration values and measure E3 coverage ([#48](https://github.com/eiserv/frameshift/issues/48)) ([bded55e](https://github.com/eiserv/frameshift/commit/bded55e81f5f0556b347f448f3ed2ea7fc610c90))
+* **semantics:** resolve local modules and build a deterministic import graph ([#43](https://github.com/eiserv/frameshift/issues/43)) ([b67810c](https://github.com/eiserv/frameshift/commit/b67810ca453496e348f9d28b9b8c418fde6602ef))
+* **semantics:** resolve local modules with an explicit Node10 profile ([#51](https://github.com/eiserv/frameshift/issues/51)) ([60edd25](https://github.com/eiserv/frameshift/commit/60edd258b2419bc8b8134e7fe649f382b16ce80b))
+* **semantics:** resolve package imports, self-references, and directory entry points ([#44](https://github.com/eiserv/frameshift/issues/44)) ([b6308e5](https://github.com/eiserv/frameshift/commit/b6308e5f6e7203ec52d3630ee7c73507998f6a91))
+* **syntax:** add the CSS tokenizer from the pinned CSS Syntax draft ([#28](https://github.com/eiserv/frameshift/issues/28)) ([d9a4f31](https://github.com/eiserv/frameshift/commit/d9a4f3146d159ecf81f0b7406ff4d5b541bd3a20))
+* **syntax:** begin SCSS and indented Sass parsing ([#30](https://github.com/eiserv/frameshift/issues/30)) ([3139e3f](https://github.com/eiserv/frameshift/commit/3139e3f74db909a78e8578ea84f7ec0f1713f3cb))
+* **syntax:** complete Sass parsing conformance against the normal reference ([#42](https://github.com/eiserv/frameshift/issues/42)) ([5b52066](https://github.com/eiserv/frameshift/commit/5b52066fcd47f53a2d0c28f4f4d1c7d727312ce4))
+* **syntax:** extend Sass grammar and JavaScript diagnostic recovery ([#40](https://github.com/eiserv/frameshift/issues/40)) ([d056601](https://github.com/eiserv/frameshift/commit/d0566013d2599c99ccc78f3c7e7bc1bdf86a27d7))
+* **syntax:** parse generic CSS structure with bounded recovery ([#29](https://github.com/eiserv/frameshift/issues/29)) ([93dab86](https://github.com/eiserv/frameshift/commit/93dab86c6840c9f04afd5c664d20e5dc7a640ee4))
+* **syntax:** parse legacy indented Sass mixin shorthand ([#31](https://github.com/eiserv/frameshift/issues/31)) ([6030ad0](https://github.com/eiserv/frameshift/commit/6030ad02bd3be692c294b3b53979ffb85f475022))
+* **syntax:** parse modern Sass if and recover JavaScript diagnostics ([#37](https://github.com/eiserv/frameshift/issues/37)) ([0914f99](https://github.com/eiserv/frameshift/commit/0914f99255e031497975cec305d79a88260601b1))
+* **syntax:** parse plain CSS functions in Sass ([#38](https://github.com/eiserv/frameshift/issues/38)) ([e902689](https://github.com/eiserv/frameshift/commit/e90268912a3bce47f66976fa77ae81dff8922a61))
+* **syntax:** parse Sass selectors with Dart Sass's evaluation grammars ([#32](https://github.com/eiserv/frameshift/issues/32)) ([f25fbc3](https://github.com/eiserv/frameshift/commit/f25fbc3157f2b8fe2cce81c55719a36d355dd45c))
+* **syntax:** refine Sass numeric parsing and default export recovery ([#41](https://github.com/eiserv/frameshift/issues/41)) ([49b08a2](https://github.com/eiserv/frameshift/commit/49b08a26b2627467c270a01c794e397fc512223b))
+* **syntax:** structure Sass extension targets and at-root queries ([#36](https://github.com/eiserv/frameshift/issues/36)) ([1f7fade](https://github.com/eiserv/frameshift/commit/1f7fadeb66a6b6a45f66aff6d5e60821bd2d92d9))
+* **syntax:** structure Sass imports and validate their URLs ([#34](https://github.com/eiserv/frameshift/issues/34)) ([a6c7f1b](https://github.com/eiserv/frameshift/commit/a6c7f1ba4b8e39967631b9f5bb3c8f0892c745a6))
+* **syntax:** structure Sass media queries and supports conditions ([#35](https://github.com/eiserv/frameshift/issues/35)) ([126480a](https://github.com/eiserv/frameshift/commit/126480a7578ee9afdd04efd5cea53fdff2591209))
+* **syntax:** validate Sass module rules and preserve their clauses ([#33](https://github.com/eiserv/frameshift/issues/33)) ([1b2521e](https://github.com/eiserv/frameshift/commit/1b2521ee4e113636b3c38e82bf3e17a380eb3503))
+
+
+### Bug Fixes
+
+* **features:** recognize static-compatible segment modes ([#62](https://github.com/eiserv/frameshift/issues/62)) ([12a9f6a](https://github.com/eiserv/frameshift/commit/12a9f6a4c6c77aa2a57c396124cc9892784f8d51))
+* **inspect:** close M2 with adversarial fixtures and detection fixes ([#26](https://github.com/eiserv/frameshift/issues/26)) ([b8c1db1](https://github.com/eiserv/frameshift/commit/b8c1db12b293c0a43ffd55cee285cf4e7b63ea01))
+* **modules:** judge inherited moduleResolution after combining configurations ([#58](https://github.com/eiserv/frameshift/issues/58)) ([9a0078a](https://github.com/eiserv/frameshift/commit/9a0078a26fd2a8ead65f3b814b8c0358f5c82b20))
+* **syntax:** distinguish raw Sass URLs from function calls ([#39](https://github.com/eiserv/frameshift/issues/39)) ([865f2b7](https://github.com/eiserv/frameshift/commit/865f2b733b2180fff1e6a9dfe797909de96ddae4))
+* **syntax:** preserve Sass operator kinds and source spans ([#50](https://github.com/eiserv/frameshift/issues/50)) ([82e8ef3](https://github.com/eiserv/frameshift/commit/82e8ef3dbdf8dc4aaf0538a576f0fbbfb8c4d169))
+
 ## 0.1.0 (2026-10-20)
 
 
