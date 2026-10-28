@@ -68,12 +68,13 @@ pub use frameshift_transform as transform;
 pub use frameshift_core::{Position, SourceText, Span, TextError, TextLimits};
 pub use frameshift_emit::{
     Anchor, Assumption, AssumptionKind, AstroComponent, AttributeItem, AttributeName,
-    AttributeValue, BuildError, ClientDirective, ComponentName, ComponentReference,
-    ComponentStrategy, ConvertError, ConvertErrorKind, ConvertedMarkup, Element, ElementResolver,
-    EmitLimits, EmittedText, Expression, ExpressionPiece, FrontmatterItem, HtmlTagName, ImportItem,
-    Indent, JsIdentifier, JsxConversion, LineEnding, NamedImport, OutputBuilder, OutputRegion,
-    PrintError, PrintOptions, PropMember, PropType, ProvenanceError, RegionOrigin, SourceId,
-    TagName, TemplateNode, convert_jsx, print_astro_component,
+    AttributeValue, BuildError, ClientDirective, ComponentConversion, ComponentName,
+    ComponentReference, ComponentStrategy, ConvertError, ConvertErrorKind, ConvertedComponent,
+    ConvertedMarkup, Element, ElementResolver, EmitLimits, EmittedText, Expression,
+    ExpressionPiece, FrontmatterItem, HtmlTagName, ImportItem, Indent, JsIdentifier, JsxConversion,
+    LineEnding, NamedImport, OutputBuilder, OutputRegion, PrintError, PrintOptions, PropMember,
+    PropType, PropsSource, ProvenanceError, RegionOrigin, SourceId, TagName, TemplateNode,
+    convert_component, convert_jsx, print_astro_component,
 };
 pub use frameshift_syntax::{
     AssignmentOperator, BinaryOperator, ChildList, ChildNodes, Comment, CommentKind, FunctionKind,

@@ -194,11 +194,33 @@ pub enum ConvertErrorKind {
     /// Text with a tab inside a line, a line or paragraph separator, a
     /// control character, or a reference to a surrogate.
     UnsupportedTextCharacter,
-    /// A comment in markup outside every copied expression, which the
-    /// conversion would drop.
+    /// A comment outside every copied span, which the conversion would drop.
     CommentInMarkup,
     /// Markup nests deeper than the configured limit.
     TooDeep,
+    /// A component function that is a generator, has more than one
+    /// parameter, or a parameter other than an object pattern.
+    UnsupportedFunction,
+    /// A component body that does not end in a single `return` of markup,
+    /// or a statement before it that is not a `var`, `let`, or `const`
+    /// declaration or an expression statement, or that contains markup or a
+    /// `return` of the component.
+    UnsupportedBody,
+    /// `this`, `super`, `arguments`, `new.target`, or `import.meta`, whose
+    /// value differs in an Astro component.
+    ContextDependent,
+    /// A call whose callee is named like a React hook (`use` or `use`
+    /// followed by an uppercase letter or a digit), which has no meaning
+    /// outside a React render.
+    HookCall,
+    /// The name `Astro`, which generated frontmatter and templates use.
+    ReservedName,
+    /// A name declared by a dropped parameter remains outside every
+    /// replaced span.
+    DroppedBinding,
+    /// A replaced span that is not inside the converted body, overlaps
+    /// another replaced span or markup, or is never reached.
+    UnsupportedSubstitution,
 }
 
 impl ConvertErrorKind {
@@ -224,6 +246,13 @@ impl ConvertErrorKind {
             Self::UnsupportedTextCharacter => "unsupported-text-character",
             Self::CommentInMarkup => "comment-in-markup",
             Self::TooDeep => "too-deep",
+            Self::UnsupportedFunction => "unsupported-function",
+            Self::UnsupportedBody => "unsupported-body",
+            Self::ContextDependent => "context-dependent",
+            Self::HookCall => "hook-call",
+            Self::ReservedName => "reserved-name",
+            Self::DroppedBinding => "dropped-binding",
+            Self::UnsupportedSubstitution => "unsupported-substitution",
         }
     }
 }
@@ -259,6 +288,20 @@ pub fn convert_jsx(
     conversion: &JsxConversion<'_>,
     resolver: &mut dyn ElementResolver,
 ) -> Result<ConvertedMarkup, ConvertError> {
+    convert_markup(tree, source, node, conversion, resolver, &[]).map(|(markup, _)| markup)
+}
+
+/// Converts markup like [`convert_jsx`] and replaces the sorted, disjoint
+/// `substitutions` inside copied expressions with `Astro.params`. Returns the
+/// substitutions it reached, in source order.
+pub(crate) fn convert_markup(
+    tree: &SyntaxTree<'_>,
+    source: SourceId,
+    node: NodeId,
+    conversion: &JsxConversion<'_>,
+    resolver: &mut dyn ElementResolver,
+    substitutions: &[Span],
+) -> Result<(ConvertedMarkup, Vec<Span>), ConvertError> {
     let mut converter = Converter {
         tree,
         source,
@@ -266,6 +309,8 @@ pub fn convert_jsx(
         resolver,
         assumptions: Vec::new(),
         copied: Vec::new(),
+        substitutions,
+        substituted: Vec::new(),
     };
     let root = converter.unparenthesize(node)?;
     let root_span = converter.span(root)?;
@@ -287,11 +332,17 @@ pub fn convert_jsx(
     converter
         .assumptions
         .sort_by_key(|assumption| (assumption.anchor.span.start(), assumption.anchor.span.end()));
-    Ok(ConvertedMarkup {
-        nodes,
-        assumptions: converter.assumptions,
-        copied: converter.copied,
-    })
+    converter
+        .substituted
+        .sort_by_key(|span| (span.start(), span.end()));
+    Ok((
+        ConvertedMarkup {
+            nodes,
+            assumptions: converter.assumptions,
+            copied: converter.copied,
+        },
+        converter.substituted,
+    ))
 }
 
 struct Converter<'t, 'r, 'c> {
@@ -301,6 +352,8 @@ struct Converter<'t, 'r, 'c> {
     resolver: &'r mut dyn ElementResolver,
     assumptions: Vec<Assumption>,
     copied: Vec<Span>,
+    substitutions: &'c [Span],
+    substituted: Vec<Span>,
 }
 
 impl<'t> Converter<'t, '_, '_> {
@@ -870,15 +923,46 @@ impl<'t> Converter<'t, '_, '_> {
         self.depth_check(depth, anchor_span)?;
         let mut markup = Vec::new();
         self.find_markup(start, inner, &mut markup)?;
+        let mut cuts = Vec::with_capacity(markup.len());
+        for &jsx in &markup {
+            cuts.push((self.span(jsx)?, Some(jsx)));
+        }
+        // Substitutions inside nested markup are reached when that markup's
+        // own expressions are copied.
+        for &span in self.substitutions {
+            if span.end() <= inner.start() || span.start() >= inner.end() {
+                continue;
+            }
+            let outside = cuts
+                .iter()
+                .filter(|(_, jsx)| jsx.is_some())
+                .all(|(markup, _)| span.end() <= markup.start() || span.start() >= markup.end());
+            let inside = cuts
+                .iter()
+                .filter(|(_, jsx)| jsx.is_some())
+                .any(|(markup, _)| markup.start() <= span.start() && span.end() <= markup.end());
+            if span.start() < inner.start() || span.end() > inner.end() || !(outside || inside) {
+                return Err(self.error(ConvertErrorKind::UnsupportedSubstitution, span));
+            }
+            if outside {
+                cuts.push((span, None));
+            }
+        }
+        cuts.sort_by_key(|(span, _)| (span.start(), span.end()));
         let mut pieces = Vec::new();
         let mut offset = inner.start();
-        for jsx in markup {
-            let span = self.span(jsx)?;
+        for (span, jsx) in cuts {
             if span.start() > offset {
                 let gap = Span::new(offset, span.start()).map_err(|_| self.invalid())?;
                 self.copied.push(gap);
                 pieces.push(ExpressionPiece::Source(gap));
             }
+            let Some(jsx) = jsx else {
+                self.substituted.push(span);
+                pieces.push(ExpressionPiece::AstroParams);
+                offset = span.end();
+                continue;
+            };
             let kind = self.kind(jsx)?;
             let node = if let SyntaxNodeKind::JsxFragment { children, .. } = kind {
                 TemplateNode::Fragment {
