@@ -1,0 +1,10 @@
+Usage: frameshift migrate [<source>] --to astro-preact --out <dir> [--package <dir>] [--dry-run]
+Migrate the Next.js App Router project at <source>, by default the current directory, into a
+new Astro project with Preact at <dir> (migrate v0, proposed in D-101). Static pages, layouts,
+and components that the analysis rates auto or review are converted; everything else is
+copied unchanged below .frameshift/unmigrated/ and listed in .frameshift/SUMMARY.md.
+<dir> must not exist, and must not be inside <source> or contain it. Files are written to a
+staging directory next to <dir> and renamed into place when complete. The source is never
+modified, and no project code or external tool runs. --dry-run lists the planned files and
+writes nothing. Exit status: 0 on success, 2 for invalid arguments, 3 when the source cannot
+be analyzed, 4 when the output location is refused or cannot be written.

@@ -9,6 +9,7 @@ Commands available in this build:
   report <file>       Render a stored analysis report
   explain <id>        Explain a finding, feature, or assessment rule
   rules               List assessment rule metadata
+  migrate [<source>]  Migrate static pages into a new Astro project (v0)
   version             Print engine and build information
 
 Options:
@@ -17,4 +18,4 @@ Options:
   --format text|json  Select command output (default: text)
   --package <dir>     Select one workspace package
 
-Migration and verification commands are not implemented.
+Planning and verification commands are not implemented.

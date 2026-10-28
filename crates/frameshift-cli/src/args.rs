@@ -30,6 +30,7 @@ pub(crate) struct InspectRequest {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Request {
     Extra(Box<crate::analysis_cli::Request>),
+    Migrate(Box<crate::migrate_cli::Request>),
     Help(HelpTopic),
     Version(Format),
     ShortVersion,
@@ -81,6 +82,9 @@ fn source_operand(args: &[Option<&str>]) -> Option<usize> {
 pub(crate) fn parse(native: &[OsString]) -> Result<Request, UsageError> {
     if let Some(request) = crate::analysis_cli::parse(native) {
         return request.map(|r| Request::Extra(Box::new(r)));
+    }
+    if let Some(request) = crate::migrate_cli::parse(native) {
+        return request.map(|r| Request::Migrate(Box::new(r)));
     }
     let args: Vec<Option<&str>> = native.iter().map(|arg| arg.to_str()).collect();
     let error = |message| UsageError {
