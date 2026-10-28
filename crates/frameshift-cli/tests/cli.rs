@@ -43,10 +43,11 @@ const GOLDENS: &[(&[&str], &str, i32)] = &[
     (&["help", "help"], "help-help.txt", 0),
     (&["help", "version"], "help-version.txt", 0),
     (&["help", "inspect"], "help-inspect.txt", 0),
+    (&["help", "migrate"], "help-migrate.txt", 0),
     (&["version"], "version.txt", 0),
     (&["version", "--format", "json"], "version.json", 0),
     (&["--version"], "short-version.txt", 0),
-    (&["migrate", "--format", "json"], "usage-error.json", 2),
+    (&["plan", "--format", "json"], "usage-error.json", 2),
 ];
 
 #[test]
@@ -115,7 +116,9 @@ fn invalid_arguments_and_planned_commands_fail_without_echoing_input() {
         &["verify"],
         &["report"],
         &["explain"],
-        &["help", "migrate"],
+        &["help", "plan"],
+        &["migrate", "--to", "astro-preact"],
+        &["migrate", "--to", "astro-preact", "--out", "o", "--strict"],
         &["version", "extra"],
         &["help", "help", "extra"],
         &["--version", "version"],

@@ -22,20 +22,21 @@ const ROOT_HELP: &str = concat!(
     "  report <file>       Render a stored analysis report\n",
     "  explain <id>        Explain a finding, feature, or assessment rule\n",
     "  rules               List assessment rule metadata\n",
+    "  migrate [<source>]  Migrate static pages into a new Astro project (v0)\n",
     "  version             Print engine and build information\n",
     "\nOptions:\n",
     "  -h, --help          Print usage\n",
     "  --version           Print the short version string\n",
     "  --format text|json  Select command output (default: text)\n",
     "  --package <dir>     Select one workspace package\n",
-    "\nMigration and verification commands are not implemented.\n",
+    "\nPlanning and verification commands are not implemented.\n",
 );
 
 pub(crate) fn help(topic: HelpTopic) -> &'static str {
     match topic {
         HelpTopic::Root => ROOT_HELP,
         HelpTopic::Help => {
-            "Usage: frameshift help [help|inspect|analyze|report|explain|rules|version]\n\
+            "Usage: frameshift help [help|inspect|analyze|report|explain|rules|migrate|version]\n\
 Print usage for the available commands. Without a topic, print the command overview.\n"
         }
         HelpTopic::Inspect => {
@@ -170,7 +171,7 @@ fn json_string(output: &mut impl Write, value: &str) -> io::Result<()> {
 /// control characters, line and paragraph separators, and bidirectional
 /// formatting characters, so that a name can neither inject escape
 /// sequences nor disguise the text around it.
-fn escape(text: &str) -> String {
+pub(crate) fn escape(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for scalar in text.chars() {
         match scalar {
