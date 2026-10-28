@@ -3,6 +3,7 @@ config     .frameshift/SUMMARY.md  report.summary
 preserve   .frameshift/unmigrated/src/app/counter/page.tsx  preserve.unmigrated  from src/app/counter/page.tsx
 preserve   .frameshift/unmigrated/src/app/lazy/page.tsx  preserve.unmigrated  from src/app/lazy/page.tsx
 preserve   .frameshift/unmigrated/src/app/plain/page.tsx  preserve.unmigrated  from src/app/plain/page.tsx
+preserve   .frameshift/unmigrated/src/app/shadow/page.tsx  preserve.unmigrated  from src/app/shadow/page.tsx
 preserve   .frameshift/unmigrated/src/components/Counter.tsx  preserve.unmigrated  from src/components/Counter.tsx
 preserve   .frameshift/unmigrated/src/lib/label.ts  preserve.unmigrated  from src/lib/label.ts
 config     .gitignore  config.gitignore
@@ -12,5 +13,5 @@ create     src/layouts/RootLayout.astro  layout.chain  from src/app/layout.tsx
 transform  src/lib/greeting.ts  module.relocate  from src/lib/greeting.ts
 create     src/pages/index.astro  route.static-page  from src/app/page.tsx  review
 config     tsconfig.json  config.tsconfig
-13 operations planned (2 converted to Astro, 5 preserved); 0 files written.
-Manual tasks: 9. See .frameshift/SUMMARY.md in the output directory.
+14 operations planned (2 converted to Astro, 6 preserved); 0 files written.
+Manual tasks: 10. See .frameshift/SUMMARY.md in the output directory.

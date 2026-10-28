@@ -7,10 +7,10 @@ Migrate v0 converts only static pages, layouts, and components that the analysis
 ## Results
 
 - Converted to Astro components: 8
-- Kept as JavaScript or TypeScript with rewritten imports: 2
+- Kept as JavaScript or TypeScript with rewritten imports: 3
 - Copied unchanged: 3
 - Generated project files: 5
-- Preserved for manual migration: 2
+- Preserved for manual migration: 3
 - Not copied: 3
 
 ## Project tasks
@@ -23,6 +23,7 @@ Migrate v0 converts only static pages, layouts, and components that the analysis
 
 - `app/blog/[slug]/page.tsx`: preserved for manual migration: the analysis rates this file's units unsupported
 - `app/contact/page.tsx`: preserved for manual migration: client components and islands are not converted by migrate v0
+- `tests/site.test.ts`: preserved for manual migration: tests and repository tooling are outside V1
 
 ## Converted files to review
 

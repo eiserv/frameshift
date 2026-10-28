@@ -390,7 +390,7 @@ impl<'a> Planner<'a> {
                 return Fate::NotCopied("excluded by discovery".into());
             }
             Some(FileClass::OutOfScope) => {
-                return Fate::NotCopied("tests and repository tooling are outside V1".into());
+                return Fate::Preserve("tests and repository tooling are outside V1".into());
             }
             Some(FileClass::Verbatim) => {
                 let output = if local.starts_with("public/") {

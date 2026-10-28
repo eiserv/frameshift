@@ -2,6 +2,7 @@ Dry run: nothing will be written.
 config     .frameshift/SUMMARY.md  report.summary
 preserve   .frameshift/unmigrated/app/blog/[slug]/page.tsx  preserve.unmigrated  from app/blog/[slug]/page.tsx
 preserve   .frameshift/unmigrated/app/contact/page.tsx  preserve.unmigrated  from app/contact/page.tsx
+preserve   .frameshift/unmigrated/tests/site.test.ts  preserve.unmigrated  from tests/site.test.ts
 config     .gitignore  config.gitignore  from .gitignore
 config     astro.config.mjs  config.astro
 config     package.json  config.package-manifest
@@ -12,6 +13,7 @@ create     src/components/SiteHeader.astro  component.astro  from components/Sit
 create     src/layouts/DocsLayout.astro  layout.chain  from app/docs/layout.tsx
 create     src/layouts/RootLayout.astro  layout.chain  from app/layout.tsx
 transform  src/lib/site.ts  module.relocate  from lib/site.ts
+transform  src/lib/types.ts  module.relocate  from lib/types.ts
 create     src/pages/about.astro  route.static-page  from app/about/page.tsx
 create     src/pages/docs.astro  route.static-page  from app/docs/page.tsx
 create     src/pages/docs/intro.astro  route.static-page  from app/docs/intro/page.tsx
@@ -19,5 +21,5 @@ create     src/pages/index.astro  route.static-page  from app/page.tsx  review
 create     src/pages/pricing.astro  route.static-page  from app/(marketing)/pricing/page.tsx
 copy       src/styles/globals.css  style.relocate  from app/globals.css
 config     tsconfig.json  config.tsconfig
-20 operations planned (8 converted to Astro, 2 preserved); 0 files written.
-Manual tasks: 7. See .frameshift/SUMMARY.md in the output directory.
+22 operations planned (8 converted to Astro, 3 preserved); 0 files written.
+Manual tasks: 8. See .frameshift/SUMMARY.md in the output directory.

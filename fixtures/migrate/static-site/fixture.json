@@ -1,7 +1,7 @@
 {
   "$schema": "../../../schemas/fixture.schema.json",
   "kind": "migrate",
-  "description": "A fictional static App Router site for migrate v0 (D-101): a root layout with a title template, description, global stylesheet, and an Astro-convertible header component; static pages with next/link, page metadata, a dropped segment option, a route group, a nested layout, a static Preact component with an early return, a relocated library module, and public assets. A dynamic route without generateStaticParams and a client page are preserved. The manifest names the real next package, so the harness creates it at test time (Q-014).",
+  "description": "A fictional static App Router site for migrate v0 (D-101): a root layout with a title template, description, global stylesheet, and an Astro-convertible header component; static pages with next/link, page metadata, a dropped segment option, a route group, a nested layout, a static Preact component with an early return, a relocated library module whose type-only aliased import is rewritten, and public assets. A test file is preserved as out of scope. A dynamic route without generateStaticParams and a client page are preserved. The manifest names the real next package, so the harness creates it at test time (Q-014).",
   "createdAtTestTime": [
     {
       "kind": "file",
