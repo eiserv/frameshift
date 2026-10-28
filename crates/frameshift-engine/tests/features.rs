@@ -241,8 +241,13 @@ const SOURCE: &[(&str, &str)] = &[
     ),
     (
         "app/(marketing)/pricing/page.tsx",
-        "export const dynamic = 'force-static';\n\
+        "export const dynamic = 'force-static';\nexport const dynamicParams = false;\n\
          export default function Pricing() { return null; }\n",
+    ),
+    (
+        "app/(marketing)/plans/page.tsx",
+        "export const dynamic = 'static';\nexport const dynamicParams = true;\n\
+         export default function Plans() { return null; }\n",
     ),
     (
         "app/shop/layout.tsx",
@@ -419,6 +424,11 @@ fn detection_maps_facts_to_catalog_features() {
         ),
         ("nextjs.segment.dynamic", "app/docs/[...path]/page.tsx"),
         ("nextjs.route.group", "app/(marketing)/pricing/page.tsx"),
+        ("nextjs.segment.static", "app/(marketing)/pricing/page.tsx"),
+        (
+            "nextjs.segment.dynamic-params",
+            "app/(marketing)/pricing/page.tsx",
+        ),
         (
             "nextjs.route.optional-catch-all",
             "app/shop/[[...filter]]/page.tsx",
@@ -503,6 +513,9 @@ fn detection_maps_facts_to_catalog_features() {
         Cause::SegmentValue,
         Cause::SegmentOption {
             name: "fetchCache".to_owned(),
+        },
+        Cause::SegmentOption {
+            name: "dynamicParams".to_owned(),
         },
         Cause::Environment(frameshift_engine::nextjs::VariableAccess::Whole),
         Cause::Api {

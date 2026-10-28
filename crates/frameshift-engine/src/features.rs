@@ -689,7 +689,17 @@ fn modules(out: &mut Out, project: &Project) {
                 {
                     out.push("nextjs.segment.dynamic", at(), detail())
                 }
+                // These modes render at build time or fail the build, so
+                // static output preserves them; other values stay unknown.
+                (FacetKind::Segment, "dynamic") if matches!(&export.value, Value::String(mode) if ["auto", "force-static", "error"].contains(&mode.as_str())) => {
+                    out.push("nextjs.segment.static", at(), detail())
+                }
                 (FacetKind::Segment, "dynamic") => out.unknown(at(), Cause::SegmentValue),
+                // `true` serves unenumerated parameters on demand, which
+                // static output cannot; only `false` matches its 404s.
+                (FacetKind::Segment, "dynamicParams") if export.value == Value::Bool(false) => {
+                    out.push("nextjs.segment.dynamic-params", at(), detail())
+                }
                 (FacetKind::Segment, _) => out.unknown(at(), Cause::SegmentOption { name }),
                 (FacetKind::Metadata, _) if export.value.is_known() => {
                     out.push("nextjs.metadata.static", at(), detail());

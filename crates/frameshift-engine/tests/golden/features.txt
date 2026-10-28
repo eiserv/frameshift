@@ -1,11 +1,18 @@
 project nextjs.navigation.client review None
 .github/workflows/ci.yml tooling.workflow - None
 app nextjs.project.app-router auto None
+app/(marketing)/plans/page.tsx nextjs.route.group auto Segment { pattern: "/plans", name: "(marketing)" }
+app/(marketing)/plans/page.tsx nextjs.route.page auto Route { pattern: "/plans" }
+app/(marketing)/plans/page.tsx nextjs.route.segment auto Route { pattern: "/plans" }
+app/(marketing)/plans/page.tsx@13..31 "dynamic = 'static'" source.unknown unknown Unknown(SegmentValue)
+app/(marketing)/plans/page.tsx@46..66 "dynamicParams = true" source.unknown unknown Unknown(SegmentOption { name: "dynamicParams" })
+app/(marketing)/plans/page.tsx@83..116 "function Plans() { return null; " react.server-component - Component { name: Some("Plans") }
 app/(marketing)/pricing/page.tsx nextjs.route.group auto Segment { pattern: "/pricing", name: "(marketing)" }
 app/(marketing)/pricing/page.tsx nextjs.route.page auto Route { pattern: "/pricing" }
 app/(marketing)/pricing/page.tsx nextjs.route.segment auto Route { pattern: "/pricing" }
-app/(marketing)/pricing/page.tsx@13..37 "dynamic = 'force-static'" source.unknown unknown Unknown(SegmentValue)
-app/(marketing)/pricing/page.tsx@54..89 "function Pricing() { return null" react.server-component - Component { name: Some("Pricing") }
+app/(marketing)/pricing/page.tsx@13..37 "dynamic = 'force-static'" nextjs.segment.static auto Export { name: "dynamic" }
+app/(marketing)/pricing/page.tsx@52..73 "dynamicParams = false" nextjs.segment.dynamic-params auto Export { name: "dynamicParams" }
+app/(marketing)/pricing/page.tsx@90..125 "function Pricing() { return null" react.server-component - Component { name: Some("Pricing") }
 app/@modal/default.tsx nextjs.route.parallel unsupported None
 app/@modal/default.tsx@15..48 "function Modal() { return null; " react.server-component - Component { name: Some("Modal") }
 app/_lib nextjs.route.private auto None
