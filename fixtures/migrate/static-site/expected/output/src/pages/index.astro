@@ -1,0 +1,16 @@
+---
+import { siteName } from '../lib/site';
+import { Badge } from '../components/Badge';
+import RootLayout from '../layouts/RootLayout.astro';
+
+// Rendered once at build time.
+const year = 2026;
+---
+<RootLayout title="Lumen Studio" description="A small, fictional design studio.">
+  <section class="hero">
+    <h1>Welcome to {siteName}</h1>
+    <p>Calm websites since {year}.</p>
+    <Badge label="new" />
+    <a href="/about" class="more">About us</a>
+  </section>
+</RootLayout>

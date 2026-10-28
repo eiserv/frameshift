@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../schemas/fixture.schema.json",
+  "kind": "migrate",
+  "description": "A fictional static App Router site for migrate v0 (D-101): a root layout with a title template, description, global stylesheet, and an Astro-convertible header component; static pages with next/link, page metadata, a dropped segment option, a route group, a nested layout, a static Preact component with an early return, a relocated library module, and public assets. A dynamic route without generateStaticParams and a client page are preserved. The manifest names the real next package, so the harness creates it at test time (Q-014).",
+  "createdAtTestTime": [
+    {
+      "kind": "file",
+      "path": "package.json",
+      "content": "{\n  \"name\": \"fictional-lumen\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"next dev\",\n    \"build\": \"next build\"\n  },\n  \"dependencies\": {\n    \"next\": \"16.2.1\",\n    \"react\": \"19.2.0\",\n    \"react-dom\": \"19.2.0\"\n  },\n  \"devDependencies\": {\n    \"@types/react\": \"19.2.0\",\n    \"typescript\": \"6.0.3\"\n  }\n}\n"
+    }
+  ]
+}

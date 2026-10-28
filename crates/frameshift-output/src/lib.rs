@@ -201,10 +201,8 @@ mod tests {
     use frameshift_core::PathLimits;
 
     fn temporary(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "frameshift-output-{name}-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("frameshift-output-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("source")).unwrap();
         root
