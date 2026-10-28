@@ -32,7 +32,15 @@ jobs:
       - name: Install pinned toolchain
         shell: bash
         run: rustup toolchain install 1.98.0 --profile minimal --target '${{ matrix.target }}'
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - id: setup-go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        continue-on-error: true
+        with:
+          go-version: '1.25.5'
+          cache: false
+      # Hosted runners occasionally fail DNS lookups for the Go download; one retry keeps a transient outage from failing the release.
+      - if: steps.setup-go.outcome == 'failure'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.25.5'
           cache: false
@@ -62,7 +70,15 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - id: setup-go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        continue-on-error: true
+        with:
+          go-version: '1.25.5'
+          cache: false
+      # Hosted runners occasionally fail DNS lookups for the Go download; one retry keeps a transient outage from failing the release.
+      - if: steps.setup-go.outcome == 'failure'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.25.5'
           cache: false
