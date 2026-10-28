@@ -766,11 +766,10 @@ impl<'a> Planner<'a> {
                 assumptions,
             };
         Ok(match &candidate.role {
-            Role::Verbatim => Ok(plain(
-                self.bytes(path)?
-                    .ok_or_else(|| MigrateError::internal("a planned file is unreadable"))?
-                    .to_vec(),
-            )),
+            Role::Verbatim => match self.bytes(path)? {
+                Some(bytes) => Ok(plain(bytes.to_vec())),
+                None => Err("the file is not readable".into()),
+            },
             Role::Stylesheet => {
                 let text = text()?;
                 if convert::stylesheet_relocatable(text.as_str()) {
@@ -883,6 +882,8 @@ impl<'a> Planner<'a> {
 
     fn finish(self, mut rendered: BTreeMap<SourcePath, Rendered>) -> Result<Plan, MigrateError> {
         let mut operations = Vec::new();
+        // Preserved paths of a case-sensitive source may collide elsewhere.
+        let mut preserved = BTreeSet::new();
         let mut tasks = Vec::new();
         let output = |path: &str| {
             OutputPath::new(path, self.limits.path)
@@ -930,7 +931,9 @@ impl<'a> Planner<'a> {
                         OutputPath::new(&target, self.limits.path),
                         self.bytes(path)?,
                     ) {
-                        (Ok(target), Some(bytes)) => {
+                        (Ok(target), Some(bytes))
+                            if preserved.insert(target.as_str().to_lowercase()) =>
+                        {
                             operations.push(Operation {
                                 kind: OperationKind::Preserve,
                                 output: target,
@@ -945,7 +948,7 @@ impl<'a> Planner<'a> {
                                 text: format!("preserved for manual migration: {reason}"),
                             });
                         }
-                        (Err(_), _) | (_, None) => tasks.push(ManualTask {
+                        (Ok(_), _) | (Err(_), _) => tasks.push(ManualTask {
                             kind: TaskKind::NotCopied,
                             source: Some(path.clone()),
                             text: format!(

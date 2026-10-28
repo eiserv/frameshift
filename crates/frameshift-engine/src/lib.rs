@@ -20,7 +20,9 @@
 //! a read-only identification of a project with its versioned JSON document.
 //! The `project` model assembles a package's source facts, and `features`
 //! detects occurrences of the V1 feature catalog in it; the facade contains
-//! read-only assessment and reporting through `analysis`; migration and verification remain unimplemented. The CLI
+//! read-only assessment and reporting through `analysis`, and `migrate`
+//! plans and executes the reduced migrate v0 (`D-101`); verification remains
+//! unimplemented. The CLI
 //! consumes this facade, including immutable build identity, rather than
 //! lower layers.
 
