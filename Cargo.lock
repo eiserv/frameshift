@@ -113,6 +113,7 @@ dependencies = [
  "frameshift-input",
  "frameshift-modules",
  "frameshift-nextjs",
+ "frameshift-output",
  "frameshift-package",
  "frameshift-syntax",
  "frameshift-transform",
@@ -174,6 +175,13 @@ dependencies = [
  "frameshift-modules",
  "frameshift-package",
  "frameshift-syntax",
+]
+
+[[package]]
+name = "frameshift-output"
+version = "0.1.0"
+dependencies = [
+ "frameshift-core",
 ]
 
 [[package]]
