@@ -156,7 +156,7 @@ Naming of public variables (`D-021`): by default, `process.env.NEXT_PUBLIC_X` be
 - **Page parameters.** `const { slug } = await params` (Next.js 15 and later) or `params.slug` (Next.js 14) becomes `Astro.params`. `auto` for these patterns, `review` for other uses of `params`.
 - **Catch-all `[...slug]`.** Becomes `[...slug].astro`. Next.js provides `string[]`, while Astro provides a `/`-joined string. The rule joins arrays in `getStaticPaths` and restores the array with `split('/')` where the page reads the parameter. `auto` when the parameter is destructured in a recognized pattern, otherwise `review`.
 - **Optional catch-all `[[...slug]]`.** Becomes `[...slug].astro`, where an `undefined` parameter produces the index path. Status `review`.
-- **`dynamicParams`.** Irrelevant for static output. Dropped with an informational finding.
+- **`dynamicParams`.** `false` matches static output, where unenumerated parameters return 404, so it is dropped (`nextjs.segment.dynamic-params`, `auto`). `true` or a value that static evaluation cannot establish serves unenumerated parameters on demand in Next.js, which static output cannot; it stays `unknown` (`source.unknown`).
 - **Dynamic segment without `generateStaticParams`.** The parameter values cannot be enumerated at build time. `unsupported` (`FS3110`).
 
 ### 6.3 Special files and unsupported routing features
@@ -198,6 +198,7 @@ Next.js performs client-side navigation between routes and preserves client comp
 | `fetch` with `next: { revalidate }` or `cache: 'no-store'` | The Next.js option is removed. The data becomes a build-time snapshot. | `review` |
 | Segment `revalidate` (ISR) | Content is fixed at build time and needs rebuilds to refresh | `review` |
 | `dynamic = 'force-dynamic'` | | `unsupported` |
+| `dynamic = 'auto'`, `'force-static'`, or `'error'` | Irrelevant for static output, which renders every route at build time. Dropped. Request-time APIs that these modes would silence or reject remain separate findings. | `auto` |
 | `cookies()`, `headers()`, `draftMode()` | Request-time APIs (`FS3101` for cookies, `FS3102` for headers, `FS3100` for draft mode) | `unsupported` |
 | `searchParams` in a server page | Not available at build time | `unsupported` |
 | Server Actions (`'use server'`) | No server in static output (`FS3120`) | `unsupported` |
@@ -492,6 +493,8 @@ Feature IDs use at least two dot-separated lowercase name segments (`D-055`). Ex
 | Build-time `fetch` | `nextjs.fetch` | A or R | R with Next.js cache options |
 | ISR `revalidate` | `nextjs.segment.revalidate` | R | |
 | `force-dynamic` | `nextjs.segment.dynamic` | U | |
+| `dynamic = 'auto'`, `'force-static'`, or `'error'` | `nextjs.segment.static` | A | Dropped (section 8) |
+| `dynamicParams = false` | `nextjs.segment.dynamic-params` | A | Dropped (section 6); other values are `source.unknown` |
 | `export const runtime` | `nextjs.segment.runtime` | A | Dropped (section 8) |
 | `cookies`, `headers`, `draftMode` | `nextjs.api.request` | U | `FS3101` for cookies, `FS3102` for headers, `FS3100` for draft mode |
 | Server `searchParams` | `nextjs.api.search-params-server` | U | |
