@@ -57,6 +57,7 @@ pub(crate) struct Syntax {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Module {
     pub functions: BTreeMap<Span, Function>,
+    page_function: Option<Span>,
     pub tags: BTreeMap<Span, Tag>,
     pub calls: BTreeMap<Span, Option<usize>>,
     pub handler_request: Option<bool>,
@@ -67,6 +68,14 @@ pub(crate) struct Function {
     pub asynchronous: bool,
     pub astro: bool,
     pub assumptions: bool,
+    // The conversion as a page whose parameter is the framework's page props,
+    // for a default export with a parameter. Route correlation selects it.
+    page: Option<Conversion>,
+}
+#[derive(Clone, Copy, Debug)]
+struct Conversion {
+    astro: bool,
+    assumptions: bool,
 }
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Tag {
@@ -109,6 +118,56 @@ impl Syntax {
     }
     pub fn correlate_routes(&mut self, project: &Project) {
         let mut routes: BTreeMap<SourcePath, std::collections::BTreeSet<String>> = BTreeMap::new();
+        // `Astro.params` equals Next.js `params` only for the values of plain
+        // dynamic segments; catch-all values are joined strings in Astro.
+        let mut pages: BTreeMap<&SourcePath, bool> = BTreeMap::new();
+        for route in &project.nextjs().routes.routes {
+            if route.kind != frameshift_nextjs::RouteKind::Page {
+                continue;
+            }
+            let exact = self.modules.get(&route.file).is_some_and(|module| {
+                module.route.parameter_keys().is_some_and(|mut keys| {
+                    keys.all(|key| {
+                        route.segments.iter().any(|segment| {
+                            matches!(&segment.kind, frameshift_nextjs::SegmentKind::Dynamic(p) if p == key)
+                        })
+                    })
+                })
+            });
+            *pages.entry(&route.file).or_insert(true) &= exact;
+        }
+        for (path, exact) in pages {
+            if let Some(module) = self.modules.get_mut(path)
+                && let Some(span) = module.page_function
+                && let Some(function) = module.functions.get_mut(&span)
+                && let Some(page) = function.page
+            {
+                function.astro = page.astro && exact;
+                function.assumptions = page.assumptions;
+            }
+        }
+        // Other conventions, such as layouts, also receive route values in
+        // their props, which `Astro.props` does not carry. Until they are
+        // mapped like pages, only entries that never read them stay Astro.
+        for file in &project.nextjs().routes.files {
+            if file.convention == frameshift_nextjs::Convention::Page
+                || project
+                    .nextjs()
+                    .routes
+                    .routes
+                    .iter()
+                    .any(|r| r.file == file.path)
+            {
+                continue;
+            }
+            if let Some(module) = self.modules.get_mut(&file.path)
+                && !module.route.parameters_unread()
+                && let Some(span) = module.page_function
+                && let Some(function) = module.functions.get_mut(&span)
+            {
+                function.astro = false;
+            }
+        }
         for route in &project.nextjs().routes.routes {
             if super::route::automatic(route, self) {
                 routes
@@ -148,7 +207,22 @@ impl Syntax {
             });
     }
     pub fn collect(&mut self, path: &SourcePath, tree: &SyntaxTree<'_>, bindings: &Bindings) {
-        let mut module = Module::default();
+        let mut module = Module {
+            route: super::route::summarize(tree, bindings),
+            ..Module::default()
+        };
+        let references = References::new(tree, bindings);
+        let page = module.route.page();
+        module.page_function = page.and_then(|(node, _)| Some(tree.node(node)?.span()));
+        let mut stack = vec![tree.root()];
+        while let Some(id) = stack.pop() {
+            if let Some(function) = function_summary(tree, &references, id, page) {
+                module
+                    .functions
+                    .insert(tree.node(id).unwrap().span(), function);
+            }
+            stack.extend(tree.child_nodes(id).into_iter().flatten());
+        }
         let written: std::collections::BTreeSet<_> = bindings
             .references()
             .iter()
@@ -162,9 +236,6 @@ impl Syntax {
             })
             .collect();
         for node in tree.nodes() {
-            if let Some(function) = function_summary(tree, node.kind()) {
-                module.functions.insert(node.span(), function);
-            }
             if let N::JsxOpeningElement { attributes, .. } = node.kind() {
                 let mut tag = Tag::default();
                 for &attr in tree.children(attributes).unwrap_or_default() {
@@ -228,7 +299,6 @@ impl Syntax {
             }
         }
         module.handler_request = handler_request(tree, bindings);
-        module.route = super::route::summarize(tree, bindings);
         self.modules.insert(path.clone(), module);
     }
     pub fn function(&self, path: &SourcePath, span: Span) -> Option<&Function> {
@@ -298,94 +368,210 @@ fn handler_request(tree: &SyntaxTree<'_>, bindings: &Bindings) -> Option<bool> {
         }
     }))
 }
-fn function_summary(tree: &SyntaxTree<'_>, kind: N) -> Option<Function> {
-    let (body, params, asynchronous, generator) = if let N::FunctionDeclaration {
-        body,
-        parameters,
-        kind,
-        ..
+// References sorted by source position, for the references inside one
+// function without scanning the module's references again.
+struct References<'a> {
+    bindings: &'a Bindings,
+    spans: Vec<(Span, usize)>,
+}
+impl<'a> References<'a> {
+    fn new(tree: &SyntaxTree<'_>, bindings: &'a Bindings) -> Self {
+        let mut spans: Vec<_> = bindings
+            .references()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, r)| Some((tree.node(r.node)?.span(), i)))
+            .collect();
+        spans.sort_by_key(|(span, i)| (span.start(), span.end(), *i));
+        Self { bindings, spans }
     }
-    | N::FunctionExpression {
-        body,
-        parameters,
-        kind,
-        ..
-    } = kind
-    {
-        (body, parameters, kind.is_async(), kind.is_generator())
-    } else if let N::ArrowFunction {
-        body,
-        parameters,
-        is_async,
-    } = kind
-    {
-        (body, parameters, is_async, false)
-    } else {
-        return None;
-    };
-    let parameters: Vec<_> = tree.child_nodes(params)?.collect();
-    let mut children = None;
-    let mut supported_params = parameters.len() <= 1;
-    for param in parameters {
-        let param = unwrap(tree, param);
-        if let N::ObjectPattern { properties, .. } = tree.node(param)?.kind() {
-            for &property in tree.children(properties)? {
-                if let N::ShorthandPatternProperty { target, .. } = tree.node(property)?.kind() {
-                    if tree.identifier_value(target).as_deref() == Some("children") {
-                        children = Some("children".to_owned())
-                    }
-                } else if let N::PatternProperty {
-                    key,
-                    value,
-                    computed: false,
-                    ..
-                } = tree.node(property)?.kind()
-                    && tree.identifier_value(key).as_deref() == Some("children")
-                {
-                    children = tree.identifier_value(value)
-                }
-            }
-        } else {
-            // props.children needs a separate frontmatter binding rewrite.
-            // Keeping the synchronous definition in Preact is conservative.
-            supported_params = false;
-        }
+    fn within(&self, outer: Span) -> impl Iterator<Item = &'a frameshift_bindings::Reference> {
+        let first = self
+            .spans
+            .partition_point(|(span, _)| span.start() < outer.start());
+        let bindings = self.bindings;
+        self.spans[first..]
+            .iter()
+            .take_while(move |(span, _)| span.start() < outer.end())
+            .filter(move |(span, _)| span.end() <= outer.end())
+            .map(move |&(_, i)| &bindings.references()[i])
     }
-    let returned = if let N::FunctionBody {
-        body: statements, ..
-    } = tree.node(body)?.kind()
-    {
-        let statements = tree.children(statements)?;
-        if statements.len() == 1 {
-            if let N::ReturnStatement { argument } = tree.node(statements[0])?.kind() {
-                argument
-            } else {
-                None
-            }
-        } else {
-            None
+}
+fn function_summary(
+    tree: &SyntaxTree<'_>,
+    references: &References<'_>,
+    id: NodeId,
+    page: Option<(NodeId, Option<&[Span]>)>,
+) -> Option<Function> {
+    let kind = tree.node(id)?.kind();
+    let (parameters, asynchronous, generator) =
+        if let N::FunctionDeclaration {
+            parameters, kind, ..
         }
-    } else {
-        Some(body)
-    };
-    let converted = returned.and_then(|root| {
-        frameshift_emit::convert_jsx(
-            tree,
-            frameshift_emit::SourceId(0),
-            root,
-            &frameshift_emit::JsxConversion {
-                children_binding: children.as_deref(),
-                ..Default::default()
+        | N::FunctionExpression {
+            parameters, kind, ..
+        } = kind
+        {
+            (parameters, kind.is_async(), kind.is_generator())
+        } else if let N::ArrowFunction {
+            parameters,
+            is_async,
+            ..
+        } = kind
+        {
+            (parameters, is_async, false)
+        } else {
+            return None;
+        };
+    let component = conversion(
+        tree,
+        references,
+        id,
+        frameshift_emit::PropsSource::AstroProps,
+        &[],
+    );
+    // A page's parameter holds route values, never component props.
+    let page = page
+        .filter(|(node, _)| *node == id)
+        .filter(|_| {
+            tree.child_nodes(parameters)
+                .is_some_and(|mut p| p.next().is_some())
+        })
+        .map(|(_, substitutions)| match substitutions {
+            Some(spans) => conversion(
+                tree,
+                references,
+                id,
+                frameshift_emit::PropsSource::Dropped,
+                spans,
+            ),
+            None => Conversion {
+                astro: false,
+                assumptions: false,
             },
-            &mut Components,
-        )
-        .ok()
-    });
+        });
     Some(Function {
         asynchronous: asynchronous || generator,
-        astro: !generator && supported_params && converted.is_some(),
-        assumptions: converted.is_some_and(|c| !c.assumptions.is_empty()),
+        astro: component.astro,
+        assumptions: component.assumptions,
+        page,
     })
+}
+// The candidate shape is exactly what the printer converts and prints. The
+// printer reads syntax only, so binding facts add what it cannot see.
+fn conversion(
+    tree: &SyntaxTree<'_>,
+    references: &References<'_>,
+    id: NodeId,
+    props: frameshift_emit::PropsSource,
+    astro_params: &[Span],
+) -> Conversion {
+    let rejected = Conversion {
+        astro: false,
+        assumptions: false,
+    };
+    let Ok(converted) = frameshift_emit::convert_component(
+        tree,
+        frameshift_emit::SourceId(0),
+        id,
+        &frameshift_emit::ComponentConversion {
+            props,
+            astro_params,
+            ..Default::default()
+        },
+        &mut Components,
+    ) else {
+        return rejected;
+    };
+    let printed = frameshift_emit::print_astro_component(
+        &converted.component,
+        &[tree.source()],
+        frameshift_emit::PrintOptions::default(),
+        frameshift_emit::EmitLimits::default(),
+    );
+    if printed.is_err() || !portable_references(tree, references, id) {
+        return rejected;
+    }
+    Conversion {
+        astro: true,
+        assumptions: !converted.assumptions.is_empty(),
+    }
+}
+// Whether every reference inside the function keeps its meaning when the
+// function becomes an Astro component whose module-level dependencies are
+// imported: no dynamic scope, implicit `arguments`, or direct `eval`; no
+// write outside the function; no capture of an enclosing function or block;
+// and no value from React itself, whose hooks and element APIs need a React
+// render.
+fn portable_references(tree: &SyntaxTree<'_>, references: &References<'_>, id: NodeId) -> bool {
+    use frameshift_bindings::{DeclarationKind, Meaning, ScopeKind, Target};
+    let Some(span) = tree.node(id).map(|n| n.span()) else {
+        return false;
+    };
+    references
+        .within(span)
+        .all(|reference| match reference.target {
+            Target::Dynamic => false,
+            Target::Global => {
+                !reference.write && reference.name != "eval" && reference.name != "arguments"
+            }
+            Target::Binding(target) => {
+                let binding = references.bindings.binding(target);
+                if binding
+                    .declarations
+                    .iter()
+                    .any(|d| d.kind == DeclarationKind::Arguments)
+                {
+                    return false;
+                }
+                let react = binding.import.as_ref().is_some_and(|import| {
+                    !import.type_only
+                        && import.specifier.as_deref().is_some_and(|s| {
+                            ["react", "react-dom"].iter().any(|p| {
+                                s == *p || s.strip_prefix(p).is_some_and(|r| r.starts_with('/'))
+                            })
+                        })
+                });
+                let element_name = tree.node(reference.node).is_some_and(|n| {
+                    matches!(
+                        n.kind(),
+                        N::JsxIdentifier
+                            | N::JsxMemberExpression { .. }
+                            | N::JsxNamespacedName { .. }
+                    )
+                });
+                if react && reference.meaning.overlaps(Meaning::VALUE) && !element_name {
+                    return false;
+                }
+                // The converted function's own binding, such as the `const`
+                // that holds an arrow, does not exist in the Astro component.
+                let own = binding.declarations.iter().any(|d| {
+                    matches!(
+                        d.kind,
+                        DeclarationKind::Var
+                            | DeclarationKind::Let
+                            | DeclarationKind::Const
+                            | DeclarationKind::Function
+                            | DeclarationKind::AnnexBFunction
+                            | DeclarationKind::FunctionName
+                            | DeclarationKind::Class
+                            | DeclarationKind::ClassName
+                    ) && tree.node(d.node).is_some_and(|n| {
+                        n.span().start() <= span.start() && span.end() <= n.span().end()
+                    })
+                });
+                if own {
+                    return false;
+                }
+                let scope = references.bindings.scope(binding.scope);
+                let local = tree.node(scope.node).is_some_and(|n| {
+                    span.start() <= n.span().start() && n.span().end() <= span.end()
+                });
+                local
+                    || (!reference.write
+                        && matches!(scope.kind, ScopeKind::Module | ScopeKind::Script))
+            }
+        })
 }
 pub(super) fn unwrap(tree: &SyntaxTree<'_>, mut id: NodeId) -> NodeId {
     loop {

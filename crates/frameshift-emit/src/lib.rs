@@ -1,12 +1,13 @@
 //! Printers for Frameshift's output layer.
 //!
 //! This crate turns converted structure into new files: an Astro component
-//! model with its canonical printer, the conversion of React JSX into that
-//! model, and emitted text whose every byte maps to a source construct. It
+//! model with its canonical printer, the conversion of React JSX and function
+//! components into that model, and emitted text whose every byte maps to a source construct. It
 //! performs no I/O, selects no migration rules, and executes nothing. Callers
 //! decide which constructs to convert and classify the recorded assumptions.
 
 mod astro;
+mod component;
 mod html;
 mod jsx;
 mod names;
@@ -17,6 +18,7 @@ pub use astro::{
     FrontmatterItem, ImportItem, Indent, LineEnding, NamedImport, PrintError, PrintOptions,
     PropMember, PropType, TagName, TemplateNode, print_astro_component,
 };
+pub use component::{ComponentConversion, ConvertedComponent, PropsSource, convert_component};
 pub use jsx::{
     Assumption, AssumptionKind, ClientDirective, ComponentReference, ComponentStrategy,
     ConvertError, ConvertErrorKind, ConvertedMarkup, ElementResolver, JsxConversion, convert_jsx,

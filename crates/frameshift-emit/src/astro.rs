@@ -49,6 +49,15 @@ pub enum FrontmatterItem {
         /// Construct responsible for the declaration.
         anchor: Anchor,
     },
+    /// A generated `const pattern = Astro.props;` declaration whose binding
+    /// pattern is copied verbatim from the anchored span. It must not contain
+    /// a line that starts with `---`.
+    PropsPattern(Anchor),
+    /// A statement assembled from copied source and generated pieces, such
+    /// as a body statement whose route parameter reads became
+    /// `Astro.params`. It must not contain markup or a line that starts with
+    /// `---`.
+    Statement(Expression),
 }
 
 /// A generated import declaration. Without bindings it is a side-effect
@@ -193,6 +202,8 @@ pub enum ExpressionPiece {
     Identifier(JsIdentifier),
     /// The generated literal `true`.
     True,
+    /// The generated member expression `Astro.params`.
+    AstroParams,
 }
 
 /// Indentation of generated lines.
@@ -242,6 +253,9 @@ pub enum PrintError {
     /// Copied frontmatter contains a line starting with `---`, which would
     /// end the frontmatter early.
     FrontmatterFence(Anchor),
+    /// A frontmatter statement contains markup, which frontmatter cannot
+    /// render.
+    FrontmatterMarkup(Anchor),
     /// Text or an attribute value contains U+0000, which HTML cannot carry.
     NulCharacter(Anchor),
     /// A void HTML element has children.
@@ -268,6 +282,9 @@ impl fmt::Display for PrintError {
                     "copied frontmatter at {} contains `---`",
                     describe(anchor)
                 )
+            }
+            Self::FrontmatterMarkup(anchor) => {
+                write!(f, "markup in frontmatter at {}", describe(anchor))
             }
             Self::NulCharacter(anchor) => write!(f, "U+0000 in text at {}", describe(anchor)),
             Self::VoidElementChildren(anchor) => {
@@ -404,19 +421,42 @@ impl Printer<'_> {
                 self.out.push_generated(&line, import.anchor)?;
             }
             FrontmatterItem::Copied(anchor) => {
-                let text = self
-                    .sources
-                    .get(anchor.source.0 as usize)
-                    .and_then(|source| source.slice(anchor.span).ok())
-                    .ok_or(PrintError::InvalidAnchor(*anchor))?;
-                let fence = text
-                    .split(['\n', '\r'])
-                    .any(|line| line.trim_start().starts_with("---"));
-                if fence {
-                    return Err(PrintError::FrontmatterFence(*anchor));
-                }
+                self.check_fence(*anchor)?;
                 self.out.push_copied(*anchor)?;
                 self.out.push_generated(eol, *anchor)?;
+            }
+            FrontmatterItem::PropsPattern(anchor) => {
+                self.check_fence(*anchor)?;
+                self.out.push_generated("const ", *anchor)?;
+                self.out.push_copied(*anchor)?;
+                self.out
+                    .push_generated(&format!(" = Astro.props;{eol}"), *anchor)?;
+            }
+            FrontmatterItem::Statement(statement) => {
+                let anchor = statement.anchor;
+                for piece in &statement.pieces {
+                    match piece {
+                        ExpressionPiece::Source(span) => {
+                            let copied = Anchor {
+                                source: anchor.source,
+                                span: *span,
+                            };
+                            self.check_fence(copied)?;
+                            self.out.push_copied(copied)?;
+                        }
+                        ExpressionPiece::Markup(_) => {
+                            return Err(PrintError::FrontmatterMarkup(anchor));
+                        }
+                        ExpressionPiece::Identifier(identifier) => {
+                            self.out.push_generated(identifier.as_str(), anchor)?;
+                        }
+                        ExpressionPiece::True => self.out.push_generated("true", anchor)?,
+                        ExpressionPiece::AstroParams => {
+                            self.out.push_generated("Astro.params", anchor)?;
+                        }
+                    }
+                }
+                self.out.push_generated(eol, anchor)?;
             }
             FrontmatterItem::PropsInterface { members, anchor } => {
                 let mut text = format!("interface Props {{{eol}");
@@ -438,6 +478,22 @@ impl Printer<'_> {
                 let text = format!("const {{ {} }} = Astro.props;{eol}", names.join(", "));
                 self.out.push_generated(&text, *anchor)?;
             }
+        }
+        Ok(())
+    }
+
+    // Rejects copied frontmatter with a line that would end the frontmatter.
+    fn check_fence(&self, anchor: Anchor) -> Result<(), PrintError> {
+        let text = self
+            .sources
+            .get(anchor.source.0 as usize)
+            .and_then(|source| source.slice(anchor.span).ok())
+            .ok_or(PrintError::InvalidAnchor(anchor))?;
+        if text
+            .split(['\n', '\r'])
+            .any(|line| line.trim_start().starts_with("---"))
+        {
+            return Err(PrintError::FrontmatterFence(anchor));
         }
         Ok(())
     }
@@ -610,6 +666,9 @@ impl Printer<'_> {
                     self.out.push_generated(identifier.as_str(), anchor)?;
                 }
                 ExpressionPiece::True => self.out.push_generated("true", anchor)?,
+                ExpressionPiece::AstroParams => {
+                    self.out.push_generated("Astro.params", anchor)?;
+                }
             }
         }
         self.out.push_generated("}", anchor)?;
@@ -635,8 +694,10 @@ fn item_anchor(item: &FrontmatterItem) -> Anchor {
     match item {
         FrontmatterItem::Import(import) => import.anchor,
         FrontmatterItem::Copied(anchor)
+        | FrontmatterItem::PropsPattern(anchor)
         | FrontmatterItem::PropsInterface { anchor, .. }
         | FrontmatterItem::PropsBinding { anchor, .. } => *anchor,
+        FrontmatterItem::Statement(statement) => statement.anchor,
     }
 }
 

@@ -2,12 +2,13 @@
 //! using fictional components.
 
 use frameshift_engine::{
-    Anchor, AssumptionKind, AstroComponent, ClientDirective, ComponentName, ComponentReference,
-    ComponentStrategy, ConvertErrorKind, ConvertedMarkup, ElementResolver, EmitLimits,
-    ExpressionPiece, FrontmatterItem, HtmlTagName, ImportItem, Indent, JsDialect, JsIdentifier,
-    JsxConversion, LineEnding, NamedImport, NodeId, ParseLimits, PrintError, PrintOptions,
-    PropMember, PropType, RegionOrigin, SourceGoal, SourceId, SourceText, Span, SyntaxNodeKind,
-    SyntaxTree, TemplateNode, TextLimits, convert_jsx, parse_js_program, print_astro_component,
+    Anchor, AssumptionKind, AstroComponent, ClientDirective, ComponentConversion, ComponentName,
+    ComponentReference, ComponentStrategy, ConvertErrorKind, ConvertedMarkup, ElementResolver,
+    EmitLimits, ExpressionPiece, FrontmatterItem, HtmlTagName, ImportItem, Indent, JsDialect,
+    JsIdentifier, JsxConversion, LineEnding, NamedImport, NodeId, ParseLimits, PrintError,
+    PrintOptions, PropMember, PropType, PropsSource, RegionOrigin, SourceGoal, SourceId,
+    SourceText, Span, SyntaxNodeKind, SyntaxTree, TemplateNode, TextLimits, convert_component,
+    convert_jsx, parse_js_program, print_astro_component,
 };
 
 fn source(text: &str) -> SourceText {
@@ -440,4 +441,332 @@ fn long_member_chains_neither_recurse_nor_overflow() {
         })
         .unwrap();
     handle.join().unwrap();
+}
+
+// The first function in source order, found iteratively.
+fn first_function(tree: &SyntaxTree<'_>) -> NodeId {
+    let mut stack = vec![tree.root()];
+    while let Some(id) = stack.pop() {
+        if matches!(
+            tree.node(id).unwrap().kind(),
+            SyntaxNodeKind::FunctionDeclaration { .. } | SyntaxNodeKind::ArrowFunction { .. }
+        ) {
+            return id;
+        }
+        let children: Vec<NodeId> = tree.child_nodes(id).unwrap().collect();
+        stack.extend(children.into_iter().rev());
+    }
+    panic!("a function")
+}
+
+// The spans of every occurrence of `needle`, as a caller's route facts would
+// name them.
+fn spans_of(text: &str, needle: &str) -> Vec<Span> {
+    text.match_indices(needle)
+        .map(|(start, _)| Span::new(start, start + needle.len()).unwrap())
+        .collect()
+}
+
+// The leading `params` of every `params.<property>` occurrence.
+fn member_objects(text: &str, member: &str) -> Vec<Span> {
+    spans_of(text, member)
+        .iter()
+        .map(|span| Span::new(span.start(), span.start() + "params".len()).unwrap())
+        .collect()
+}
+
+fn convert_function(
+    text: &SourceText,
+    props: PropsSource,
+    astro_params: &[Span],
+) -> Result<String, ConvertErrorKind> {
+    let tree = parse(text);
+    let converted = convert_component(
+        &tree,
+        SourceId(0),
+        first_function(&tree),
+        &ComponentConversion {
+            props,
+            astro_params,
+            ..ComponentConversion::default()
+        },
+        &mut Resolver,
+    )
+    .map_err(|error| error.kind)?;
+    let emitted = print_astro_component(
+        &converted.component,
+        &[text],
+        PrintOptions::default(),
+        EmitLimits::default(),
+    )
+    .unwrap();
+    emitted.verify(&[text]).unwrap();
+    // Every comment of the function is copied.
+    for comment in tree.comments() {
+        assert!(
+            converted.copied.iter().any(
+                |span| span.start() <= comment.span.start() && comment.span.end() <= span.end()
+            ),
+            "{comment:?}"
+        );
+    }
+    Ok(emitted.as_str().to_owned())
+}
+
+#[test]
+fn async_pages_become_frontmatter_with_astro_params() {
+    let text = source(concat!(
+        "export default async function Post({ params }: { params: Promise<{ slug: string }> }) {\n",
+        "  // Route parameters.\n",
+        "  const { slug } = await params;\n",
+        "  const post = posts.find((p) => p.slug === slug); /* by slug */\n",
+        "  return (\n",
+        "    <article>\n",
+        "      <h1>{post.title}</h1>\n",
+        "      <p>{params.slug}</p>\n",
+        "    </article>\n",
+        "  );\n",
+        "}\n",
+    ));
+    let mut spans = spans_of(text.as_str(), "await params");
+    spans.extend(member_objects(text.as_str(), "params.slug"));
+    let output = convert_function(&text, PropsSource::Dropped, &spans).unwrap();
+    assert_eq!(
+        output,
+        concat!(
+            "---\n",
+            "// Route parameters.\n",
+            "const { slug } = Astro.params;\n",
+            "const post = posts.find((p) => p.slug === slug);\n",
+            "/* by slug */\n",
+            "---\n",
+            "<article>\n",
+            "  <h1>\n",
+            "    {post.title}\n",
+            "  </h1>\n",
+            "  <p>\n",
+            "    {Astro.params.slug}\n",
+            "  </p>\n",
+            "</article>\n",
+        )
+    );
+}
+
+#[test]
+fn component_props_and_statements_become_frontmatter() {
+    let text = source(
+        "const Card = ({ title, children }) => <section><h2>{title}</h2>{children}</section>;\n",
+    );
+    assert_eq!(
+        convert_function(&text, PropsSource::AstroProps, &[]).unwrap(),
+        concat!(
+            "---\n",
+            "const { title, children } = Astro.props;\n",
+            "---\n",
+            "<section>\n",
+            "  <h2>\n",
+            "    {title}\n",
+            "  </h2>\n",
+            "  <slot />\n",
+            "</section>\n",
+        )
+    );
+    let text = source(
+        "function List({ items = [] }) {\n  let total = items.length;\n  total += 1;\n  return <p>{`${total}`}</p>;\n}\n",
+    );
+    assert_eq!(
+        convert_function(&text, PropsSource::AstroProps, &[]).unwrap(),
+        concat!(
+            "---\n",
+            "const { items = [] } = Astro.props;\n",
+            "let total = items.length;\n",
+            "total += 1;\n",
+            "---\n",
+            "<p>\n",
+            "  {`${total}`}\n",
+            "</p>\n",
+        )
+    );
+}
+
+#[test]
+fn unsupported_component_bodies_fail_closed() {
+    let cases = [
+        (
+            "async function P({ x }) { const a = await x; if (!a) return null; return <p>{a}</p>; }",
+            ConvertErrorKind::UnsupportedBody,
+        ),
+        (
+            "function P({ x }) { if (x) return <a />; return <p />; }",
+            ConvertErrorKind::UnsupportedBody,
+        ),
+        (
+            "function P({ x }) { return x ? <a /> : <p />; }",
+            ConvertErrorKind::NotJsx,
+        ),
+        (
+            "function P({ x }) { const a = <b />; return <p>{a}</p>; }",
+            ConvertErrorKind::UnsupportedBody,
+        ),
+        (
+            "function P({ x }) { for (const y of x) {} return <p />; }",
+            ConvertErrorKind::UnsupportedBody,
+        ),
+        (
+            "function P({ x }) { using y = x; return <p />; }",
+            ConvertErrorKind::UnsupportedBody,
+        ),
+        (
+            "function P() { const [v] = useState(0); return <p>{v}</p>; }",
+            ConvertErrorKind::HookCall,
+        ),
+        (
+            "function P() { return <p>{React.use(data)}</p>; }",
+            ConvertErrorKind::HookCall,
+        ),
+        (
+            "function P() { const v = this.value; return <p>{v}</p>; }",
+            ConvertErrorKind::ContextDependent,
+        ),
+        (
+            "function P() { const v = arguments[0]; return <p>{v}</p>; }",
+            ConvertErrorKind::ContextDependent,
+        ),
+        (
+            "function P() { const v = import.meta.url; return <p>{v}</p>; }",
+            ConvertErrorKind::ContextDependent,
+        ),
+        (
+            "function P() { const Astro = 1; return <p>{Astro}</p>; }",
+            ConvertErrorKind::ReservedName,
+        ),
+        (
+            "function P({ children }) { const c = children; return <p>{c}</p>; }",
+            ConvertErrorKind::ChildrenOutsideSlot,
+        ),
+        (
+            "function P() { const label = P.name; return <p>{label}</p>; }",
+            ConvertErrorKind::DroppedBinding,
+        ),
+        (
+            "function P({ x }, y) { return <p />; }",
+            ConvertErrorKind::UnsupportedFunction,
+        ),
+        (
+            "function* P() { return <p />; }",
+            ConvertErrorKind::UnsupportedFunction,
+        ),
+        (
+            "const P = (props) => <p />;",
+            ConvertErrorKind::UnsupportedFunction,
+        ),
+        (
+            "function P({ x }) { const a = x; return /* dropped */ <p>{a}</p>; }",
+            ConvertErrorKind::CommentInMarkup,
+        ),
+        (
+            "function P({ x }) { return <p>{x}</p>; /* dropped */ }",
+            ConvertErrorKind::CommentInMarkup,
+        ),
+    ];
+    for (code, expected) in cases {
+        let text = source(code);
+        assert_eq!(
+            convert_function(&text, PropsSource::AstroProps, &[]),
+            Err(expected),
+            "{code}"
+        );
+    }
+}
+
+#[test]
+fn dropped_parameters_require_every_use_replaced() {
+    let code = "async function P({ params }) { const { slug } = await params; return <p>{params.slug}</p>; }";
+    let text = source(code);
+    let awaited = spans_of(code, "await params");
+    // The member read keeps `params`, which the dropped parameter declared.
+    assert_eq!(
+        convert_function(&text, PropsSource::Dropped, &awaited),
+        Err(ConvertErrorKind::DroppedBinding)
+    );
+    // A span outside the body, overlapping spans, and a span inside a
+    // discarded `key` are rejected.
+    let header = spans_of(code, "P(");
+    assert_eq!(
+        convert_function(&text, PropsSource::Dropped, &header),
+        Err(ConvertErrorKind::UnsupportedSubstitution)
+    );
+    let code = "async function P({ params }) { const { slug } = await /* x */ params; return <p>{slug}</p>; }";
+    assert_eq!(
+        convert_function(
+            &source(code),
+            PropsSource::Dropped,
+            &spans_of(code, "await /* x */ params")
+        ),
+        Err(ConvertErrorKind::CommentInMarkup)
+    );
+    // Dropping a pattern would skip its defaults and computed keys.
+    for code in [
+        "function P({ missing: unused = record() }) { return <p />; }",
+        "function P({ unused = record() }) { return <p />; }",
+        "function P({ [key()]: unused }) { return <p />; }",
+        "function P({ missing: { unused } }) { return <p />; }",
+        "function P({ missing: [unused] }) { return <p />; }",
+    ] {
+        assert_eq!(
+            convert_function(&source(code), PropsSource::Dropped, &[]),
+            Err(ConvertErrorKind::UnsupportedFunction),
+            "{code}"
+        );
+    }
+    let inner = Span::new(awaited[0].start() + 6, awaited[0].end()).unwrap();
+    assert_eq!(
+        convert_function(&text, PropsSource::Dropped, &[awaited[0], inner]),
+        Err(ConvertErrorKind::UnsupportedSubstitution)
+    );
+    let code = "function P({ params }) { return <ul><li key={params.id}>x</li></ul>; }";
+    let text = source(code);
+    assert_eq!(
+        convert_function(
+            &text,
+            PropsSource::Dropped,
+            &member_objects(code, "params.id")
+        ),
+        Err(ConvertErrorKind::UnsupportedSubstitution)
+    );
+}
+
+#[test]
+fn frontmatter_statements_reject_markup_and_fences() {
+    let text = source("a\n--- b");
+    let statement = |pieces| AstroComponent {
+        frontmatter: vec![FrontmatterItem::Statement(frameshift_engine::Expression {
+            pieces,
+            anchor: anchor(0, 7),
+        })],
+        template: Vec::new(),
+    };
+    let fenced = statement(vec![ExpressionPiece::Source(Span::new(0, 7).unwrap())]);
+    assert!(matches!(
+        print_astro_component(
+            &fenced,
+            &[&text],
+            PrintOptions::default(),
+            EmitLimits::default()
+        ),
+        Err(PrintError::FrontmatterFence(_))
+    ));
+    let markup = statement(vec![ExpressionPiece::Markup(TemplateNode::Text {
+        value: "x".into(),
+        anchor: anchor(0, 1),
+    })]);
+    assert!(matches!(
+        print_astro_component(
+            &markup,
+            &[&text],
+            PrintOptions::default(),
+            EmitLimits::default()
+        ),
+        Err(PrintError::FrontmatterMarkup(_))
+    ));
 }
