@@ -772,7 +772,7 @@ impl<'a> Planner<'a> {
             },
             Role::Stylesheet => {
                 let text = text()?;
-                if convert::stylesheet_relocatable(text.as_str()) {
+                if convert::stylesheet_relocatable(text, self.limits) {
                     Ok(plain(text.as_str().as_bytes().to_vec()))
                 } else {
                     Err("the stylesheet has relative references that relocation would break".into())

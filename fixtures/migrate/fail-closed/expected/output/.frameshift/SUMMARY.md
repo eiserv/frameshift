@@ -10,7 +10,7 @@ Migrate v0 converts only static pages, layouts, and components that the analysis
 - Kept as JavaScript or TypeScript with rewritten imports: 1
 - Copied unchanged: 0
 - Generated project files: 5
-- Preserved for manual migration: 4
+- Preserved for manual migration: 5
 - Not copied: 2
 
 ## Project tasks
@@ -22,6 +22,7 @@ Migrate v0 converts only static pages, layouts, and components that the analysis
 ## Preserved files
 
 - `src/app/counter/page.tsx`: preserved for manual migration: it imports a file that migrate v0 does not migrate
+- `src/app/lazy/page.tsx`: preserved for manual migration: dynamic imports, re-exports, and require calls of project files are not converted
 - `src/app/plain/page.tsx`: preserved for manual migration: it imports a file that migrate v0 does not migrate
 - `src/components/Counter.tsx`: preserved for manual migration: client components and islands are not converted by migrate v0
 - `src/lib/label.ts`: preserved for manual migration: the analysis rates this file's units unsupported

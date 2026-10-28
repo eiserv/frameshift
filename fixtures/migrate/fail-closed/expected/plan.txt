@@ -1,5 +1,6 @@
 config     .frameshift/SUMMARY.md report.summary -
 preserve   .frameshift/unmigrated/src/app/counter/page.tsx preserve.unmigrated src/app/counter/page.tsx
+preserve   .frameshift/unmigrated/src/app/lazy/page.tsx preserve.unmigrated src/app/lazy/page.tsx
 preserve   .frameshift/unmigrated/src/app/plain/page.tsx preserve.unmigrated src/app/plain/page.tsx
 preserve   .frameshift/unmigrated/src/components/Counter.tsx preserve.unmigrated src/components/Counter.tsx
 preserve   .frameshift/unmigrated/src/lib/label.ts preserve.unmigrated src/lib/label.ts
@@ -15,6 +16,7 @@ task Project -: install dependencies with your package manager; lockfiles are no
 task Project -: 3 Next.js and React dependencies were removed from package.json; check that nothing else needs them
 task Project -: configuration concern config:source.analysis (review) is not migrated by v0; see `frameshift analyze`
 task Preserved src/app/counter/page.tsx: preserved for manual migration: it imports a file that migrate v0 does not migrate
+task Preserved src/app/lazy/page.tsx: preserved for manual migration: dynamic imports, re-exports, and require calls of project files are not converted
 task Preserved src/app/plain/page.tsx: preserved for manual migration: it imports a file that migrate v0 does not migrate
 task Preserved src/components/Counter.tsx: preserved for manual migration: client components and islands are not converted by migrate v0
 task Preserved src/lib/label.ts: preserved for manual migration: the analysis rates this file's units unsupported
