@@ -146,6 +146,28 @@ impl Syntax {
                 function.assumptions = page.assumptions;
             }
         }
+        // Other conventions, such as layouts, also receive route values in
+        // their props, which `Astro.props` does not carry. Until they are
+        // mapped like pages, only entries that never read them stay Astro.
+        for file in &project.nextjs().routes.files {
+            if file.convention == frameshift_nextjs::Convention::Page
+                || project
+                    .nextjs()
+                    .routes
+                    .routes
+                    .iter()
+                    .any(|r| r.file == file.path)
+            {
+                continue;
+            }
+            if let Some(module) = self.modules.get_mut(&file.path)
+                && !module.route.parameters_unread()
+                && let Some(span) = module.page_function
+                && let Some(function) = module.functions.get_mut(&span)
+            {
+                function.astro = false;
+            }
+        }
         for route in &project.nextjs().routes.routes {
             if super::route::automatic(route, self) {
                 routes

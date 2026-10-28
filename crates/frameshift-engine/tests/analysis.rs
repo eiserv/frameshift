@@ -3162,3 +3162,73 @@ fn async_pages_with_body_statements_convert_only_inside_the_printer_subset() {
         StoredReport::parse(analysis.document().unwrap().into_bytes(), &Limits::default()).unwrap();
     }
 }
+#[test]
+fn route_values_outside_pages_and_evaluated_page_patterns_stay_outside_astro() {
+    for (name, path, source, strategy) in [
+        // Layouts receive `params` in props, which `Astro.props` lacks.
+        (
+            "layout-awaited-params",
+            "app/blog/[slug]/layout.tsx",
+            "export default async function Layout({children,params}){const {slug}=await params;return <section>{children}<p>{`${slug}`}</p></section>}",
+            Strategy::Preserve,
+        ),
+        (
+            "layout-member-params",
+            "app/blog/[slug]/layout.tsx",
+            "export default function Layout({children,params}){const n=1;return <section>{children}<p>{`${params.slug}${n}`}</p></section>}",
+            Strategy::PreactStatic,
+        ),
+        (
+            "layout-without-params",
+            "app/blog/[slug]/layout.tsx",
+            "export default async function Layout({children}){const n=await Promise.resolve(1);return <section>{children}<p>{`${n}`}</p></section>}",
+            Strategy::Astro,
+        ),
+        // Dropping the page parameter would skip the default's call.
+        (
+            "page-evaluated-default",
+            "app/blog/[slug]/page.tsx",
+            "export default async function Page({missing:unused=record()}){return <p>x</p>}",
+            Strategy::Preserve,
+        ),
+    ] {
+        let mut files = vec![
+            ("app/page.tsx", PAGE),
+            (
+                "app/blog/[slug]/page.tsx",
+                "export function generateStaticParams(){return [{slug:'a'}]}export default function Page(){return <p>x</p>}",
+            ),
+            ("lib/record.ts", "export function record(){return 1}"),
+        ];
+        let page;
+        if path.ends_with("page.tsx") {
+            page = format!(
+                "import {{record}} from '../../../lib/record';export function generateStaticParams(){{return [{{slug:'a'}}]}}{source}"
+            );
+            files[1] = (path, page.as_str());
+        } else {
+            files.push((path, source));
+        }
+        let root = create(&format!("route-values-{name}"), &files);
+        let analysis = run(&root);
+        let unit = analysis
+            .assessment
+            .units
+            .iter()
+            .find(|u| {
+                matches!(u.kind, UnitKind::Route | UnitKind::Layout)
+                    && u.path.as_ref().is_some_and(|p| p.as_str() == path)
+            })
+            .unwrap();
+        assert_eq!(unit.strategy, strategy, "{name}");
+        if strategy == Strategy::Preserve {
+            let route = analysis
+                .assessment
+                .routes
+                .iter()
+                .find(|r| r.pattern == "/blog/[slug]")
+                .unwrap();
+            assert_eq!(route.status, Status::Unsupported, "{name}");
+        }
+    }
+}

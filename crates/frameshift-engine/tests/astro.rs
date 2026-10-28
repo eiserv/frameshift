@@ -701,6 +701,18 @@ fn dropped_parameters_require_every_use_replaced() {
         ),
         Err(ConvertErrorKind::CommentInMarkup)
     );
+    // Dropping a pattern would skip its defaults and computed keys.
+    for code in [
+        "function P({ missing: unused = record() }) { return <p />; }",
+        "function P({ unused = record() }) { return <p />; }",
+        "function P({ [key()]: unused }) { return <p />; }",
+    ] {
+        assert_eq!(
+            convert_function(&source(code), PropsSource::Dropped, &[]),
+            Err(ConvertErrorKind::UnsupportedFunction),
+            "{code}"
+        );
+    }
     let inner = Span::new(awaited[0].start() + 6, awaited[0].end()).unwrap();
     assert_eq!(
         convert_function(&text, PropsSource::Dropped, &[awaited[0], inner]),

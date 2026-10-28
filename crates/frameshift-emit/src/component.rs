@@ -26,8 +26,9 @@ pub enum PropsSource {
     AstroProps,
     /// The parameter holds framework values, such as a page's route
     /// parameters, that the caller replaces through
-    /// [`ComponentConversion::astro_params`]. The parameter is dropped, and no
-    /// name it declares may occur outside a replaced span.
+    /// [`ComponentConversion::astro_params`]. The parameter is dropped, so
+    /// its pattern may not evaluate a default value or a computed key, and
+    /// no name it declares may occur outside a replaced span.
     Dropped,
 }
 
@@ -146,7 +147,10 @@ pub fn convert_component(
         None => None,
     };
     let dropped = match (pattern, conversion.props) {
-        (Some(pattern), PropsSource::Dropped) => checker.declared_names(pattern)?,
+        (Some(pattern), PropsSource::Dropped) => {
+            checker.check_inert(pattern)?;
+            checker.declared_names(pattern)?
+        }
         (Some(_), PropsSource::AstroProps) | (None, _) => Vec::new(),
     };
     checker.check_function(function, &substitutions, &dropped)?;
@@ -371,6 +375,29 @@ impl Checker<'_> {
             }
         }
         Ok(binding)
+    }
+
+    // Rejects a pattern that evaluates code when it binds, a default value or
+    // a computed key, which dropping the pattern would skip.
+    fn check_inert(&self, pattern: NodeId) -> Result<(), ConvertError> {
+        let mut stack = vec![pattern];
+        while let Some(id) = stack.pop() {
+            let kind = self.kind(id)?;
+            let evaluates = matches!(
+                kind,
+                SyntaxNodeKind::AssignmentPattern { .. }
+                    | SyntaxNodeKind::ShorthandPatternProperty {
+                        default: Some(_),
+                        ..
+                    }
+                    | SyntaxNodeKind::PatternProperty { computed: true, .. }
+            );
+            if evaluates {
+                return Err(self.error(ConvertErrorKind::UnsupportedFunction, self.span(id)?));
+            }
+            stack.extend(self.tree.child_nodes(id).ok_or_else(|| self.invalid())?);
+        }
+        Ok(())
     }
 
     // Every name that the pattern declares.

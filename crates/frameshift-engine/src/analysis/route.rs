@@ -29,6 +29,13 @@ impl Summary {
             self.parameters.as_ref().map(|p| p.substitutions.as_slice()),
         ))
     }
+    /// Whether the default export provably never reads route parameters:
+    /// every `params` use is recognized and there is none.
+    pub(crate) fn parameters_unread(&self) -> bool {
+        self.parameters
+            .as_ref()
+            .is_some_and(|p| p.substitutions.is_empty())
+    }
     /// Parameter names that the default export reads, if every use is recognized.
     pub(crate) fn parameter_keys(&self) -> Option<impl Iterator<Item = &String>> {
         self.parameters

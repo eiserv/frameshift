@@ -199,7 +199,8 @@ pub enum ConvertErrorKind {
     /// Markup nests deeper than the configured limit.
     TooDeep,
     /// A component function that is a generator, has more than one
-    /// parameter, or a parameter other than an object pattern.
+    /// parameter, or a parameter other than an object pattern, or a dropped
+    /// parameter whose pattern evaluates a default or a computed key.
     UnsupportedFunction,
     /// A component body that does not end in a single `return` of markup,
     /// or a statement before it that is not a `var`, `let`, or `const`
