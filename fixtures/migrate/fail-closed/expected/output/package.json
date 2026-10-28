@@ -13,5 +13,8 @@
     "preact": "10.29.8",
     "react": "npm:@preact/compat@18.3.2",
     "react-dom": "npm:@preact/compat@18.3.2"
+  },
+  "optionalDependencies": {
+    "fictional-optional": "1.0.0"
   }
 }

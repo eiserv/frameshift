@@ -1,12 +1,12 @@
 {
   "$schema": "../../../schemas/fixture.schema.json",
   "kind": "migrate",
-  "description": "Fail-closed propagation of migrate v0 (D-101) in a src/app project: a page that renders a client component is preserved with it, a page that imports a module reading request cookies is preserved with that module, and only the static page with its root layout and relocated module is converted. The manifest names the real next package, so the harness creates it at test time (Q-014).",
+  "description": "Fail-closed propagation of migrate v0 (D-101) in a src/app project: a page that renders a client component is preserved with it, a page that imports a module reading request cookies is preserved with that module, a page whose copied code dynamically imports a project file is preserved, because only static imports are rewritten, and only the static page with its root layout and relocated module is converted; the optional dependency is kept in the generated manifest. The manifest names the real next package, so the harness creates it at test time (Q-014).",
   "createdAtTestTime": [
     {
       "kind": "file",
       "path": "package.json",
-      "content": "{\n  \"name\": \"fictional-counter\",\n  \"dependencies\": {\n    \"next\": \"16.2.1\",\n    \"react\": \"19.2.0\",\n    \"react-dom\": \"19.2.0\"\n  }\n}\n"
+      "content": "{\n  \"name\": \"fictional-counter\",\n  \"dependencies\": {\n    \"next\": \"16.2.1\",\n    \"react\": \"19.2.0\",\n    \"react-dom\": \"19.2.0\"\n  },\n  \"optionalDependencies\": {\n    \"fictional-optional\": \"1.0.0\"\n  }\n}\n"
     }
   ]
 }

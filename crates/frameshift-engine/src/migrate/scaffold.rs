@@ -73,12 +73,24 @@ pub(crate) fn generate(
     ] {
         dependencies.insert(name.to_owned(), version);
     }
-    let mut dev = BTreeMap::new();
-    for entry in &manifest.dev_dependencies {
-        if removed(&entry.key) {
-            removed_names.push(entry.key.to_string());
-        } else if !dependencies.contains_key(&*entry.key) {
-            dev.insert(entry.key.to_string(), entry.value.text.to_string());
+    // Every other declaration group is kept, so a package that retained
+    // code imports stays installable wherever the source declared it.
+    let mut groups = Vec::new();
+    for (name, entries) in [
+        ("devDependencies", &manifest.dev_dependencies),
+        ("optionalDependencies", &manifest.optional_dependencies),
+        ("peerDependencies", &manifest.peer_dependencies),
+    ] {
+        let mut members = BTreeMap::new();
+        for entry in entries {
+            if removed(&entry.key) {
+                removed_names.push(entry.key.to_string());
+            } else if !dependencies.contains_key(&*entry.key) {
+                members.insert(entry.key.to_string(), entry.value.text.to_string());
+            }
+        }
+        if !members.is_empty() {
+            groups.push((name, members));
         }
     }
     removed_names.sort();
@@ -109,9 +121,14 @@ pub(crate) fn generate(
         out.push_str(&lines.join(&format!(",{eol}")));
         let _ = write!(out, "{eol}  }}{}{eol}", if last { "" } else { "," });
     };
-    object(&mut package, "dependencies", &dependencies, dev.is_empty());
-    if !dev.is_empty() {
-        object(&mut package, "devDependencies", &dev, true);
+    object(
+        &mut package,
+        "dependencies",
+        &dependencies,
+        groups.is_empty(),
+    );
+    for (index, (name, members)) in groups.iter().enumerate() {
+        object(&mut package, name, members, index + 1 == groups.len());
     }
     package.push('}');
     package.push_str(eol);

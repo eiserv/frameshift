@@ -158,7 +158,7 @@ pub fn write(destination: &Destination, files: &[OutputFile]) -> Result<(), Outp
                 "the output location appeared during the run",
             ));
         }
-        fs::rename(&destination.staging, &destination.output)
+        rename(&destination.staging, &destination.output)
             .map_err(|error| OutputError::io("moving the output into place failed", &error))
     });
     if result.is_err() {
@@ -166,6 +166,26 @@ pub fn write(destination: &Destination, files: &[OutputFile]) -> Result<(), Outp
         let _ = fs::remove_dir_all(&destination.staging);
     }
     result
+}
+
+// On Windows, a scanner or indexer may briefly hold files of the new tree
+// open, which makes the directory rename fail with access denied. Retrying
+// a bounded number of times changes no output; other errors fail at once.
+fn rename(from: &Path, to: &Path) -> io::Result<()> {
+    let mut attempts = 0;
+    loop {
+        match fs::rename(from, to) {
+            Err(error)
+                if cfg!(windows)
+                    && error.kind() == io::ErrorKind::PermissionDenied
+                    && attempts < 20 =>
+            {
+                attempts += 1;
+                std::thread::sleep(std::time::Duration::from_millis(50 * attempts));
+            }
+            result => return result,
+        }
+    }
 }
 
 fn fill(staging: &Path, files: &[OutputFile]) -> Result<(), OutputError> {

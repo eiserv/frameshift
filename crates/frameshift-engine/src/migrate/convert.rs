@@ -360,6 +360,7 @@ pub(crate) fn astro(
     let tree = parse(text, path.as_str(), context.limits)?;
     let source = SourceId(0);
     let analysis = analyze(context, path, &tree, output, role)?;
+    check_other_edges(context, path, &tree)?;
     let anchor = |span: Span| Anchor { source, span };
     let function_anchor = anchor(analysis.function);
     let mut frontmatter = Vec::new();
@@ -532,6 +533,39 @@ pub(crate) fn astro(
         .map_err(|error| format!("emitted provenance is inconsistent ({error})"))?;
     check_comments(&tree, source, &emitted)?;
     Ok((emitted, assumptions))
+}
+
+// Only static import declarations are rewritten. Any other runtime edge to
+// a local or unresolved target, such as `import()` or `require()` in copied
+// code, would keep a stale specifier after the move, so it refuses the file.
+fn check_other_edges(
+    context: &Context<'_>,
+    path: &SourcePath,
+    tree: &SyntaxTree<'_>,
+) -> Result<()> {
+    let mut rewritten = Vec::new();
+    for item in program_body(tree)? {
+        if let SyntaxNodeKind::ImportDeclaration { source, .. } = kind(tree, item)? {
+            rewritten.push(node_span(tree, source)?);
+        }
+    }
+    let Some(node) = context.graph.node(path) else {
+        return refuse("the module is not in the module graph");
+    };
+    for edge in &node.edges {
+        if edge.type_only || rewritten.contains(&edge.span) {
+            continue;
+        }
+        if matches!(
+            edge.resolution,
+            Resolution::Local { .. } | Resolution::Unresolved(_)
+        ) {
+            return refuse(
+                "dynamic imports, re-exports, and require calls of project files are not converted",
+            );
+        }
+    }
+    Ok(())
 }
 
 /// The props that a layout with this metadata receives from its pages.
@@ -1371,33 +1405,76 @@ pub(crate) fn relocate(
     Ok(EmittedText::from_rewritten(SourceId(0), &rewritten))
 }
 
-/// Whether a stylesheet keeps working when it moves: every `url()` and
-/// import must be absolute, a data URL, or a remote URL.
-pub(crate) fn stylesheet_relocatable(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    let absolute = |rest: &str| {
-        let rest = rest.trim_start_matches([' ', '\t', '\r', '\n', '"', '\'']);
-        (rest.starts_with('/') && !rest.starts_with("//"))
-            || rest.starts_with("data:")
-            || rest.starts_with("https:")
-            || rest.starts_with("http:")
-            || rest.starts_with('#')
+/// Whether a stylesheet keeps working when it moves, decided on CSS tokens:
+/// every URL token, every string in `url()`, `src()`, `image()`, and
+/// `image-set()`, and every `@import`, `@use`, or `@forward` target must be
+/// root-absolute, a data URL, a remote URL, or a fragment (imports only
+/// remote or data). Comments are tokens of their own, so they cannot hide
+/// a relative reference; any tokenizer error refuses the stylesheet.
+pub(crate) fn stylesheet_relocatable(text: &SourceText, limits: &Limits) -> bool {
+    use frameshift_syntax::{CssTokenKind, css_token_value, tokenize_css};
+    fn absolute(value: &str, import: bool) -> bool {
+        let lower = value.trim().to_ascii_lowercase();
+        let remote = ["data:", "https:", "http:"]
+            .iter()
+            .any(|scheme| lower.starts_with(scheme));
+        remote
+            || (!import
+                && ((lower.starts_with('/') && !lower.starts_with("//"))
+                    || (lower.starts_with('#') && !lower.starts_with("#{"))))
+    }
+    let Ok(tokens) = tokenize_css(text, limits.css) else {
+        return false;
     };
-    for (index, _) in lower.match_indices("url(") {
-        if !absolute(&lower[index + 4..]) {
+    if !tokens.errors().is_empty() {
+        return false;
+    }
+    // Depth of the innermost open URL-taking function, and whether the next
+    // URL or string is an import target.
+    let (mut depth, mut guarded, mut import) = (0usize, None::<usize>, false);
+    for token in tokens.tokens() {
+        let Ok(value) = css_token_value(text, token) else {
+            return false;
+        };
+        let value = value.unwrap_or_default();
+        let kind = token.kind;
+        if matches!(kind, CssTokenKind::BadUrl | CssTokenKind::BadString) {
             return false;
         }
-    }
-    for keyword in ["@import", "@use", "@forward"] {
-        for (index, _) in lower.match_indices(keyword) {
-            let rest = lower[index + keyword.len()..].trim_start();
-            let rest = rest.strip_prefix("url(").unwrap_or(rest);
-            if !absolute(rest) || rest.trim_start_matches(['"', '\'']).starts_with('/') {
+        if matches!(kind, CssTokenKind::Url)
+            || (matches!(kind, CssTokenKind::String) && (guarded.is_some() || import))
+        {
+            if !absolute(&value, import) {
                 return false;
             }
+            import = false;
+        }
+        if matches!(kind, CssTokenKind::AtKeyword) {
+            import = ["import", "use", "forward"]
+                .iter()
+                .any(|name| value.eq_ignore_ascii_case(name));
+        } else if matches!(kind, CssTokenKind::Semicolon | CssTokenKind::OpenCurly) && import {
+            // An import without a URL or string target.
+            return false;
+        }
+        if matches!(kind, CssTokenKind::Function | CssTokenKind::OpenParen) {
+            depth += 1;
+            let name = value.to_ascii_lowercase();
+            let name = name.trim_start_matches("-webkit-");
+            if guarded.is_none()
+                && matches!(kind, CssTokenKind::Function)
+                && matches!(name, "url" | "src" | "image" | "image-set")
+            {
+                guarded = Some(depth);
+            }
+        } else if matches!(kind, CssTokenKind::CloseParen) {
+            if guarded == Some(depth) {
+                guarded = None;
+            }
+            depth = depth.saturating_sub(1);
         }
     }
-    true
+    !import
 }
 
 #[cfg(test)]
@@ -1434,16 +1511,28 @@ mod tests {
 
     #[test]
     fn stylesheet_references() {
-        assert!(stylesheet_relocatable("body { color: red }"));
-        assert!(stylesheet_relocatable("a { background: url('/bg.png') }"));
-        assert!(stylesheet_relocatable(
-            "a { background: url(data:image/png;base64,AA) }"
+        let limits = Limits::default();
+        let check = |css: &str| {
+            let text = SourceText::new(css.to_owned(), limits.text).unwrap();
+            stylesheet_relocatable(&text, &limits)
+        };
+        assert!(check("body { color: red }"));
+        assert!(check("a { background: url('/bg.png') }"));
+        assert!(check("a { background: url(data:image/png;base64,AA) }"));
+        assert!(check("a { filter: url(#blur) }"));
+        assert!(check("@import url('https://fonts.example/css');"));
+        assert!(check("a::before { content: './not-a-url' }"));
+        assert!(!check("a { background: url(./bg.png) }"));
+        assert!(!check("a { background: url(/* comment */ './img.png') }"));
+        assert!(!check("a { background: image-set('./a.png' 1x) }"));
+        assert!(!check("a { background: url(#{$base}/a.png) }"));
+        assert!(!check("@import './other.css';"));
+        assert!(!check("@import '/root.css';"));
+        assert!(!check("@import 'tailwindcss';"));
+        assert!(!check("@use 'variables';"));
+        assert!(!check(
+            "a { content: \"/*\" } b { background: url(./x.png) }"
         ));
-        assert!(!stylesheet_relocatable("a { background: url(./bg.png) }"));
-        assert!(!stylesheet_relocatable("@import './other.css';"));
-        assert!(!stylesheet_relocatable("@import 'tailwindcss';"));
-        assert!(stylesheet_relocatable(
-            "@import url('https://fonts.example/css');"
-        ));
+        assert!(!check("a { content: \"unterminated }"));
     }
 }
