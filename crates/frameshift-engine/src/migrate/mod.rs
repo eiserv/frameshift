@@ -14,6 +14,7 @@ mod managed;
 mod plan_document;
 pub mod rules;
 mod scaffold;
+mod structure;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -805,6 +806,26 @@ impl<'a> Planner<'a> {
                         rendered.insert(path.clone(), output);
                     }
                     Err(reason) => refused.push((path.clone(), reason)),
+                }
+            }
+            if refused.is_empty() {
+                let outputs: BTreeSet<String> = self
+                    .fates
+                    .values()
+                    .filter_map(|fate| match fate {
+                        Fate::Convert(candidate) => Some(candidate.output.clone()),
+                        Fate::Preserve(_) | Fate::NotCopied(_) | Fate::Gitignore => None,
+                    })
+                    .collect();
+                for (path, output) in &rendered {
+                    let Some(Fate::Convert(candidate)) = self.fates.get(path) else {
+                        continue;
+                    };
+                    if let Err(reason) =
+                        structure::check(&candidate.output, &output.bytes, &outputs, self.limits)
+                    {
+                        refused.push((path.clone(), reason));
+                    }
                 }
             }
             if refused.is_empty() {

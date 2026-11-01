@@ -114,6 +114,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-104 | The rule registry of migrate | Accepted |
 | D-105 | The output manifest | Accepted |
 | D-106 | Replacing managed output | Accepted |
+| D-107 | The structural postcondition of generated scripts | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1226,6 +1227,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale:** The manifest proves that a location is Frameshift's and unchanged, so no manual edit can be lost. Moving instead of deleting keeps every failure recoverable.
 - **Tradeoffs:** A user must remove the moved tree before the next replacement. The manifest is not authenticated, so someone who edits both a file and its digest can pass the check; the policy protects against accidental loss, not against an attacker with write access to the output.
 - **Revisit if:** Repeated regeneration makes removing the moved tree a burden.
+
+### D-107: The structural postcondition of generated scripts
+
+- **Status:** Accepted (2026-11-01), implementing the postconditions of section 12.2 of [ARCHITECTURE.md](ARCHITECTURE.md) for the rules that exist.
+- **Decision:** Before a plan is final, every generated script and the frontmatter of every generated Astro file must parse again in a strict parse. A runtime import, re-export, or literal dynamic import must not name `next` or `next/*`, and a relative one must name a file that the plan writes. A `use client` or `use server` directive must not remain. A file that fails is preserved with its reason, and preservation propagates as usual. Type-only imports and declaration files are not checked for imports, because they do not exist at run time.
+- **Rationale:** The rules are designed to make these failures impossible, so this is a net for rule defects. Preserving keeps a defect from reaching the output and reports it as a manual task, as the fail-closed rule requires.
+- **Tradeoffs:** The Astro template is not re-parsed, because no template parser exists. A failure appears as a preserved file with a generic reason, not as a `failed` unit or `FS5001`, because units have no such state yet. `frameshift verify` remains planned.
+- **Revisit if:** M10 adds an Astro template parser and `verify`.
 
 ## Technique proposals and related accepted decisions
 
