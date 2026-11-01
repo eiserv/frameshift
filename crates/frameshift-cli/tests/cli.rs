@@ -44,10 +44,11 @@ const GOLDENS: &[(&[&str], &str, i32)] = &[
     (&["help", "version"], "help-version.txt", 0),
     (&["help", "inspect"], "help-inspect.txt", 0),
     (&["help", "migrate"], "help-migrate.txt", 0),
+    (&["help", "plan"], "help-plan.txt", 0),
     (&["version"], "version.txt", 0),
     (&["version", "--format", "json"], "version.json", 0),
     (&["--version"], "short-version.txt", 0),
-    (&["plan", "--format", "json"], "usage-error.json", 2),
+    (&["verify", "--format", "json"], "usage-error.json", 2),
 ];
 
 #[test]
@@ -116,7 +117,9 @@ fn invalid_arguments_and_planned_commands_fail_without_echoing_input() {
         &["verify"],
         &["report"],
         &["explain"],
-        &["help", "plan"],
+        &["plan", "--to", "vue"],
+        &["plan", "--to", "astro-preact", "--show", "units"],
+        &["plan", "--to", "astro-preact", "--dry-run"],
         &["migrate", "--to", "astro-preact"],
         &["migrate", "--to", "astro-preact", "--out", "o", "--strict"],
         &["version", "extra"],
@@ -154,6 +157,15 @@ fn invalid_arguments_and_planned_commands_fail_without_echoing_input() {
         &["help", "--format=json"],
         &["--version", "--format", "json"],
         &["version", "--format", "json", "--format", "text"],
+        &[
+            "plan",
+            "--to",
+            "astro-preact",
+            "--show",
+            "tasks",
+            "--format",
+            "json",
+        ],
     ] {
         let output = invoke(arguments);
         assert_eq!(output.status.code(), Some(2));

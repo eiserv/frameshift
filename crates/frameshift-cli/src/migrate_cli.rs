@@ -1,21 +1,27 @@
-//! Thin adapter for `frameshift migrate` v0 (`D-101`): argument parsing,
-//! one engine call for the plan, one for the checked write, and text output.
+//! Thin adapter for `frameshift migrate` v0 (`D-101`) and `frameshift plan`
+//! (`D-102`): argument parsing, one engine call for the plan, one for the
+//! checked write, and rendering.
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use frameshift_engine::foundation::{PathLimits, SourcePath};
-use frameshift_engine::migrate::{self, MigrateErrorKind, MigrateOptions, OperationKind, TaskKind};
+use frameshift_engine::limits::Limits;
+use frameshift_engine::migrate::{
+    self, MigrateErrorKind, MigrateOptions, Operation, OperationKind, Plan, TaskKind,
+};
 
 use crate::args::{Format, UsageError};
-use crate::render::escape;
+use crate::render::{self, escape};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Request {
     Migrate(Options),
+    Plan(PlanOptions),
     Help,
+    PlanHelp,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,22 +30,53 @@ pub(crate) struct Options {
     output: PathBuf,
     package: Option<SourcePath>,
     dry_run: bool,
+    plan: Option<PathBuf>,
 }
 
-pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] --to astro-preact --out <dir> [--package <dir>] [--dry-run]\n\
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PlanOptions {
+    source: OsString,
+    output: Option<PathBuf>,
+    package: Option<SourcePath>,
+    show: Show,
+    format: Format,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Show {
+    Overview,
+    Operations,
+    Files,
+    Tasks,
+}
+
+pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] --to astro-preact --out <dir> [--package <dir>]\n       [--plan <plan.json>] [--dry-run]\n\
 Migrate the Next.js App Router project at <source>, by default the current directory, into a\n\
 new Astro project with Preact at <dir> (migrate v0, D-101). Static pages, layouts,\n\
 and components that the analysis rates auto or review are converted; everything else is\n\
 copied unchanged below .frameshift/unmigrated/ and listed in .frameshift/SUMMARY.md.\n\
 <dir> must not exist, and must not be inside <source> or contain it. Files are written to a\n\
 staging directory next to <dir> and renamed into place when complete. The source is never\n\
-modified, and no project code or external tool runs. --dry-run lists the planned files and\n\
-writes nothing. Exit status: 0 on success, 2 for invalid arguments, 3 when the source cannot\n\
-be analyzed, 4 when the output location is refused or cannot be written.\n";
+modified, and no project code or external tool runs. --plan refuses to continue unless the\n\
+recomputed plan document equals the given one byte for byte; the given file is compared, never\n\
+executed. --dry-run lists the planned files and writes nothing. Exit status: 0 on success,\n\
+2 for invalid arguments, 3 when the source cannot be analyzed or the plan document differs,\n\
+4 when the output location is refused or cannot be written.\n";
+
+pub(crate) const PLAN_HELP: &str = "Usage: frameshift plan [<source>] --to astro-preact [--package <dir>] [--out <plan.json>]\n       [--show operations|files|tasks] [--format text|json]\n\
+Compute what `frameshift migrate` would do for the project at <source>, by default the current\n\
+directory, without writing project files. The frameshift.plan document records the source\n\
+snapshot, versions, options, the digest of every output file, and the manual tasks, under one\n\
+plan hash. --out writes it to a new file outside <source> for review or approval, and\n\
+--format json prints it. --show lists every operation, output file, or manual task. Exit\n\
+status: 0 on success, 2 for invalid arguments, 3 when the source cannot be analyzed, 4 when the\n\
+plan document cannot be written.\n";
+
+// How many operations the plan overview lists.
+const OVERVIEW_OPERATIONS: usize = 8;
 
 // Options that CLI.md specifies for later milestones.
 const PLANNED: &[&str] = &[
-    "--plan",
     "--strict",
     "--on-existing",
     "--clean-staging",
@@ -50,7 +87,7 @@ const PLANNED: &[&str] = &[
     "--no-config",
 ];
 
-const VALUE_OPTIONS: &[&str] = &["--to", "--out", "--package", "--format"];
+const VALUE_OPTIONS: &[&str] = &["--to", "--out", "--package", "--format", "--plan", "--show"];
 
 fn command(args: &[OsString]) -> Option<(usize, &str)> {
     let mut index = 0;
@@ -72,19 +109,21 @@ fn command(args: &[OsString]) -> Option<(usize, &str)> {
 pub(crate) fn parse(args: &[OsString]) -> Option<Result<Request, UsageError>> {
     let (index, command) = command(args)?;
     if command == "help" {
-        if args.get(index + 1).and_then(|s| s.to_str()) != Some("migrate") {
-            return None;
-        }
+        let request = match args.get(index + 1).and_then(|s| s.to_str()) {
+            Some("migrate") => Request::Help,
+            Some("plan") => Request::PlanHelp,
+            _ => return None,
+        };
         return Some(if args.len() == 2 {
-            Ok(Request::Help)
+            Ok(request)
         } else {
             Err(error(args, "help takes one command name"))
         });
     }
-    if command != "migrate" {
+    if command != "migrate" && command != "plan" {
         return None;
     }
-    Some(parse_migrate(args, index).map_err(|message| error(args, message)))
+    Some(parse_command(args, index, command == "plan").map_err(|message| error(args, message)))
 }
 
 fn error(args: &[OsString], message: &'static str) -> UsageError {
@@ -98,11 +137,16 @@ fn error(args: &[OsString], message: &'static str) -> UsageError {
     }
 }
 
-fn parse_migrate(args: &[OsString], command: usize) -> Result<Request, &'static str> {
+fn parse_command(
+    args: &[OsString],
+    command: usize,
+    planning: bool,
+) -> Result<Request, &'static str> {
     let mut seen = BTreeSet::new();
     let mut operands = Vec::new();
     let (mut target, mut output, mut package, mut dry_run, mut help) =
         (None, None, None, false, false);
+    let (mut approved, mut show, mut format) = (None, Show::Overview, Format::Text);
     let mut i = 0;
     while i < args.len() {
         if i == command {
@@ -128,6 +172,9 @@ fn parse_migrate(args: &[OsString], command: usize) -> Result<Request, &'static 
         }
         if PLANNED.contains(&key) {
             return Err("option is not available in migrate v0");
+        }
+        if (planning && matches!(key, "--dry-run" | "--plan")) || (!planning && key == "--show") {
+            return Err("unknown option; run 'frameshift help' for usage");
         }
         if matches!(key, "--help" | "--dry-run") {
             if inline.is_some() {
@@ -155,11 +202,25 @@ fn parse_migrate(args: &[OsString], command: usize) -> Result<Request, &'static 
             output = Some(PathBuf::from(value));
             continue;
         }
+        if key == "--plan" {
+            approved = Some(PathBuf::from(value));
+            continue;
+        }
         let value = value.to_str().ok_or("option values must be valid UTF-8")?;
         match key {
             "--to" => target = Some(value.to_owned()),
             "--format" if value == "text" => {}
+            "--format" if planning && value == "json" => format = Format::Json,
+            "--format" if planning => return Err("--format requires text or json"),
             "--format" => return Err("migrate v0 supports only text output"),
+            "--show" => {
+                show = match value {
+                    "operations" => Show::Operations,
+                    "files" => Show::Files,
+                    "tasks" => Show::Tasks,
+                    _ => return Err("--show requires operations, files, or tasks"),
+                };
+            }
             _ => {
                 package =
                     if value == "." {
@@ -176,23 +237,187 @@ fn parse_migrate(args: &[OsString], command: usize) -> Result<Request, &'static 
         if !operands.is_empty() || seen.len() != 1 {
             return Err("command help takes no operands or other options");
         }
-        return Ok(Request::Help);
+        return Ok(if planning {
+            Request::PlanHelp
+        } else {
+            Request::Help
+        });
     }
     match target.as_deref() {
         Some("astro-preact") => {}
         Some(_) => return Err("the only available target is astro-preact"),
+        None if planning => return Err("plan requires --to astro-preact"),
         None => return Err("migrate requires --to astro-preact"),
     }
-    let output = output.ok_or("migrate requires --out <dir>")?;
     if operands.len() > 1 {
-        return Err("migrate takes at most one source");
+        return Err(if planning {
+            "plan takes at most one source"
+        } else {
+            "migrate takes at most one source"
+        });
     }
+    let source = operands.pop().unwrap_or_else(|| ".".into());
+    if planning {
+        if format == Format::Json && show != Show::Overview {
+            return Err("--show applies only to text output");
+        }
+        return Ok(Request::Plan(PlanOptions {
+            source,
+            output,
+            package,
+            show,
+            format,
+        }));
+    }
+    let output = output.ok_or("migrate requires --out <dir>")?;
     Ok(Request::Migrate(Options {
-        source: operands.pop().unwrap_or_else(|| ".".into()),
+        source,
         output,
         package,
         dry_run,
+        plan: approved,
     }))
+}
+
+fn write_operation(stdout: &mut impl Write, operation: &Operation) -> io::Result<()> {
+    write!(
+        stdout,
+        "{:<10} {}  {}",
+        operation.kind.as_str(),
+        escape(operation.output.as_str()),
+        operation.rule
+    )?;
+    if let Some(source) = &operation.source {
+        write!(stdout, "  from {}", escape(source.as_str()))?;
+    }
+    writeln!(stdout, "{}", if operation.review { "  review" } else { "" })
+}
+
+// The eight hexadecimal digits that identify a digest in text output.
+fn short(digest: &str) -> &str {
+    let hex = digest.strip_prefix("sha256:").unwrap_or(digest);
+    hex.get(..8).unwrap_or(hex)
+}
+
+fn manual_tasks(plan: &Plan) -> usize {
+    plan.tasks
+        .iter()
+        .filter(|t| t.kind != TaskKind::NotCopied)
+        .count()
+}
+
+fn run_plan(
+    options: &PlanOptions,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> io::Result<u8> {
+    let source = Path::new(&options.source);
+    let failed = |stdout: &mut _, stderr: &mut _, code, message: &str| {
+        if options.format == Format::Json {
+            render::error_document(stdout, code, message)?;
+        }
+        fail(stderr, code, message)
+    };
+    let plan = match migrate::plan(
+        source,
+        &MigrateOptions {
+            package: options.package.clone(),
+            ..MigrateOptions::default()
+        },
+    ) {
+        Ok(plan) => plan,
+        Err(error) => return failed(stdout, stderr, code(error.kind()), &error.to_string()),
+    };
+    if let Some(path) = &options.output {
+        let written = crate::analysis_cli::report_destination(source, path)
+            .map_err(|_| "the plan document must be a new file outside the source")
+            .and_then(|destination| {
+                crate::analysis_cli::write_new(&destination, plan.document().as_bytes())
+                    .map_err(|_| "the plan document already exists or cannot be written")
+            });
+        if let Err(message) = written {
+            return failed(stdout, stderr, 4, message);
+        }
+    }
+    if options.format == Format::Json {
+        stdout.write_all(plan.document().as_bytes())?;
+        return Ok(0);
+    }
+    let hash = plan.hash().to_string();
+    let snapshot = plan.binding.snapshot.to_string();
+    writeln!(
+        stdout,
+        "Frameshift {}  plan  nextjs {} (App Router) -> astro-preact (profile {})",
+        plan.binding.engine_version,
+        plan.binding
+            .source_version
+            .as_deref()
+            .map_or_else(|| "unknown version".to_owned(), escape),
+        plan.binding.target_profile
+    )?;
+    writeln!(
+        stdout,
+        "Plan {}   {} operations   input snapshot {}\n",
+        short(&hash),
+        plan.operations.len(),
+        short(&snapshot)
+    )?;
+    match options.show {
+        Show::Overview | Show::Operations => {
+            let shown = if options.show == Show::Overview {
+                OVERVIEW_OPERATIONS.min(plan.operations.len())
+            } else {
+                plan.operations.len()
+            };
+            for operation in &plan.operations[..shown] {
+                write_operation(stdout, operation)?;
+            }
+            if shown < plan.operations.len() {
+                writeln!(
+                    stdout,
+                    "... {} more (use --show operations)",
+                    plan.operations.len() - shown
+                )?;
+            }
+        }
+        Show::Files => {
+            for operation in &plan.operations {
+                writeln!(stdout, "{}", escape(operation.output.as_str()))?;
+            }
+        }
+        Show::Tasks => {
+            for task in &plan.tasks {
+                writeln!(
+                    stdout,
+                    "{:<10} {}: {}",
+                    task.kind.as_str(),
+                    task.source
+                        .as_ref()
+                        .map_or_else(|| "project".to_owned(), |path| escape(path.as_str())),
+                    task.text
+                )?;
+            }
+        }
+    }
+    writeln!(
+        stdout,
+        "\nManual tasks: {} (use --show tasks)",
+        manual_tasks(&plan)
+    )?;
+    if options.output.is_some() {
+        writeln!(stdout, "Plan document written.")?;
+    }
+    Ok(0)
+}
+
+fn read_plan_document(path: &Path) -> Result<Vec<u8>, &'static str> {
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .map_err(|_| "cannot open the plan document")?
+        .take(Limits::default().analysis.max_report_bytes as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "cannot read the plan document")?;
+    Ok(bytes)
 }
 
 pub(crate) fn run(
@@ -205,6 +430,11 @@ pub(crate) fn run(
             stdout.write_all(HELP.as_bytes())?;
             return Ok(0);
         }
+        Request::PlanHelp => {
+            stdout.write_all(PLAN_HELP.as_bytes())?;
+            return Ok(0);
+        }
+        Request::Plan(options) => return run_plan(&options, stdout, stderr),
         Request::Migrate(options) => options,
     };
     let source = Path::new(&options.source);
@@ -218,30 +448,31 @@ pub(crate) fn run(
         Ok(plan) => plan,
         Err(error) => return fail(stderr, code(error.kind()), &error.to_string()),
     };
+    if let Some(path) = &options.plan {
+        match read_plan_document(path) {
+            Ok(stored) if plan.matches_document(&stored) => {
+                writeln!(stdout, "Plan {} verified.", short(&plan.hash().to_string()))?;
+            }
+            Ok(_) => {
+                return fail(
+                    stderr,
+                    3,
+                    "the plan document is invalid or differs from the recomputed plan",
+                );
+            }
+            Err(message) => return fail(stderr, 3, message),
+        }
+    }
     let destination = match migrate::check_output(source, &options.output) {
         Ok(destination) => destination,
         Err(error) => return fail(stderr, code(error.kind()), &error.to_string()),
     };
     let count = |kind| plan.operations.iter().filter(|o| o.kind == kind).count();
-    let tasks = plan
-        .tasks
-        .iter()
-        .filter(|t| t.kind != TaskKind::NotCopied)
-        .count();
+    let tasks = manual_tasks(&plan);
     if options.dry_run {
         writeln!(stdout, "Dry run: nothing will be written.")?;
         for operation in &plan.operations {
-            write!(
-                stdout,
-                "{:<10} {}  {}",
-                operation.kind.as_str(),
-                escape(operation.output.as_str()),
-                operation.rule
-            )?;
-            if let Some(source) = &operation.source {
-                write!(stdout, "  from {}", escape(source.as_str()))?;
-            }
-            writeln!(stdout, "{}", if operation.review { "  review" } else { "" })?;
+            write_operation(stdout, operation)?;
         }
         writeln!(
             stdout,

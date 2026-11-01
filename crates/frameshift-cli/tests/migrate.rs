@@ -145,6 +145,86 @@ fn migration_writes_the_golden_tree_and_refuses_unsafe_outputs() {
     }
 }
 
+const PLAN: &[&str] = &["plan", "source", "--to", "astro-preact"];
+
+#[test]
+fn plan_documents_approve_exactly_the_run_they_describe() {
+    for case in cases() {
+        let root = workspace(&case, "approve");
+        let before = read_tree(&root.join("source"));
+        let mut args = PLAN.to_vec();
+        args.extend(["--out", "plan.json"]);
+        let written = call(&root, &args);
+        assert_eq!(written.status.code(), Some(0), "{case}");
+        assert!(
+            String::from_utf8_lossy(&written.stdout).contains("Plan document written."),
+            "{case}"
+        );
+        // `--format json` prints the document that `--out` wrote.
+        let mut json = PLAN.to_vec();
+        json.extend(["--format", "json"]);
+        let printed = call(&root, &json);
+        assert_eq!(printed.status.code(), Some(0), "{case}");
+        assert_eq!(printed.stdout, fs::read(root.join("plan.json")).unwrap());
+        // An existing document or one inside the source is refused.
+        assert_eq!(call(&root, &args).status.code(), Some(4), "{case}");
+        let mut inside = PLAN.to_vec();
+        inside.extend(["--out", "source/plan.json"]);
+        assert_eq!(call(&root, &inside).status.code(), Some(4), "{case}");
+        assert_eq!(read_tree(&root.join("source")), before, "{case}");
+
+        let approved = |out: &'static str, plan: &'static str| {
+            let mut args = MIGRATE[..5].to_vec();
+            args.extend([out, "--plan", plan]);
+            call(&root, &args)
+        };
+        // A changed plan document, a stale plan, and a missing one exit 3
+        // and write nothing.
+        let mut tampered = fs::read(root.join("plan.json")).unwrap();
+        *tampered.last_mut().unwrap() = b' ';
+        fs::write(root.join("tampered.json"), tampered).unwrap();
+        for plan in ["tampered.json", "missing.json"] {
+            let refused = approved("refused", plan);
+            assert_eq!(refused.status.code(), Some(3), "{case}: {plan}");
+            assert!(!root.join("refused").exists(), "{case}: {plan}");
+        }
+        let verified = approved("verified", "plan.json");
+        assert_eq!(verified.status.code(), Some(0), "{case}");
+        assert!(String::from_utf8_lossy(&verified.stdout).starts_with("Plan "));
+        let golden = read_tree(&fixtures().join(&case).join("expected/output"));
+        assert_eq!(read_tree(&root.join("verified")), golden, "{case}");
+
+        fs::write(root.join("source/added.txt"), "changed").unwrap();
+        let stale = approved("stale", "plan.json");
+        assert_eq!(stale.status.code(), Some(3), "{case}");
+        assert!(!root.join("stale").exists(), "{case}");
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn plan_text_lists_operations_files_and_tasks() {
+    let case = "static-site";
+    let root = workspace(case, "show");
+    let run = |show: &'static str| {
+        let mut args = PLAN.to_vec();
+        args.extend(["--show", show]);
+        let output = call(&root, &args);
+        assert_eq!(output.status.code(), Some(0), "{show}");
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let overview = String::from_utf8(call(&root, PLAN).stdout).unwrap();
+    assert!(overview.starts_with("Frameshift "), "{overview}");
+    assert!(
+        overview.contains("more (use --show operations)"),
+        "{overview}"
+    );
+    assert!(run("operations").contains("layout.chain  from app/layout.tsx"));
+    assert!(run("files").contains("\nsrc/pages/index.astro\n"));
+    assert!(run("tasks").contains("preserved  app/contact/page.tsx: "));
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 #[ignore = "rewrites the migrate dry-run text goldens"]
 fn update_migrate_text_goldens() {
