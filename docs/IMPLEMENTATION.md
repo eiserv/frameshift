@@ -1,6 +1,6 @@
 # Implementation Status and Source Contracts
 
-**Status: M0 through M4 complete; M5 implemented (`D-100`); migrate v0 implemented under `D-101` (section 52).** This is the authoritative map of existing code and its current contracts. The architecture and migration documents describe the remaining product design. E1 passed on 2026-10-13 (`D-047`), and E2 passed on the same day (`D-049`, section 11), so `P-002` and `P-003` are accepted.
+**Status: M0 through M4 complete; M5 and M6 implemented (`D-100`, `D-102` to `D-104`); M7 in progress, with migrate v0 under `D-101` (sections 52 to 58).** This is the authoritative map of existing code and its current contracts. The architecture and migration documents describe the remaining product design. E1 passed on 2026-10-13 (`D-047`), and E2 passed on the same day (`D-049`, section 11), so `P-002` and `P-003` are accepted.
 
 ## 1. Tooling and code map
 
