@@ -126,7 +126,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 - Configuration files are parsed and evaluated statically. The evaluator understands literals, object and array literals, template literals with known parts, `const` bindings, and constant imports from local files. Everything else becomes `Unknown(reason)`.
 - The evaluator has no access to the filesystem, environment, network, or clock, so it can never perform side effects.
 - Build-time code (server components, `generateStaticParams`) is moved into the output, never run by Frameshift.
-- A `frameshift.jsonc` inside the source project is untrusted like every other file. It cannot enable code execution, change overwrite policies, choose the output location, or reference paths outside the source root (section 5.1 of [CLI.md](CLI.md)).
+- A `frameshift.jsonc` inside the source project is untrusted like every other file (implemented, `D-103`: its closed key set holds only `$schema`, `to`, and `package`, and it is read through the snapshot store). It cannot enable code execution, change overwrite policies, choose the output location, or reference paths outside the source root (section 5.1 of [CLI.md](CLI.md)).
 
 ### 7.4 External tool execution (verification only)
 
