@@ -1968,7 +1968,7 @@ The hash is SHA-256 of the domain line `frameshift.plan.v1` and the printed docu
 
 **Validation.** `crates/frameshift-engine/tests/migrate.rs` compares `expected/plan.json` with each fixture's document, with `@ENGINE_VERSION@` and `@PLAN_HASH@` in place of the release-dependent values, and checks that a file no operation copies changes the snapshot identity and the hash. `crates/frameshift-cli/tests/migrate.rs` checks that `--out` and `--format json` agree, that an existing destination and a destination inside the source are refused, that a tampered, missing, or stale document exits with 3 and writes nothing, and that the matching document produces the golden tree.
 
-**Boundaries.** The rule registry of M6 is outstanding, so rule versions are absent; `binding.options` holds the effective `to` and `package`. Later commands do not read a stored plan for anything except this comparison.
+**Boundaries.** `binding.options` holds the effective `to` and `package`, and operations record their rule version (section 55). Later commands do not read a stored plan for anything except this comparison.
 
 ## 54. Project configuration (`D-103`)
 
@@ -1979,3 +1979,9 @@ The hash is SHA-256 of the domain line `frameshift.plan.v1` and the printed docu
 **Validation.** `crates/frameshift-engine/tests/config.rs` covers the key set, comments, rejected keys and values without echoing them, and the admitted-file rule. `crates/frameshift-cli/tests/migrate.rs` covers precedence, `--config`, `--no-config`, and that the file stays out of the output.
 
 **Boundaries.** There is no `exclude` or `envNames` key (`D-103`). The planned `--env-names` option remains a usage error.
+
+## 55. Rule registry (`D-104`)
+
+`migrate/rules.rs` lists every transformation rule of migrate with its version, operation kind, and summary. `Planner::finish` rejects an operation whose rule is unregistered or of another kind, and two operations for one source file; both are internal errors, which fail closed. The plan document records `ruleVersion` for each operation. `frameshift rules` prints the rules after the assessment predicates, except with `--unsupported`, and `explain` and `rules show` print one rule by its full identifier, such as `nextjs-to-astro-preact/route.static-page`.
+
+Tests check that the registry is sorted and unique, that every identifier passes `RuleId`'s grammar, and that every fixture's plan passes the checks. With this section, M6's scope exists; the preconditions, `excludes` relation, and source spans of ARCHITECTURE.md section 12 remain planned until rules can compete for one occurrence.

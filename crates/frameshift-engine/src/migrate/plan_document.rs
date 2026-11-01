@@ -8,7 +8,7 @@
 use frameshift_core::{Sha256Digest, Sha256Hasher, SourcePath};
 use frameshift_input::SnapshotId;
 
-use super::{ManualTask, MigrateError, MigrateErrorKind, Operation};
+use super::{ManualTask, MigrateError, MigrateErrorKind, Operation, rules};
 use crate::document::{self, Value as V};
 use crate::limits::Limits;
 
@@ -64,10 +64,13 @@ pub(super) fn print(
     let mut entries = Vec::with_capacity(operations.len());
     for operation in operations {
         let digest = Sha256Digest::hash(operation.bytes(), limits.hash).map_err(|_| too_large())?;
+        let rule = rules::find(operation.rule)
+            .ok_or_else(|| MigrateError::internal("an operation names an unregistered rule"))?;
         entries.push(V::Object(vec![
             ("kind", V::string(operation.kind.as_str())),
             ("output", V::string(operation.output.as_str())),
-            ("rule", V::string(operation.rule)),
+            ("rule", V::string(rule.id)),
+            ("ruleVersion", V::Number(rule.version)),
             ("source", optional_path(operation.source.as_ref())),
             ("review", V::Bool(operation.review)),
             ("size", V::count(operation.bytes().len())),

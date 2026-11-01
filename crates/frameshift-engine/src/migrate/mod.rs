@@ -11,6 +11,7 @@
 
 mod convert;
 mod plan_document;
+pub mod rules;
 mod scaffold;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -1099,6 +1100,7 @@ impl<'a> Planner<'a> {
                 "two operations write one output path",
             ));
         }
+        check_rules(&operations)?;
         let snapshot = self.snapshot().identity().map_err(|error| MigrateError {
             kind: MigrateErrorKind::Input,
             message: error.to_string(),
@@ -1121,6 +1123,29 @@ impl<'a> Planner<'a> {
             document: printed.document,
         })
     }
+}
+
+// Every operation names a registered rule of its own kind, and rules are
+// exclusive: one source file reaches at most one of them (FS4001 fails closed).
+fn check_rules(operations: &[Operation]) -> Result<(), MigrateError> {
+    let mut sources = BTreeSet::new();
+    for operation in operations {
+        if rules::find(operation.rule).is_none_or(|rule| rule.kind != operation.kind) {
+            return Err(MigrateError::internal(
+                "an operation names an unregistered rule",
+            ));
+        }
+        if operation
+            .source
+            .as_ref()
+            .is_some_and(|source| !sources.insert(source))
+        {
+            return Err(MigrateError::internal(
+                "two rules produced output for one source file",
+            ));
+        }
+    }
+    Ok(())
 }
 
 // Why a page is outside v0 before any conversion is attempted.
