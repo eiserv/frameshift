@@ -160,7 +160,21 @@ fn outputs(plan: &Plan) -> BTreeMap<String, Vec<u8>> {
         .collect()
 }
 
-fn run(case: &Case, label: &str) -> (String, BTreeMap<String, Vec<u8>>) {
+/// The plan document with its release-dependent members replaced, because
+/// the engine version is hashed and changes with every release.
+fn document(plan: &Plan) -> String {
+    plan.document()
+        .replace(
+            &format!(
+                "\"engineVersion\": \"{}\"",
+                frameshift_engine::version::info().engine_version
+            ),
+            "\"engineVersion\": \"@ENGINE_VERSION@\"",
+        )
+        .replace(&plan.hash().to_string(), "@PLAN_HASH@")
+}
+
+fn run(case: &Case, label: &str) -> (String, String, BTreeMap<String, Vec<u8>>) {
     let workspace = prepare(case, label);
     let source = workspace.join("source");
     let first = migrate::plan(&source, &MigrateOptions::default())
@@ -168,14 +182,20 @@ fn run(case: &Case, label: &str) -> (String, BTreeMap<String, Vec<u8>>) {
     let second = migrate::plan(&source, &MigrateOptions::default()).unwrap();
     assert_eq!(first, second, "{}: repeated plans differ", case.name);
     fs::remove_dir_all(workspace).unwrap();
-    (listing(&first), outputs(&first))
+    (listing(&first), document(&first), outputs(&first))
 }
 
 #[test]
 fn migrate_fixtures_match_their_goldens() {
     for case in cases() {
-        let (listing, files) = run(&case, "golden");
+        let (listing, document, files) = run(&case, "golden");
         let expected = case.directory.join("expected");
+        assert_eq!(
+            fs::read_to_string(expected.join("plan.json")).unwrap(),
+            document,
+            "{}: plan document",
+            case.name
+        );
         assert_eq!(
             fs::read_to_string(expected.join("plan.txt")).unwrap(),
             listing,
@@ -228,16 +248,38 @@ fn execution_writes_exactly_the_plan_and_never_touches_the_source() {
 }
 
 #[test]
+fn plan_hashes_bind_the_source_and_the_selected_package() {
+    let case = cases().into_iter().next().unwrap();
+    let workspace = prepare(&case, "binding");
+    let source = workspace.join("source");
+    let first = migrate::plan(&source, &MigrateOptions::default()).unwrap();
+    assert!(first.matches_document(first.document().as_bytes()));
+    assert!(!first.matches_document(b"{}"));
+    assert_eq!(
+        first.binding.engine_version,
+        frameshift_engine::version::info().engine_version
+    );
+    // A file that no operation copies still changes the snapshot identity.
+    fs::write(source.join("notes.txt"), "changed").unwrap();
+    let second = migrate::plan(&source, &MigrateOptions::default()).unwrap();
+    assert_ne!(first.binding.snapshot, second.binding.snapshot);
+    assert_ne!(first.hash(), second.hash());
+    assert!(!second.matches_document(first.document().as_bytes()));
+    fs::remove_dir_all(workspace).unwrap();
+}
+
+#[test]
 #[ignore = "rewrites the migrate fixture goldens"]
 fn update_migrate_goldens() {
     for case in cases() {
-        let (listing, files) = run(&case, "update");
+        let (listing, document, files) = run(&case, "update");
         let expected = case.directory.join("expected");
         if expected.exists() {
             fs::remove_dir_all(&expected).unwrap();
         }
         fs::create_dir_all(&expected).unwrap();
         fs::write(expected.join("plan.txt"), listing).unwrap();
+        fs::write(expected.join("plan.json"), document).unwrap();
         for (path, bytes) in files {
             let native = expected.join("output").join(&path);
             fs::create_dir_all(native.parent().unwrap()).unwrap();

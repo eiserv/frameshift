@@ -1,0 +1,310 @@
+{
+  "kind": "frameshift.plan",
+  "schemaVersion": 1,
+  "planHash": "@PLAN_HASH@",
+  "binding": {
+    "snapshot": "sha256:3bca7fc683e2083fd3202f239f20807d2cee5ac5497a5b5a7c1b7668de5106fe",
+    "engineVersion": "@ENGINE_VERSION@",
+    "ruleset": "nextjs-to-astro-preact/assessment-v1",
+    "knowledgeBases": [
+      "2026.10.1"
+    ],
+    "targetProfile": "astro7-preact10",
+    "source": {
+      "framework": "nextjs",
+      "version": "16.2.1"
+    },
+    "options": {
+      "to": "astro-preact",
+      "package": null
+    }
+  },
+  "operations": [
+    {
+      "kind": "config",
+      "output": ".frameshift/SUMMARY.md",
+      "rule": "report.summary",
+      "source": null,
+      "review": false,
+      "size": 3026,
+      "sha256": "sha256:53e5cb4f8b78825069177d2d84a06079c954167ddbeaf9b33bbd64885871dce1"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/app/captured/page.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/app/captured/page.tsx",
+      "review": false,
+      "size": 144,
+      "sha256": "sha256:4b8063db48ae67036f7436bcb159cd3be0314ee6a3e15f658504a8e084c3a11d"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/app/counter/page.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/app/counter/page.tsx",
+      "review": false,
+      "size": 158,
+      "sha256": "sha256:0d973ac9773a781abd2b139d52dd8e8cd31044eca4e2d4088ca3967583f621ae"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/app/hoisted/page.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/app/hoisted/page.tsx",
+      "review": false,
+      "size": 109,
+      "sha256": "sha256:415258f38bc92d2b4082f99057a62fb1ed6e3911466f3b83d338b34a50df149a"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/app/lazy/page.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/app/lazy/page.tsx",
+      "review": false,
+      "size": 137,
+      "sha256": "sha256:9ba0422ad3f6e05e9075378c26d455dcd37d33e057edb771e5753389827a412f"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/app/plain/page.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/app/plain/page.tsx",
+      "review": false,
+      "size": 103,
+      "sha256": "sha256:31851bf974b5efa695af7c77390ef5a26ed0105c6e724c7e74bc9621eeed8fc5"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/app/shadow/page.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/app/shadow/page.tsx",
+      "review": false,
+      "size": 133,
+      "sha256": "sha256:c69871967c03460b58064ea365977f39dbc37aa4399932e64f2d20482fc88387"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/app/tagged/page.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/app/tagged/page.tsx",
+      "review": false,
+      "size": 112,
+      "sha256": "sha256:f36b7eeff8e957ab98ec458bfd2fa858e1d6f7f369d487fc6113bc6fb1ce44c2"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/components/Counter.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/components/Counter.tsx",
+      "review": false,
+      "size": 224,
+      "sha256": "sha256:bd7272adc6efef9aace55c0214b49e4df8ee1332e88a23b6b4a6efc44832d0d8"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/components/Tag.tsx",
+      "rule": "preserve.unmigrated",
+      "source": "src/components/Tag.tsx",
+      "review": false,
+      "size": 117,
+      "sha256": "sha256:cf23dbaf3b01a38b2bf9f77332052592f5a2098d8c468c731c5531397a7e90f5"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/lib/here.ts",
+      "rule": "preserve.unmigrated",
+      "source": "src/lib/here.ts",
+      "review": false,
+      "size": 66,
+      "sha256": "sha256:8f09bf8a025b30b19a7b42dae4c60c70434978782ee69a1e84d799ad73512bb8"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/lib/label.ts",
+      "rule": "preserve.unmigrated",
+      "source": "src/lib/label.ts",
+      "review": false,
+      "size": 133,
+      "sha256": "sha256:3af0dbba7d87e0ff397c21ad87c9ea6a7827cc2589c5f7169e855b47106f48db"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/types/augment.d.ts",
+      "rule": "preserve.unmigrated",
+      "source": "src/types/augment.d.ts",
+      "review": false,
+      "size": 70,
+      "sha256": "sha256:ffb85de88427420dc36bbeb59c48fc1e5b6697f8f4c40c7402e8c3f1edd2a78d"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/src/types/referenced.d.ts",
+      "rule": "preserve.unmigrated",
+      "source": "src/types/referenced.d.ts",
+      "review": false,
+      "size": 73,
+      "sha256": "sha256:48e0cbb2073af19a35396952f66f43b62835a30d7175d1c25ab5d9bf221495ec"
+    },
+    {
+      "kind": "config",
+      "output": ".gitignore",
+      "rule": "config.gitignore",
+      "source": null,
+      "review": false,
+      "size": 28,
+      "sha256": "sha256:c760594e89b7b78ec030eb86107c075f9d8177fa7987881c04ff6ea47d5d40cc"
+    },
+    {
+      "kind": "config",
+      "output": "astro.config.mjs",
+      "rule": "config.astro",
+      "source": null,
+      "review": false,
+      "size": 162,
+      "sha256": "sha256:089ceb7b4c4a8157addb0cd527f8f20f17b4b62db2afee13a59802e3a46ccd23"
+    },
+    {
+      "kind": "config",
+      "output": "package.json",
+      "rule": "config.package-manifest",
+      "source": null,
+      "review": false,
+      "size": 434,
+      "sha256": "sha256:4db0ee5ed8511a21aeae8db8be781d38b198a0be4d199f29847377a16e10856e"
+    },
+    {
+      "kind": "create",
+      "output": "src/layouts/RootLayout.astro",
+      "rule": "layout.chain",
+      "source": "src/app/layout.tsx",
+      "review": false,
+      "size": 180,
+      "sha256": "sha256:e864c1a4178db1cec6b539b9e8140e78e4a5940e345dc84eebe0cbd51441b22c"
+    },
+    {
+      "kind": "transform",
+      "output": "src/lib/greeting.ts",
+      "rule": "module.relocate",
+      "source": "src/lib/greeting.ts",
+      "review": false,
+      "size": 33,
+      "sha256": "sha256:8825446b55c5fb7d3963e5846e5d506cd2b8eccad4206694e41ed7bec58ae895"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/index.astro",
+      "rule": "route.static-page",
+      "source": "src/app/page.tsx",
+      "review": true,
+      "size": 163,
+      "sha256": "sha256:f288fcff10abb3ab4db7dddb9af77ce2840fd9390ae9d7fef9b5760fc5da8f68"
+    },
+    {
+      "kind": "config",
+      "output": "tsconfig.json",
+      "rule": "config.tsconfig",
+      "source": null,
+      "review": false,
+      "size": 193,
+      "sha256": "sha256:746b4c28adb919320614a80e7d2e9d2f922ca45de0ad25bedba332aa8936ffc1"
+    }
+  ],
+  "tasks": [
+    {
+      "kind": "project",
+      "source": null,
+      "text": "install dependencies with your package manager; lockfiles are not carried over"
+    },
+    {
+      "kind": "project",
+      "source": null,
+      "text": "3 Next.js and React dependencies were removed from package.json; check that nothing else needs them"
+    },
+    {
+      "kind": "project",
+      "source": null,
+      "text": "configuration concern config:source.analysis (review) is not migrated by v0; see `frameshift analyze`"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/app/captured/page.tsx",
+      "text": "preserved for manual migration: a module declaration reads a name that a function binding would capture"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/app/counter/page.tsx",
+      "text": "preserved for manual migration: it imports a file that migrate v0 does not migrate"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/app/hoisted/page.tsx",
+      "text": "preserved for manual migration: a function binding would share the frontmatter scope with another binding"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/app/lazy/page.tsx",
+      "text": "preserved for manual migration: dynamic imports, re-exports, and require calls of project files are not converted"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/app/plain/page.tsx",
+      "text": "preserved for manual migration: it imports a file that migrate v0 does not migrate"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/app/shadow/page.tsx",
+      "text": "preserved for manual migration: the file already binds a name that the conversion generates"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/app/tagged/page.tsx",
+      "text": "preserved for manual migration: it imports a file that migrate v0 does not migrate"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/components/Counter.tsx",
+      "text": "preserved for manual migration: client components and islands are not converted by migrate v0"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/components/Tag.tsx",
+      "text": "preserved for manual migration: a function binding would share the frontmatter scope with another binding"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/lib/here.ts",
+      "text": "preserved for manual migration: the module refers to its own location outside its import specifiers"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/lib/label.ts",
+      "text": "preserved for manual migration: the analysis rates this file's units unsupported"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/types/augment.d.ts",
+      "text": "preserved for manual migration: the module refers to its own location outside its import specifiers"
+    },
+    {
+      "kind": "preserved",
+      "source": "src/types/referenced.d.ts",
+      "text": "preserved for manual migration: a triple-slash path reference is not rewritten by migrate v0"
+    },
+    {
+      "kind": "review",
+      "source": "src/app/page.tsx",
+      "text": "converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)"
+    },
+    {
+      "kind": "not-copied",
+      "source": "package.json",
+      "text": "replaced by the generated package.json"
+    },
+    {
+      "kind": "not-copied",
+      "source": "tsconfig.json",
+      "text": "replaced by the generated tsconfig.json"
+    }
+  ]
+}
