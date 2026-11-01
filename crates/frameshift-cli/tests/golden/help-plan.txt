@@ -1,9 +1,10 @@
-Usage: frameshift plan [<source>] --to astro-preact [--package <dir>] [--out <plan.json>]
-       [--show operations|files|tasks] [--format text|json]
+Usage: frameshift plan [<source>] [--to astro-preact] [--package <dir>] [--out <plan.json>]
+       [--config <file>|--no-config] [--show operations|files|tasks] [--format text|json]
 Compute what `frameshift migrate` would do for the project at <source>, by default the current
 directory, without writing project files. The frameshift.plan document records the source
 snapshot, versions, options, the digest of every output file, and the manual tasks, under one
 plan hash. --out writes it to a new file outside <source> for review or approval, and
---format json prints it. --show lists every operation, output file, or manual task. Exit
-status: 0 on success, 2 for invalid arguments, 3 when the source cannot be analyzed, 4 when the
-plan document cannot be written.
+--format json prints it. --show lists every operation, output file, or manual task.
+frameshift.jsonc in <source> or the --config file can set the target and the package; flags
+override it. Exit status: 0 on success, 2 for invalid arguments, 3 when the source or
+configuration cannot be read, 4 when the plan document cannot be written.

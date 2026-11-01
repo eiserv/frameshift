@@ -415,6 +415,9 @@ impl<'a> Planner<'a> {
                     return Fate::NotCopied("replaced by the generated tsconfig.json".into());
                 }
                 "next-env.d.ts" => return Fate::NotCopied("Next.js type declarations".into()),
+                crate::config::CONFIG_FILE => {
+                    return Fate::NotCopied("Frameshift configuration of the source".into());
+                }
                 ".gitignore" => return Fate::Gitignore,
                 _ if name.starts_with("next.config.") => {
                     return Fate::NotCopied("replaced by the generated astro.config.mjs".into());

@@ -1,12 +1,15 @@
 //! Thin command adapter and escaped report projections for M5.
 
 use crate::args::{Format, UsageError};
+use crate::config_cli::{ConfigChoice, Selection};
 use frameshift_engine::analysis::{
     self, AnalyzeOptions,
     metrics::Metric,
     stored::{StoredReport, Value},
 };
+use frameshift_engine::config::PackageChoice;
 use frameshift_engine::foundation::{PathLimits, SourcePath};
+use frameshift_engine::limits::Limits;
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::io::{self, Write};
@@ -23,7 +26,7 @@ pub(crate) enum Request {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Options {
     source: OsString,
-    package: Option<SourcePath>,
+    selection: Selection,
     format: String,
     output: Option<PathBuf>,
     fail_on: BTreeSet<String>,
@@ -41,6 +44,7 @@ const VALUE_OPTIONS: &[&str] = &[
     "--from",
     "--format",
     "--package",
+    "--config",
     "--fail-on",
     "--report",
     "--out",
@@ -100,7 +104,7 @@ fn parse_command(
 ) -> Result<Request, &'static str> {
     let mut options = Options {
         source: ".".into(),
-        package: None,
+        selection: Selection::default(),
         format: "text".into(),
         output: None,
         fail_on: BTreeSet::new(),
@@ -142,7 +146,15 @@ fn parse_command(
         if !seen.insert(key.to_owned()) {
             return Err("option may be supplied only once");
         }
-        if ["--help", "--all", "--unweighted", "--unsupported"].contains(&key) {
+        if [
+            "--help",
+            "--all",
+            "--unweighted",
+            "--unsupported",
+            "--no-config",
+        ]
+        .contains(&key)
+        {
             if inline.is_some() {
                 return Err("flag does not accept a value");
             }
@@ -151,6 +163,9 @@ fn parse_command(
                 "--all" => options.all = true,
                 "--unweighted" => options.unweighted = true,
                 "--unsupported" if command == "rules" => options.section = "unsupported".into(),
+                "--no-config" if command == "analyze" => {
+                    options.selection.config = ConfigChoice::Ignored;
+                }
                 _ => return Err("option is unavailable for this command"),
             };
             continue;
@@ -165,6 +180,10 @@ fn parse_command(
             i += 1;
             v
         };
+        if key == "--config" && command == "analyze" {
+            options.selection.config = ConfigChoice::File(PathBuf::from(value));
+            continue;
+        }
         if key == "--report" || key == "--out" {
             if (key == "--report" && command != "analyze")
                 || (key == "--out" && command != "report")
@@ -181,14 +200,10 @@ fn parse_command(
             "--from" if command == "analyze" => adapter = Some(value.to_owned()),
             "--format" if matches!(command, "analyze" | "report") => options.format = value.into(),
             "--package" if command == "analyze" => {
-                options.package =
-                    if value == "." {
-                        None
-                    } else {
-                        Some(SourcePath::new(value, PathLimits::default()).map_err(
-                            |_| "--package requires a canonical root-relative directory",
-                        )?)
-                    }
+                options.selection.package = Some(
+                    PackageChoice::parse(value, &Limits::default())
+                        .ok_or("--package requires a canonical root-relative directory")?,
+                );
             }
             "--fail-on" if command == "analyze" => {
                 for condition in value.split(',') {
@@ -261,11 +276,12 @@ fn parse_command(
     if (options.unweighted || options.all) && !matches!(command, "analyze" | "report") {
         return Err("presentation options are unavailable for this command");
     }
+    if seen.contains("--config") && seen.contains("--no-config") {
+        return Err("--config and --no-config exclude each other");
+    }
+    options.selection.target = target.is_some();
     match command {
         "analyze" => {
-            if target.is_none() {
-                return Err("analyze requires --to astro-preact");
-            };
             if operands.len() > 1 {
                 return Err("analyze takes at most one source");
             };
@@ -366,10 +382,19 @@ pub(crate) fn run(
             Ok(0)
         }
         Request::Analyze(options) => {
+            let package = match options.selection.resolve(
+                Path::new(&options.source),
+                "analyze requires --to astro-preact",
+            ) {
+                Ok(package) => package,
+                Err(failure) => {
+                    return fail(&options, stdout, stderr, failure.code, &failure.message);
+                }
+            };
             match analysis::analyze(
                 Path::new(&options.source),
                 &AnalyzeOptions {
-                    package: options.package.clone(),
+                    package,
                     ..Default::default()
                 },
             ) {
@@ -559,7 +584,7 @@ fn explain(id: &str, stdout: &mut impl Write, stderr: &mut impl Write) -> io::Re
 pub(crate) fn help(topic: &str) -> &'static str {
     match topic {
         "analyze" => {
-            "Usage: frameshift analyze [<source>] --to astro-preact [--from nextjs]\n       [--package <dir>] [--format text|json] [--report <new-file>]\n       [--fail-on unknown,unsupported,review,blocked-routes] [--unweighted] [--all]\n\nAnalyze one App Router package without writing source, executing code, or using the network.\nThe source is the workspace root. --package selects one member; '.' selects the root.\nExit: 0 assessed, 1 requested condition failed, 2 usage, 3 input, 4 report output refused.\nA high feasibility value never establishes behavioral equivalence.\n"
+            "Usage: frameshift analyze [<source>] [--to astro-preact] [--from nextjs]\n       [--config <file>|--no-config] [--package <dir>] [--format text|json] [--report <new-file>]\n       [--fail-on unknown,unsupported,review,blocked-routes] [--unweighted] [--all]\n\nAnalyze one App Router package without writing source, executing code, or using the network.\nThe source is the workspace root. --package selects one member; '.' selects the root.\nExit: 0 assessed, 1 requested condition failed, 2 usage, 3 input, 4 report output refused.\nA high feasibility value never establishes behavioral equivalence.\n"
         }
         "report" => {
             "Usage: frameshift report <report.json|output-dir> [--format text|markdown|json]\n       [--out <new-file>] [--section summary|routes|units|files|dependencies|config|rules|findings|verification|tasks]\n       [--route <pattern>] [--file <path>] [--severity <minimum>] [--code <code>]\n       [--unweighted] [--all]\n\nRender stored analysis evidence without re-analyzing or opening source files.\nAn output directory selects .frameshift/report.json. Output files must be new.\n"

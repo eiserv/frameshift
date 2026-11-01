@@ -131,11 +131,11 @@ Output: verdict, assessment distribution, route readiness, dependencies, rule co
 ### 4.3 `plan`
 
 ```text
-frameshift plan [<source>] --to astro-preact [--package <dir>] [--out <plan.json>]
-                [--show operations|files|tasks] [--format text|json]
+frameshift plan [<source>] [--to astro-preact] [--package <dir>] [--out <plan.json>]
+                [--config <file>|--no-config] [--show operations|files|tasks] [--format text|json]
 ```
 
-**Implemented (`D-102`).** Computes the plan without writing project files. `--out` writes the `frameshift.plan` document ([schema](../schemas/frameshift.plan.schema.json)) to a new file outside the source for review or approval, and `--format json` prints it. A plan document is bound to the source snapshot, engine version, ruleset, knowledge bases, target profile, and options (see section 13 of [ARCHITECTURE.md](ARCHITECTURE.md)). The overview lists at most eight operations; `--show` lists all operations, output files, or manual tasks. `--report`, `--config`, `--no-config`, and `--env-names` remain planned usage errors. Exit statuses: 0, 2, 3 for input failures, 4 when the document cannot be written, and 70.
+**Implemented (`D-102`).** Computes the plan without writing project files. `--out` writes the `frameshift.plan` document ([schema](../schemas/frameshift.plan.schema.json)) to a new file outside the source for review or approval, and `--format json` prints it. A plan document is bound to the source snapshot, engine version, ruleset, knowledge bases, target profile, and options (see section 13 of [ARCHITECTURE.md](ARCHITECTURE.md)). The overview lists at most eight operations; `--show` lists all operations, output files, or manual tasks. `--to` may come from the configuration file (section 5.1). `--report` and `--env-names` remain planned usage errors. Exit statuses: 0, 2, 3 for input failures, 4 when the document cannot be written, and 70.
 
 ```text
 $ frameshift plan ./lumen-site --to astro-preact --out plan.json
@@ -173,11 +173,11 @@ frameshift migrate [<source>] --to <target> --out <dir>
 | `--show-files` | List every file operation |
 | `--strict` | Abort before commit if any unit is `unsupported`, `unknown`, or `failed`. Nothing is written, and the exit code is 1. |
 | `--env-names astro\|keep` | Naming of public environment variables (`D-021`). Default `astro` renames `NEXT_PUBLIC_X` to `PUBLIC_X`. `keep` preserves the original names. Also accepted by `plan`. |
-| `--config <file>`, `--no-config` | Use a specific configuration file, or none (section 5.1). Also accepted by `analyze` and `plan`. |
+| `--config <file>`, `--no-config` | Use a specific configuration file, or none (section 5.1, implemented, `D-103`). Also accepted by `analyze` and `plan`. |
 | `--on-existing fail\|replace-managed` | `fail` (default) refuses an existing output. `replace-managed` replaces an existing output only if its manifest marks it as Frameshift output and no file in it was modified since generation. The previous output is moved aside, never deleted. |
 | `--clean-staging` | Remove a staging directory left by an interrupted run. Only directories carrying Frameshift's staging marker are removed. |
 
-**Implemented: migrate v0 (`D-101`).** `frameshift migrate [<source>] --to astro-preact --out <dir> [--package <dir>] [--plan <plan.json>] [--dry-run]` exists with text output only. `--out` must name a directory that does not exist, whose parent exists, and that is neither inside the source nor contains it. The command converts static pages, layouts, and components that the analysis rates `auto` or `review` with the `astro` or `preact-static` strategy, copies everything else unchanged below `.frameshift/unmigrated/`, and writes `.frameshift/SUMMARY.md` with the manual tasks. `--dry-run` prints every planned file with its operation kind, rule, and source, and writes nothing. A real run writes through a staging directory `.<name>.frameshift-staging` next to the output and prints counts; an existing staging directory refuses the run. `--plan`, `--strict`, `--on-existing`, `--clean-staging`, `--report`, `--show-files`, `--env-names`, `--config`, `--no-config`, and `--format json` remain planned and are usage errors. Exit statuses are 0, 2, 3, 4, 6, and 70 as in section 7; preserved files are reported results and do not produce 1 or 5. Structural verification, the manifest, and `report.json` are not implemented yet. Exact contracts are in section 52 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
+**Implemented: migrate v0 (`D-101`).** `frameshift migrate [<source>] [--to astro-preact] --out <dir> [--package <dir>] [--config <file>|--no-config] [--plan <plan.json>] [--dry-run]` exists with text output only. `--out` must name a directory that does not exist, whose parent exists, and that is neither inside the source nor contains it. The command converts static pages, layouts, and components that the analysis rates `auto` or `review` with the `astro` or `preact-static` strategy, copies everything else unchanged below `.frameshift/unmigrated/`, and writes `.frameshift/SUMMARY.md` with the manual tasks. `--dry-run` prints every planned file with its operation kind, rule, and source, and writes nothing. A real run writes through a staging directory `.<name>.frameshift-staging` next to the output and prints counts; an existing staging directory refuses the run. `--plan`, `--strict`, `--on-existing`, `--clean-staging`, `--report`, `--show-files`, `--env-names`, `--config`, `--no-config`, and `--format json` remain planned and are usage errors. Exit statuses are 0, 2, 3, 4, 6, and 70 as in section 7; preserved files are reported results and do not produce 1 or 5. Structural verification, the manifest, and `report.json` are not implemented yet. Exact contracts are in section 52 of [IMPLEMENTATION.md](IMPLEMENTATION.md).
 
 Structural verification always runs as part of `migrate`, because its checks are rule postconditions. A sample is in section 11.4 of [MIGRATION_REPORTING.md](MIGRATION_REPORTING.md).
 
@@ -317,9 +317,9 @@ If JSON was explicitly selected anywhere in an invalid invocation, standard outp
 
 V1 supports an optional project configuration file (`D-027`):
 
-- **Name and location.** `frameshift.jsonc` in the source root, or any path given with `--config <file>`. `--no-config` ignores the file.
+- **Name and location.** `frameshift.jsonc` in the source root, or any path given with `--config <file>`. `--no-config` ignores the file. A root file that exists but is not admitted, such as a link or a gitignored file, is an error (exit code 3); so is an unknown key or an invalid value.
 - **Format.** JSON with comments, validated against a published JSON Schema. A `$schema` property enables editor completion. Unknown keys are errors, not warnings.
-- **Contents.** Options that describe the project and the desired migration, for example the target, excluded paths, and `envNames` (`"astro"` or `"keep"`, `D-021`). The exact key set is specified in M6.
+- **Contents (implemented, `D-103`).** `$schema`, `to` (only `astro-preact`), and `package` (a canonical root-relative directory, or `.` for the root), described by [frameshift.config.schema.json](../schemas/frameshift.config.schema.json). `envNames` (`"astro"` or `"keep"`, `D-021`) follows with M8.
 - **Precedence.** Command-line flags override the file, and the file overrides defaults. The effective options are recorded in the plan and the report, so results stay reproducible.
 - **Safety.** The file is part of the source project, which may be untrusted. It can never enable `--allow-exec` or `--allow-install-scripts`, change overwrite policies, choose the output location, or reference paths outside the source root. Those decisions stay with the person running the command.
 

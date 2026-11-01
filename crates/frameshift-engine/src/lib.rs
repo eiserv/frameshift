@@ -36,6 +36,7 @@ pub use frameshift_bindings as bindings;
 pub use frameshift_evaluate as evaluate;
 
 pub mod analysis;
+pub mod config;
 mod document;
 pub mod features;
 pub mod inspect;
