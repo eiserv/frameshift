@@ -111,6 +111,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-101 | Migrate v0: a reduced first `migrate` for static App Router sites | Accepted |
 | D-102 | M6 plan document, plan hash, and `frameshift plan` | Accepted |
 | D-103 | The key set of `frameshift.jsonc` | Accepted |
+| D-104 | The rule registry of migrate | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1199,6 +1200,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Tradeoffs:** `to` has a single value today, and the discovery runs twice in a run that uses the file from the source. A project that keeps its configuration in an ignored file must pass `--config`.
 - **Binding:** The plan document records the effective `to` and `package`. A file in the source root is also covered by the snapshot identity, while a file outside it affects a plan only through those options.
 - **Revisit if:** A real project needs `exclude`.
+
+### D-104: The rule registry of migrate
+
+- **Status:** Accepted (2026-11-01), under the owner's instruction to finish M6 first. It closes M6 together with `D-102` and `D-103`.
+- **Decision:** `frameshift_engine::migrate::rules::RULES` is a compile-time, sorted list of rule identifiers below the migration path, each with a version, an operation kind, and a summary. Planning checks every operation against it: an unregistered rule or a rule of another kind is an internal error, and so are two operations for one source file, because a source file must reach exactly one rule. Each plan operation records `ruleVersion`, so a rule change makes older plans stale. `frameshift rules` lists the registered rules after the assessment predicates, and `explain` and `rules show` accept their full identifiers.
+- **Rationale:** Rule selection in migrate v0 is one classification function, so exclusivity holds by construction and the plan-time check is its fail-closed proof. The declarative preconditions and the feature ID index of ARCHITECTURE.md section 12 add nothing until several rules can match one occurrence, so they stay planned and are not simulated by metadata without an effect.
+- **Tradeoffs:** Selection logic is not data yet, so `rules` lists what exists without its preconditions, and rule coverage metrics stay at their current meaning.
+- **Revisit if:** M8 or M9 adds rules that can match the same occurrence. Then preconditions and the `excludes` relation become data.
 
 ## Technique proposals and related accepted decisions
 
