@@ -10,6 +10,7 @@ use frameshift_engine::analysis::{
 use frameshift_engine::config::PackageChoice;
 use frameshift_engine::foundation::{PathLimits, SourcePath};
 use frameshift_engine::limits::Limits;
+use frameshift_engine::migrate;
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::io::{self, Write};
@@ -379,6 +380,20 @@ pub(crate) fn run(
                     feature.v1
                 )?;
             }
+            // Transformation rules exist for what migrates, not for what is unsupported.
+            if !unsupported {
+                for rule in migrate::rules::RULES {
+                    writeln!(
+                        stdout,
+                        "{}/{}  v{}  {}  {}",
+                        frameshift_engine::catalog::PATH,
+                        rule.id,
+                        rule.version,
+                        rule.kind.as_str(),
+                        rule.summary
+                    )?;
+                }
+            }
             Ok(0)
         }
         Request::Analyze(options) => {
@@ -548,6 +563,20 @@ fn fail(
 fn explain(id: &str, stdout: &mut impl Write, stderr: &mut impl Write) -> io::Result<u8> {
     if let Some((message, explanation, remediation)) = analysis::knowledge::explain(id) {
         writeln!(stdout, "{id}  {message}\n\n{explanation}\n\n{remediation}")?;
+        return Ok(0);
+    }
+    let transformation = id
+        .strip_prefix(frameshift_engine::catalog::PATH)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .and_then(migrate::rules::find);
+    if let Some(rule) = transformation {
+        writeln!(
+            stdout,
+            "{id}  version {}, operation {}\n\n{}",
+            rule.version,
+            rule.kind.as_str(),
+            rule.summary
+        )?;
         return Ok(0);
     }
     let feature = if let Some(name) = id.strip_prefix("nextjs-to-astro-preact/assessment.") {

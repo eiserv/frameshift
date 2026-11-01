@@ -356,7 +356,9 @@ fn assessment_rule_metadata_excludes_out_of_scope_features() {
             .map(|l| l.split_whitespace().next().unwrap())
             .collect();
         let expected: Vec<_> = FEATURES.iter().filter(|f| matches!(f.v1, V1::Assessed(statuses) if !unsupported_only || statuses.contains(&Status::Unsupported)))
-            .map(|f| format!("{PATH}/assessment.{}", f.id.replace('.', "-"))).collect();
+            .map(|f| format!("{PATH}/assessment.{}", f.id.replace('.', "-")))
+            .chain(frameshift_engine::migrate::rules::RULES.iter().filter(|_| !unsupported_only).map(|r| format!("{PATH}/{}", r.id)))
+            .collect();
         assert_eq!(actual, expected);
     }
     for feature in FEATURES.iter().filter(|f| f.v1 == V1::OutOfScope) {
@@ -387,6 +389,8 @@ fn explanations_and_help_are_available_without_a_source_project() {
             "explain",
             "nextjs-to-astro-preact/assessment.nextjs-api-request",
         ],
+        vec!["explain", "nextjs-to-astro-preact/route.static-page"],
+        vec!["rules", "show", "nextjs-to-astro-preact/layout.chain"],
         vec!["rules"],
         vec!["help", "analyze"],
         vec!["analyze", "--help"],

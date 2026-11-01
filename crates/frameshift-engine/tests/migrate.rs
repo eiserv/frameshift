@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use frameshift_engine::foundation::{IdentifierLimits, RuleId};
 use frameshift_engine::migrate::{self, MigrateErrorKind, MigrateOptions, Plan};
 use support::Json;
 
@@ -245,6 +246,20 @@ fn execution_writes_exactly_the_plan_and_never_touches_the_source() {
         assert_eq!(read_tree(&source), before);
         fs::remove_dir_all(workspace).unwrap();
     }
+}
+
+#[test]
+fn the_rule_registry_is_sorted_unique_and_catalog_spelled() {
+    let rules = migrate::rules::RULES;
+    assert!(rules.windows(2).all(|pair| pair[0].id < pair[1].id));
+    for rule in rules {
+        let id = format!("{}/{}", frameshift_engine::catalog::PATH, rule.id);
+        RuleId::new(&id, IdentifierLimits::default()).unwrap_or_else(|_| panic!("{id}"));
+        assert!(rule.version >= 1, "{id}");
+        assert!(rule.summary.ends_with('.'), "{id}");
+        assert_eq!(migrate::rules::find(rule.id), Some(rule));
+    }
+    assert_eq!(migrate::rules::find("route.unknown"), None);
 }
 
 #[test]
