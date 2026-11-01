@@ -31,6 +31,7 @@ pub(crate) struct Options {
     output: PathBuf,
     selection: Selection,
     dry_run: bool,
+    clean_staging: bool,
     plan: Option<PathBuf>,
 }
 
@@ -51,7 +52,7 @@ enum Show {
     Tasks,
 }
 
-pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] [--to astro-preact] --out <dir> [--package <dir>]\n       [--config <file>|--no-config] [--plan <plan.json>] [--dry-run]\n\
+pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] [--to astro-preact] --out <dir> [--package <dir>]\n       [--config <file>|--no-config] [--plan <plan.json>] [--dry-run] [--clean-staging]\n\
 Migrate the Next.js App Router project at <source>, by default the current directory, into a\n\
 new Astro project with Preact at <dir> (migrate v0, D-101). Static pages, layouts,\n\
 and components that the analysis rates auto or review are converted; everything else is\n\
@@ -60,7 +61,8 @@ copied unchanged below .frameshift/unmigrated/ and listed in .frameshift/SUMMARY
 staging directory next to <dir> and renamed into place when complete. The source is never\n\
 modified, and no project code or external tool runs. --plan refuses to continue unless the\n\
 recomputed plan document equals the given one byte for byte; the given file is compared, never\n\
-executed. --dry-run lists the planned files and writes nothing. frameshift.jsonc in <source>\n\
+executed. --dry-run lists the planned files and writes nothing. --clean-staging first removes\n\
+the marked staging directory of an interrupted run next to <dir>. frameshift.jsonc in <source>\n\
 or the --config file can set the target and the package; flags override it. Exit status: 0 on\n\
 success, 2 for invalid arguments, 3 when the source or configuration cannot be read or the plan\n\
 document differs, 4 when the output location is refused or cannot be written.\n";
@@ -82,7 +84,6 @@ const OVERVIEW_OPERATIONS: usize = 8;
 const PLANNED: &[&str] = &[
     "--strict",
     "--on-existing",
-    "--clean-staging",
     "--report",
     "--show-files",
     "--env-names",
@@ -154,7 +155,7 @@ fn parse_command(
     let mut seen = BTreeSet::new();
     let mut operands = Vec::new();
     let (mut target, mut output, mut dry_run, mut help) = (None, None, false, false);
-    let (mut package, mut config, mut no_config) = (None, None, false);
+    let (mut package, mut config, mut no_config, mut clean_staging) = (None, None, false, false);
     let (mut approved, mut show, mut format) = (None, Show::Overview, Format::Text);
     let mut i = 0;
     while i < args.len() {
@@ -182,16 +183,22 @@ fn parse_command(
         if PLANNED.contains(&key) {
             return Err("option is not available in migrate v0");
         }
-        if (planning && matches!(key, "--dry-run" | "--plan")) || (!planning && key == "--show") {
+        if (planning && matches!(key, "--dry-run" | "--plan" | "--clean-staging"))
+            || (!planning && key == "--show")
+        {
             return Err("unknown option; run 'frameshift help' for usage");
         }
-        if matches!(key, "--help" | "--dry-run" | "--no-config") {
+        if matches!(
+            key,
+            "--help" | "--dry-run" | "--no-config" | "--clean-staging"
+        ) {
             if inline.is_some() {
                 return Err("flag does not accept a value");
             }
             match key {
                 "--help" => help = true,
                 "--dry-run" => dry_run = true,
+                "--clean-staging" => clean_staging = true,
                 _ => no_config = true,
             }
             continue;
@@ -286,11 +293,15 @@ fn parse_command(
         }));
     }
     let output = output.ok_or("migrate requires --out <dir>")?;
+    if dry_run && clean_staging {
+        return Err("--clean-staging writes, so it cannot be part of a dry run");
+    }
     Ok(Request::Migrate(Options {
         source,
         output,
         selection,
         dry_run,
+        clean_staging,
         plan: approved,
     }))
 }
@@ -492,6 +503,11 @@ pub(crate) fn run(
             }
             Err(message) => return fail(stderr, 3, message),
         }
+    }
+    if options.clean_staging
+        && let Err(error) = migrate::clean_staging(&options.output)
+    {
+        return fail(stderr, code(error.kind()), &error.to_string());
     }
     let destination = match migrate::check_output(source, &options.output) {
         Ok(destination) => destination,

@@ -89,6 +89,22 @@ pub fn prepare(source: &Path, output: &Path) -> Result<Destination, OutputError>
     if fs::symlink_metadata(output).is_ok() {
         return Err(OutputError::refused("the output location already exists"));
     }
+    let (output, staging) = locations(output)?;
+    if output.starts_with(&source) || source.starts_with(&output) {
+        return Err(OutputError::refused(
+            "the output must not be inside the source or contain it",
+        ));
+    }
+    if fs::symlink_metadata(&staging).is_ok() {
+        return Err(OutputError::refused(
+            "a staging directory from an interrupted run exists next to the output",
+        ));
+    }
+    Ok(Destination { output, staging })
+}
+
+// The resolved output path and the staging directory next to it.
+fn locations(output: &Path) -> Result<(PathBuf, PathBuf), OutputError> {
     let name = match output.components().next_back() {
         Some(Component::Normal(name)) => name.to_owned(),
         Some(
@@ -111,22 +127,33 @@ pub fn prepare(source: &Path, output: &Path) -> Result<Destination, OutputError>
             "the output's parent is not a directory",
         ));
     }
-    let output = parent.join(&name);
-    if output.starts_with(&source) || source.starts_with(&output) {
-        return Err(OutputError::refused(
-            "the output must not be inside the source or contain it",
-        ));
-    }
     let mut staging_name = OsString::from(".");
     staging_name.push(&name);
     staging_name.push(".frameshift-staging");
-    let staging = parent.join(staging_name);
-    if fs::symlink_metadata(&staging).is_ok() {
+    Ok((parent.join(&name), parent.join(staging_name)))
+}
+
+/// Removes the staging directory that an interrupted run left next to
+/// `output`, and returns whether there was one.
+///
+/// Only a real directory that holds the staging marker is removed. Anything
+/// else at that name is refused, so this cannot delete a directory that a
+/// person created.
+pub fn clean_staging(output: &Path) -> Result<bool, OutputError> {
+    let (_, staging) = locations(output)?;
+    let Ok(metadata) = fs::symlink_metadata(&staging) else {
+        return Ok(false);
+    };
+    let marked = fs::symlink_metadata(staging.join(STAGING_MARKER))
+        .is_ok_and(|marker| marker.file_type().is_file());
+    if !metadata.file_type().is_dir() || !marked {
         return Err(OutputError::refused(
-            "a staging directory from an interrupted run exists next to the output",
+            "the entry at the staging location is not a marked staging directory",
         ));
     }
-    Ok(Destination { output, staging })
+    fs::remove_dir_all(&staging)
+        .map_err(|error| OutputError::io("removing the staging directory failed", &error))?;
+    Ok(true)
 }
 
 /// Writes `files` into a new staging directory and renames it to the output.
@@ -267,6 +294,35 @@ mod tests {
         fs::create_dir(root.join(".out.frameshift-staging")).unwrap();
         let error = prepare(&source, &root.join("out")).unwrap_err();
         assert!(error.to_string().contains("staging"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cleaning_removes_only_a_marked_staging_directory() {
+        let root = temporary("clean");
+        let out = root.join("out");
+        let staging = root.join(".out.frameshift-staging");
+        assert_eq!(clean_staging(&out), Ok(false));
+        // An unmarked directory and a file at that name are never removed.
+        fs::create_dir(&staging).unwrap();
+        fs::write(staging.join("notes.txt"), "kept").unwrap();
+        assert_eq!(
+            clean_staging(&out).unwrap_err().kind(),
+            OutputErrorKind::Refused
+        );
+        assert!(staging.join("notes.txt").exists());
+        fs::remove_dir_all(&staging).unwrap();
+        fs::write(&staging, "kept").unwrap();
+        assert!(clean_staging(&out).is_err());
+        fs::remove_file(&staging).unwrap();
+        // A marked directory goes, and the location is usable again.
+        fs::create_dir(&staging).unwrap();
+        fs::write(staging.join(STAGING_MARKER), "").unwrap();
+        fs::write(staging.join("partial.txt"), "gone").unwrap();
+        assert!(prepare(&root.join("source"), &out).is_err());
+        assert_eq!(clean_staging(&out), Ok(true));
+        assert!(!staging.exists());
+        assert!(prepare(&root.join("source"), &out).is_ok());
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -285,6 +285,28 @@ fn plan_documents_approve_exactly_the_run_they_describe() {
 }
 
 #[test]
+fn clean_staging_recovers_from_an_interrupted_run() {
+    let root = workspace("static-site", "staging");
+    let staging = root.join(".out.frameshift-staging");
+    fs::create_dir(&staging).unwrap();
+    fs::write(staging.join("notes.txt"), "kept").unwrap();
+    let mut args = MIGRATE.to_vec();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    args.push("--clean-staging");
+    // Without the marker, the directory is not Frameshift's to remove.
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    assert!(staging.join("notes.txt").exists());
+    fs::write(staging.join(".frameshift-staging"), "").unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(0));
+    assert!(!staging.exists());
+    assert!(root.join("out/.frameshift/manifest.json").exists());
+    // A dry run writes nothing, so it cannot clean.
+    args.push("--dry-run");
+    assert_eq!(call(&root, &args).status.code(), Some(2));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn plan_text_lists_operations_files_and_tasks() {
     let case = "static-site";
     let root = workspace(case, "show");

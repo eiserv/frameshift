@@ -227,6 +227,12 @@ pub fn check_output(source: &Path, output: &Path) -> Result<Destination, Migrate
     Ok(frameshift_output::prepare(source, output)?)
 }
 
+/// Removes the marked staging directory that an interrupted run left next to
+/// `output`, and returns whether there was one.
+pub fn clean_staging(output: &Path) -> Result<bool, MigrateError> {
+    Ok(frameshift_output::clean_staging(output)?)
+}
+
 /// Writes every operation of `plan` into the checked destination, through
 /// a staging directory and an atomic rename.
 pub fn execute(plan: &Plan, destination: &Destination) -> Result<(), MigrateError> {
