@@ -36,6 +36,6 @@ task Preserved src/lib/here.ts: preserved for manual migration: the module refer
 task Preserved src/lib/label.ts: preserved for manual migration: the analysis rates this file's units unsupported
 task Preserved src/types/augment.d.ts: preserved for manual migration: the module refers to its own location outside its import specifiers
 task Preserved src/types/referenced.d.ts: preserved for manual migration: a triple-slash path reference is not rewritten by migrate v0
-task Review src/app/page.tsx: converted; check the result, because the analysis rates it review, and the conversion assumes values that React and Astro render alike (child-not-true)
+task Review src/app/page.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)
 task NotCopied package.json: replaced by the generated package.json
 task NotCopied tsconfig.json: replaced by the generated tsconfig.json

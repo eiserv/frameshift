@@ -37,7 +37,7 @@ Migrate v0 converts only static pages, layouts, and components that the analysis
 
 ## Converted files to review
 
-- `src/app/page.tsx`: converted; check the result, because the analysis rates it review, and the conversion assumes values that React and Astro render alike (child-not-true)
+- `src/app/page.tsx`: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)
 
 ## Not copied
 

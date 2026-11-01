@@ -902,7 +902,7 @@ impl<'a> Planner<'a> {
                     }
                     if !assumptions.is_empty() {
                         reasons.push(format!(
-                            "the conversion assumes values that React and Astro render alike ({})",
+                            "the conversion relies on assumptions that a review must confirm ({})",
                             assumptions.join(", ")
                         ));
                     }

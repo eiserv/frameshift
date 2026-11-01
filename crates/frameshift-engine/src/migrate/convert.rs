@@ -507,6 +507,15 @@ pub(crate) fn astro(
         .map_err(|error| format!("the JSX is outside the converted subset ({error})"))?;
     let mut assumptions: Vec<&'static str> =
         markup.assumptions.iter().map(|a| a.kind.id()).collect();
+    // Frontmatter runs on every render, a module once. A v0 page renders once
+    // per route, but a layout or component may render many times.
+    if !matches!(role, Role::Page { .. }) {
+        for &item in &analysis.module_copies {
+            if evaluates_calls(&tree, item)? {
+                assumptions.push("module-per-render");
+            }
+        }
+    }
     assumptions.sort_unstable();
     assumptions.dedup();
     let mut template = markup.nodes;
@@ -636,6 +645,35 @@ fn bound_names(tree: &SyntaxTree<'_>, id: NodeId, names: &mut BTreeSet<String>) 
         bound_names(tree, child, names)?;
     }
     Ok(())
+}
+
+// Whether evaluating the statement can run other code. Function bodies do not
+// run when their declaration is evaluated.
+fn evaluates_calls(tree: &SyntaxTree<'_>, id: NodeId) -> Result<bool> {
+    let node = kind(tree, id)?;
+    if matches!(
+        node,
+        SyntaxNodeKind::FunctionDeclaration { .. }
+            | SyntaxNodeKind::FunctionExpression { .. }
+            | SyntaxNodeKind::ArrowFunction { .. }
+    ) {
+        return Ok(false);
+    }
+    if matches!(
+        node,
+        SyntaxNodeKind::Call { .. }
+            | SyntaxNodeKind::New { .. }
+            | SyntaxNodeKind::Await { .. }
+            | SyntaxNodeKind::TaggedTemplate { .. }
+    ) {
+        return Ok(true);
+    }
+    for child in tree.child_nodes(id).into_iter().flatten() {
+        if evaluates_calls(tree, child)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 // Whether any identifier below `id` spells one of `names`. Spelling is enough

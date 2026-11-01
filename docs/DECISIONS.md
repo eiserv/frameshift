@@ -108,7 +108,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-098 | Resolve package-based configuration inheritance from linked workspace members | Accepted |
 | D-099 | Close M4 and begin M5 with the feature catalog and its detection | Accepted |
 | D-100 | Complete M5 with read-only analysis and reporting | Accepted |
-| D-101 | Migrate v0: a reduced first `migrate` for static App Router sites | Proposed |
+| D-101 | Migrate v0: a reduced first `migrate` for static App Router sites | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1157,9 +1157,9 @@ Statuses change through an edit to this file under the integration workflow in D
 
 ### D-101: Migrate v0: a reduced first `migrate` for static App Router sites
 
-- **Status:** Proposed (2026-10-28). The project owner must accept this entry before the pull request that implements it is merged. The implementation exists on its branch so that the owner can judge the scope with working code.
+- **Status:** Accepted (2026-11-01), confirmed by the project owner after judging the scope with working code.
 - **Context:** M5 delivers `frameshift analyze`. The owner wants a first usable migration command for static Next.js App Router sites as soon as possible and accepts that niche constructs stay uncovered, provided that fail-closed reporting, determinism, and the rule never to write into the source remain intact. The full M6 and M7 scope (configuration file, plan documents bound by hashes, rule registry, overwrite policies, structural verification, manifest, report) is large; a reduced first step gives users value earlier and exercises the pipeline end to end.
-- **Proposal:** Implement "migrate v0", a strict subset of M6 and M7:
+- **Decision:** Implement "migrate v0", a strict subset of M6 and M7:
   - **Command:** `frameshift migrate [<source>] --to astro-preact --out <dir> [--package <dir>] [--dry-run]`, text output only. `--plan`, `--strict`, `--on-existing`, `--clean-staging`, `--report`, `--config`, `--env-names`, `--show-files`, `--format json`, and the `plan` command stay planned and are usage errors.
   - **No configuration file and no plan binding:** `frameshift.jsonc`, plan documents, plan hashes, and `--plan` approval are not implemented. Effective options are the command-line options alone.
   - **Pure planning:** The plan is a pure function of the `analysis::Analysis` result and the snapshot contents it was computed from. Planning reads nothing else and writes nothing. Its result is a list of operations sorted by output path (`create`, `transform`, `copy`, `config`, `preserve`) and a list of manual tasks.

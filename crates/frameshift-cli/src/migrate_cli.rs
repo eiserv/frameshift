@@ -28,7 +28,7 @@ pub(crate) struct Options {
 
 pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] --to astro-preact --out <dir> [--package <dir>] [--dry-run]\n\
 Migrate the Next.js App Router project at <source>, by default the current directory, into a\n\
-new Astro project with Preact at <dir> (migrate v0, proposed in D-101). Static pages, layouts,\n\
+new Astro project with Preact at <dir> (migrate v0, D-101). Static pages, layouts,\n\
 and components that the analysis rates auto or review are converted; everything else is\n\
 copied unchanged below .frameshift/unmigrated/ and listed in .frameshift/SUMMARY.md.\n\
 <dir> must not exist, and must not be inside <source> or contain it. Files are written to a\n\

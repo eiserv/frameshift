@@ -10,6 +10,7 @@ copy       public/paper.svg  asset.verbatim  from public/paper.svg
 copy       public/robots.txt  asset.verbatim  from public/robots.txt
 transform  src/components/Badge.tsx  component.preact-static  from components/Badge.tsx
 create     src/components/SiteHeader.astro  component.astro  from components/SiteHeader.tsx  review
+create     src/components/Stamp.astro  component.astro  from components/Stamp.tsx  review
 create     src/layouts/DocsLayout.astro  layout.chain  from app/docs/layout.tsx
 create     src/layouts/RootLayout.astro  layout.chain  from app/layout.tsx
 transform  src/lib/site.ts  module.relocate  from lib/site.ts
@@ -24,5 +25,5 @@ copy       src/styles/globals.css  style.relocate  from app/globals.css
 transform  src/types/api.d.ts  module.relocate  from types/api.d.ts
 transform  src/types/assets.d.ts  module.relocate  from types/assets.d.ts
 config     tsconfig.json  config.tsconfig
-25 operations planned (9 converted to Astro, 3 preserved); 0 files written.
-Manual tasks: 9. See .frameshift/SUMMARY.md in the output directory.
+26 operations planned (10 converted to Astro, 3 preserved); 0 files written.
+Manual tasks: 10. See .frameshift/SUMMARY.md in the output directory.
