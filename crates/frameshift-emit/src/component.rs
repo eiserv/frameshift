@@ -117,7 +117,9 @@ pub fn convert_component(
             (Vec::new(), body, None)
         };
     let root_span = checker.span(root)?;
-    let root_kind = checker.kind(checker.unparenthesize(root)?)?;
+    let markup_root = checker.unparenthesize(root)?;
+    let markup_span = checker.span(markup_root)?;
+    let root_kind = checker.kind(markup_root)?;
     if !matches!(
         root_kind,
         SyntaxNodeKind::JsxElement { .. } | SyntaxNodeKind::JsxFragment { .. }
@@ -202,6 +204,11 @@ pub fn convert_component(
         let pattern_copied = matches!(conversion.props, PropsSource::AstroProps)
             && pattern.is_some_and(|pattern| checker.span(pattern).is_ok_and(|p| within(&p)));
         if substitutions.iter().any(within) {
+            return Err(checker.error(ConvertErrorKind::CommentInMarkup, span));
+        }
+        // The markup conversion checks only what the parentheses around the
+        // root enclose, so a comment beside the root would be lost.
+        if within(&root_span) && !within(&markup_span) {
             return Err(checker.error(ConvertErrorKind::CommentInMarkup, span));
         }
         if within(&root_span) || statement_spans.iter().any(within) || pattern_copied {
