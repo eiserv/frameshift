@@ -15,11 +15,14 @@ create     src/layouts/RootLayout.astro  layout.chain  from app/layout.tsx
 transform  src/lib/site.ts  module.relocate  from lib/site.ts
 transform  src/lib/types.ts  module.relocate  from lib/types.ts
 create     src/pages/about.astro  route.static-page  from app/about/page.tsx
+create     src/pages/changelog.astro  route.static-page  from app/changelog/page.tsx  review
 create     src/pages/docs.astro  route.static-page  from app/docs/page.tsx
 create     src/pages/docs/intro.astro  route.static-page  from app/docs/intro/page.tsx
 create     src/pages/index.astro  route.static-page  from app/page.tsx  review
 create     src/pages/pricing.astro  route.static-page  from app/(marketing)/pricing/page.tsx
 copy       src/styles/globals.css  style.relocate  from app/globals.css
+transform  src/types/api.d.ts  module.relocate  from types/api.d.ts
+transform  src/types/assets.d.ts  module.relocate  from types/assets.d.ts
 config     tsconfig.json  config.tsconfig
-22 operations planned (8 converted to Astro, 3 preserved); 0 files written.
-Manual tasks: 8. See .frameshift/SUMMARY.md in the output directory.
+25 operations planned (9 converted to Astro, 3 preserved); 0 files written.
+Manual tasks: 9. See .frameshift/SUMMARY.md in the output directory.

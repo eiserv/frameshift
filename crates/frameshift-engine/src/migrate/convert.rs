@@ -5,7 +5,7 @@
 //! import must resolve through the module graph to a file the plan writes,
 //! and every construct outside the recognized shapes refuses the file.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use frameshift_core::{SourcePath, SourceText, Span};
 use frameshift_emit::{
@@ -17,8 +17,8 @@ use frameshift_emit::{
 };
 use frameshift_modules::{ModuleGraph, Resolution};
 use frameshift_syntax::{
-    ChildList, FunctionKind, JsDialect, NodeId, SourceGoal, SyntaxNodeKind, SyntaxTree,
-    TemplatePart, TypeScriptKind, VariableKind, parse_js_program,
+    ChildList, FunctionKind, JsDialect, MetaPropertyKind, NodeId, SourceGoal, SyntaxNodeKind,
+    SyntaxTree, TemplatePart, TypeScriptKind, VariableKind, parse_js_program,
 };
 use frameshift_transform::{Edit, EditOrder, apply_edits};
 
@@ -276,6 +276,12 @@ enum Import {
 struct Analysis {
     imports: Vec<Import>,
     copies: Vec<Span>,
+    // Module items whose bindings share the frontmatter scope.
+    module_items: Vec<NodeId>,
+    // Module declarations that the frontmatter copies.
+    module_copies: Vec<NodeId>,
+    // Function body statements that the frontmatter copies.
+    leading: Vec<NodeId>,
     metadata: Option<Metadata>,
     function: Span,
     props: Vec<String>,
@@ -361,7 +367,7 @@ pub(crate) fn astro(
     let source = SourceId(0);
     let analysis = analyze(context, path, &tree, output, role)?;
     check_other_edges(context, path, &tree)?;
-    let generated: Vec<&str> = match role {
+    let mut generated: Vec<&str> = match role {
         Role::Page { layout_name, .. } => vec![layout_name],
         Role::NestedLayout {
             parent_name, props, ..
@@ -369,9 +375,12 @@ pub(crate) fn astro(
         Role::RootLayout => layout_props(analysis.metadata.as_ref()),
         Role::Component => Vec::new(),
     };
+    // Every generated component reads the `Astro` global.
+    generated.push("Astro");
     if binds_any(&tree, tree.root(), &generated)? {
         return refuse("the file already binds a name that the conversion generates");
     }
+    check_frontmatter_scope(&tree, &analysis)?;
     let anchor = |span: Span| Anchor { source, span };
     let function_anchor = anchor(analysis.function);
     let mut frontmatter = Vec::new();
@@ -565,6 +574,86 @@ fn binds_any(tree: &SyntaxTree<'_>, id: NodeId, names: &[&str]) -> Result<bool> 
     Ok(false)
 }
 
+// A function's parameter and body statements leave their function scope for
+// the module's frontmatter scope, where they must not meet another binding of
+// the same name, and where no copied module declaration may start to read them.
+fn check_frontmatter_scope(tree: &SyntaxTree<'_>, analysis: &Analysis) -> Result<()> {
+    let mut module = BTreeSet::new();
+    for &item in &analysis.module_items {
+        bound_names(tree, item, &mut module)?;
+    }
+    let mut body = BTreeSet::new();
+    for &statement in &analysis.leading {
+        bound_names(tree, statement, &mut body)?;
+    }
+    // `children` becomes the slot and binds nothing in the frontmatter.
+    let props: BTreeSet<String> = analysis
+        .props
+        .iter()
+        .filter(|prop| prop.as_str() != "children")
+        .cloned()
+        .collect();
+    if !module.is_disjoint(&body) || !module.is_disjoint(&props) || !body.is_disjoint(&props) {
+        return refuse("a function binding would share the frontmatter scope with another binding");
+    }
+    let hoisted: BTreeSet<String> = body.into_iter().chain(props).collect();
+    for &item in &analysis.module_copies {
+        if reads_any(tree, item, &hoisted)? {
+            return refuse(
+                "a module declaration reads a name that a function binding would capture",
+            );
+        }
+    }
+    Ok(())
+}
+
+// The names that a statement binds in its own scope. Nested functions and
+// classes have scopes of their own.
+fn bound_names(tree: &SyntaxTree<'_>, id: NodeId, names: &mut BTreeSet<String>) -> Result<()> {
+    let node = kind(tree, id)?;
+    if let SyntaxNodeKind::FunctionDeclaration { name, .. } = node {
+        if let Some(name) = name {
+            names.insert(node_text(tree, name)?.to_owned());
+        }
+        return Ok(());
+    }
+    if let SyntaxNodeKind::VariableDeclarator { target, .. } = node {
+        return bound_names(tree, target, names);
+    }
+    if matches!(
+        node,
+        SyntaxNodeKind::FunctionExpression { .. }
+            | SyntaxNodeKind::ArrowFunction { .. }
+            | SyntaxNodeKind::ClassDeclaration { .. }
+            | SyntaxNodeKind::ClassExpression { .. }
+    ) {
+        return Ok(());
+    }
+    if matches!(node, SyntaxNodeKind::BindingIdentifier { .. }) {
+        names.insert(node_text(tree, id)?.to_owned());
+    }
+    for child in tree.child_nodes(id).into_iter().flatten() {
+        bound_names(tree, child, names)?;
+    }
+    Ok(())
+}
+
+// Whether any identifier below `id` spells one of `names`. Spelling is enough
+// here because a match only refuses the file.
+fn reads_any(tree: &SyntaxTree<'_>, id: NodeId, names: &BTreeSet<String>) -> Result<bool> {
+    if matches!(kind(tree, id)?, SyntaxNodeKind::Identifier { .. })
+        && names.contains(node_text(tree, id)?)
+    {
+        return Ok(true);
+    }
+    for child in tree.child_nodes(id).into_iter().flatten() {
+        if reads_any(tree, child, names)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 // Only static import declarations are rewritten. Any other runtime edge to
 // a local or unresolved target, such as `import()` or `require()` in copied
 // code, would keep a stale specifier after the move, so it refuses the file.
@@ -642,6 +731,8 @@ fn analyze(
     let is_component = matches!(role, Role::Component);
     let mut imports = Vec::new();
     let mut copies = Vec::new();
+    let mut module_items = Vec::new();
+    let mut module_copies = Vec::new();
     let mut metadata = None;
     let mut function = None;
     let mut previous_end = 0;
@@ -654,6 +745,7 @@ fn analyze(
         let item_kind = kind(tree, item)?;
         if let SyntaxNodeKind::ImportDeclaration { .. } = item_kind {
             imports.push(import(context, path, tree, item, output)?);
+            module_items.push(item);
         } else if let SyntaxNodeKind::TypeScript {
             kind: TypeScriptKind::TypeOnly,
             children,
@@ -705,6 +797,8 @@ fn analyze(
                 return refuse("module-level JSX is not converted by migrate v0");
             }
             copies.push(item_span);
+            module_items.push(item);
+            module_copies.push(item);
         } else {
             return refuse("a module item outside the converted subset");
         }
@@ -766,6 +860,9 @@ fn analyze(
     Ok(Analysis {
         imports,
         copies,
+        module_items,
+        module_copies,
+        leading: leading.to_vec(),
         metadata,
         function: node_span(tree, function)?,
         props,
@@ -1342,14 +1439,27 @@ pub(crate) fn relocate(
     text: &SourceText,
     output: &str,
 ) -> Result<EmittedText> {
-    if path.as_str().ends_with(".d.ts") {
-        return Ok(EmittedText::from_rewritten(
-            SourceId(0),
-            &apply_edits(text, &[], context.limits.edit)
-                .map_err(|_| "the declaration file cannot be copied".to_owned())?,
-        ));
+    let tree = if path.as_str().ends_with(".d.ts") {
+        parse_js_program(
+            text,
+            SourceGoal::Module,
+            JsDialect::TypeScriptDeclaration,
+            context.limits.parse,
+        )
+        .map_err(|_| "the file does not parse strictly".to_owned())?
+    } else {
+        parse(text, path.as_str(), context.limits)?
+    };
+    if depends_on_location(&tree, tree.root())? {
+        return refuse("the module refers to its own location outside its import specifiers");
     }
-    let tree = parse(text, path.as_str(), context.limits)?;
+    if tree
+        .comments()
+        .iter()
+        .any(|comment| text.slice(comment.span).is_ok_and(is_path_reference))
+    {
+        return refuse("a triple-slash path reference is not rewritten by migrate v0");
+    }
     let Some(node) = context.graph.node(path) else {
         return refuse("the module is not in the module graph");
     };
@@ -1432,6 +1542,42 @@ pub(crate) fn relocate(
     let rewritten = apply_edits(text, &edits, context.limits.edit)
         .map_err(|error| format!("the import rewrite failed ({error})"))?;
     Ok(EmittedText::from_rewritten(SourceId(0), &rewritten))
+}
+
+fn is_path_reference(comment: &str) -> bool {
+    comment.starts_with("///") && comment.contains("<reference") && comment.contains("path=")
+}
+
+// What the module graph has no edge for and a move would silently change:
+// `import.meta`, and ambient module declarations, which name a module by the
+// same specifier that the file's location resolves. Wildcard declarations such
+// as `*.svg` name no location.
+fn depends_on_location(tree: &SyntaxTree<'_>, id: NodeId) -> Result<bool> {
+    let node = kind(tree, id)?;
+    if matches!(
+        node,
+        SyntaxNodeKind::MetaProperty {
+            kind: MetaPropertyKind::ImportMeta
+        }
+    ) {
+        return Ok(true);
+    }
+    if let SyntaxNodeKind::TypeScript {
+        kind: TypeScriptKind::Namespace,
+        children,
+    } = node
+        && let Some(&name) = list(tree, children)?.first()
+        && matches!(kind(tree, name)?, SyntaxNodeKind::StringLiteral)
+        && !string_value(tree, name)?.contains('*')
+    {
+        return Ok(true);
+    }
+    for child in tree.child_nodes(id).into_iter().flatten() {
+        if depends_on_location(tree, child)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Whether a stylesheet keeps working when it moves, decided on CSS tokens:

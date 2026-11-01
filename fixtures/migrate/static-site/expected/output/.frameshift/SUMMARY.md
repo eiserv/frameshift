@@ -6,8 +6,8 @@ Migrate v0 converts only static pages, layouts, and components that the analysis
 
 ## Results
 
-- Converted to Astro components: 8
-- Kept as JavaScript or TypeScript with rewritten imports: 3
+- Converted to Astro components: 9
+- Kept as JavaScript or TypeScript with rewritten imports: 5
 - Copied unchanged: 3
 - Generated project files: 5
 - Preserved for manual migration: 3
@@ -27,6 +27,7 @@ Migrate v0 converts only static pages, layouts, and components that the analysis
 
 ## Converted files to review
 
+- `app/changelog/page.tsx`: converted; check the result, because the analysis rates it review, and the conversion assumes values that React and Astro render alike (child-not-true)
 - `app/page.tsx`: converted; check the result, because the analysis rates it review, and the conversion assumes values that React and Astro render alike (child-not-true)
 - `components/SiteHeader.tsx`: converted; check the result, because the analysis rates it review, and the conversion assumes values that React and Astro render alike (child-not-true)
 
