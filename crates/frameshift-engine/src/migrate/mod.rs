@@ -27,7 +27,7 @@ use crate::analysis::{self, AnalyzeErrorKind, AnalyzeOptions, FileClass, Strateg
 use crate::limits::Limits;
 use crate::project::FileState;
 use convert::{Context, Role as AstroRole, RootFacts, Target, TargetKind};
-pub use plan_document::{Binding, PLAN_SCHEMA_VERSION};
+pub use plan_document::{Binding, MANIFEST_SCHEMA_VERSION, PLAN_SCHEMA_VERSION};
 
 pub use frameshift_output::Destination;
 
@@ -39,6 +39,9 @@ pub const UNMIGRATED: &str = ".frameshift/unmigrated";
 
 /// Path of the human-readable summary in the output.
 pub const SUMMARY: &str = ".frameshift/SUMMARY.md";
+
+/// The provenance record that every migration writes.
+pub const MANIFEST: &str = ".frameshift/manifest.json";
 
 /// Explicit inputs to one migration plan.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -1115,6 +1118,21 @@ impl<'a> Planner<'a> {
             package: self.package,
         };
         let printed = plan_document::print(&binding, &operations, &tasks, self.limits)?;
+        // The insertion point keeps the operations sorted by output path.
+        let manifest = output(MANIFEST)?;
+        let index = operations
+            .partition_point(|o| o.output.as_str().as_bytes() < manifest.as_str().as_bytes());
+        operations.insert(
+            index,
+            Operation {
+                kind: OperationKind::Config,
+                output: manifest,
+                rule: "report.manifest",
+                source: None,
+                review: false,
+                bytes: printed.manifest,
+            },
+        );
         Ok(Plan {
             operations,
             tasks,

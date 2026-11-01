@@ -1,4 +1,5 @@
 config     .frameshift/SUMMARY.md report.summary -
+config     .frameshift/manifest.json report.manifest -
 preserve   .frameshift/unmigrated/src/app/captured/page.tsx preserve.unmigrated src/app/captured/page.tsx
 preserve   .frameshift/unmigrated/src/app/counter/page.tsx preserve.unmigrated src/app/counter/page.tsx
 preserve   .frameshift/unmigrated/src/app/hoisted/page.tsx preserve.unmigrated src/app/hoisted/page.tsx

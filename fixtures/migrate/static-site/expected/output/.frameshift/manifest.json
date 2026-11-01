@@ -1,0 +1,314 @@
+{
+  "kind": "frameshift.manifest",
+  "schemaVersion": 1,
+  "planHash": "@PLAN_HASH@",
+  "binding": {
+    "snapshot": "sha256:392a22ad93d5e9a2d85f8c0859ed816dcc7134bf2562e2930a4eaba5ca08f40c",
+    "engineVersion": "@ENGINE_VERSION@",
+    "ruleset": "nextjs-to-astro-preact/assessment-v1",
+    "knowledgeBases": [
+      "2026.10.1"
+    ],
+    "targetProfile": "astro7-preact10",
+    "source": {
+      "framework": "nextjs",
+      "version": "16.2.1"
+    },
+    "options": {
+      "to": "astro-preact",
+      "package": null
+    }
+  },
+  "files": [
+    {
+      "kind": "config",
+      "output": ".frameshift/SUMMARY.md",
+      "rule": "report.summary",
+      "ruleVersion": 1,
+      "source": null,
+      "review": false,
+      "size": 2514,
+      "sha256": "sha256:5b96fddcbf6a7c4b4cde7c833dc415ca301ef0e3210451c96c378260a1e797ea"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/app/blog/[slug]/page.tsx",
+      "rule": "preserve.unmigrated",
+      "ruleVersion": 1,
+      "source": "app/blog/[slug]/page.tsx",
+      "review": false,
+      "size": 153,
+      "sha256": "sha256:4f7a0d15c200e21511fd4b7b17422605c87c86f83256c6fb9955c6431c23e122"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/app/contact/page.tsx",
+      "rule": "preserve.unmigrated",
+      "ruleVersion": 1,
+      "source": "app/contact/page.tsx",
+      "review": false,
+      "size": 219,
+      "sha256": "sha256:57db3b5cac72835720f8fc1d5654634a526f7916540aca5504353b0d4bafe5b4"
+    },
+    {
+      "kind": "preserve",
+      "output": ".frameshift/unmigrated/tests/site.test.ts",
+      "rule": "preserve.unmigrated",
+      "ruleVersion": 1,
+      "source": "tests/site.test.ts",
+      "review": false,
+      "size": 85,
+      "sha256": "sha256:d45f6e73e5125928a5554ff76b36ce55c3a0e5227e5bc05c6eba7be38a3d1514"
+    },
+    {
+      "kind": "config",
+      "output": ".gitignore",
+      "rule": "config.gitignore",
+      "ruleVersion": 1,
+      "source": ".gitignore",
+      "review": false,
+      "size": 35,
+      "sha256": "sha256:6ed824521a9f00e77252d571b8af3d5d86a5993a623f9b32adbf47c0271f0674"
+    },
+    {
+      "kind": "config",
+      "output": "astro.config.mjs",
+      "rule": "config.astro",
+      "ruleVersion": 1,
+      "source": null,
+      "review": false,
+      "size": 162,
+      "sha256": "sha256:089ceb7b4c4a8157addb0cd527f8f20f17b4b62db2afee13a59802e3a46ccd23"
+    },
+    {
+      "kind": "config",
+      "output": "package.json",
+      "rule": "config.package-manifest",
+      "ruleVersion": 1,
+      "source": null,
+      "review": false,
+      "size": 419,
+      "sha256": "sha256:e73620876a99be8cb3a0201fdc1c0ca08d4e4e9a9aeaf543e8694f124212e2f6"
+    },
+    {
+      "kind": "copy",
+      "output": "public/paper.svg",
+      "rule": "asset.verbatim",
+      "ruleVersion": 1,
+      "source": "public/paper.svg",
+      "review": false,
+      "size": 111,
+      "sha256": "sha256:39329952a9a52dbadbe0f17d972b784dbf438cfa77776a992c9a4f36799b06ef"
+    },
+    {
+      "kind": "copy",
+      "output": "public/robots.txt",
+      "rule": "asset.verbatim",
+      "ruleVersion": 1,
+      "source": "public/robots.txt",
+      "review": false,
+      "size": 23,
+      "sha256": "sha256:16ceb5ee3e0dc13aa9adf31a3ebbe45a1d965b8c2b9f72eaf84e5911e140ed95"
+    },
+    {
+      "kind": "transform",
+      "output": "src/components/Badge.tsx",
+      "rule": "component.preact-static",
+      "ruleVersion": 1,
+      "source": "components/Badge.tsx",
+      "review": false,
+      "size": 142,
+      "sha256": "sha256:eaba3e84ff925cc34ba379b7996516a5c7ad4309767d6f3561eecb77a76ed356"
+    },
+    {
+      "kind": "create",
+      "output": "src/components/Card.astro",
+      "rule": "component.astro",
+      "ruleVersion": 1,
+      "source": "components/Card.tsx",
+      "review": true,
+      "size": 140,
+      "sha256": "sha256:9decbb8f327c8f1fe90a3982f45a463b0a27125541cb6eaf2608eda4673c2cd3"
+    },
+    {
+      "kind": "create",
+      "output": "src/components/SiteHeader.astro",
+      "rule": "component.astro",
+      "ruleVersion": 1,
+      "source": "components/SiteHeader.tsx",
+      "review": true,
+      "size": 104,
+      "sha256": "sha256:f64f0e1e27784d5826cb71c1fddec1844006e280bc5de1bb97a35312758cec18"
+    },
+    {
+      "kind": "create",
+      "output": "src/components/Stamp.astro",
+      "rule": "component.astro",
+      "ruleVersion": 1,
+      "source": "components/Stamp.tsx",
+      "review": true,
+      "size": 114,
+      "sha256": "sha256:83adbb062ab8c3873977f198155fb311b4a43fe2b0374f10e85376b755bc462b"
+    },
+    {
+      "kind": "create",
+      "output": "src/layouts/DocsLayout.astro",
+      "rule": "layout.chain",
+      "ruleVersion": 1,
+      "source": "app/docs/layout.tsx",
+      "review": false,
+      "size": 328,
+      "sha256": "sha256:7561d5ec79ddfa5ef03f361a58291add6d62e81714ceb213d985ae7b766de176"
+    },
+    {
+      "kind": "create",
+      "output": "src/layouts/RootLayout.astro",
+      "rule": "layout.chain",
+      "ruleVersion": 1,
+      "source": "app/layout.tsx",
+      "review": false,
+      "size": 520,
+      "sha256": "sha256:5aa9900c71fc19f087fc04cd7151fa6b7e44f6a97503160eb2e632e01587c5bd"
+    },
+    {
+      "kind": "transform",
+      "output": "src/lib/site.ts",
+      "rule": "module.relocate",
+      "ruleVersion": 1,
+      "source": "lib/site.ts",
+      "review": false,
+      "size": 92,
+      "sha256": "sha256:d87adc6e5ecd4106df78c616f858e71d50cad5785738c3c0119b1b6d0b0a4663"
+    },
+    {
+      "kind": "transform",
+      "output": "src/lib/types.ts",
+      "rule": "module.relocate",
+      "ruleVersion": 1,
+      "source": "lib/types.ts",
+      "review": false,
+      "size": 31,
+      "sha256": "sha256:899485279dcd413a22e30fe4def6fb759847f7c79bc484d627ad611f9fdc53e8"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/about.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/about/page.tsx",
+      "review": false,
+      "size": 302,
+      "sha256": "sha256:68aaa7eae4225a398a79598f817a8f12de8586cb048de98fec567e17cf468bfb"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/arrow.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/arrow/page.tsx",
+      "review": false,
+      "size": 305,
+      "sha256": "sha256:af69d25b981c0403f0f5987e8c6db6e10a72dadcd91c6325295d8bfde909fa50"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/changelog.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/changelog/page.tsx",
+      "review": true,
+      "size": 514,
+      "sha256": "sha256:04d71bdf100b64f2477d7a6638166793c2f55cf0c775fdf4c1a8b04f67a5092b"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/docs.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/docs/page.tsx",
+      "review": false,
+      "size": 203,
+      "sha256": "sha256:8389c5093d266010dd848a5a26a764a088b4d44a8e3b6f80f6f7ba4a897ee727"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/docs/intro.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/docs/intro/page.tsx",
+      "review": false,
+      "size": 205,
+      "sha256": "sha256:2d2aeb141948cba3ecee6863b48bc382d5624120ad9b44b3de430f16502d50b9"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/index.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/page.tsx",
+      "review": true,
+      "size": 480,
+      "sha256": "sha256:65a1b1d2f86e7eea288e94c981790ed1f63c47ac6c930d4b8b1a8286e6abc497"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/pricing.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/(marketing)/pricing/page.tsx",
+      "review": false,
+      "size": 221,
+      "sha256": "sha256:eb0be37f6c3c378e30f6c55769076cab8016b8c8237a2bcadc8fd1163e6404a3"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/statements.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/statements/page.tsx",
+      "review": false,
+      "size": 367,
+      "sha256": "sha256:4b4f039977c24238866718114a89e38267ee054d2399cf987193d5b835ff4934"
+    },
+    {
+      "kind": "copy",
+      "output": "src/styles/globals.css",
+      "rule": "style.relocate",
+      "ruleVersion": 1,
+      "source": "app/globals.css",
+      "review": false,
+      "size": 93,
+      "sha256": "sha256:de66b2ededf9ad03882d4798f5ca322b076ce219361137227db35c2cfb29f137"
+    },
+    {
+      "kind": "transform",
+      "output": "src/types/api.d.ts",
+      "rule": "module.relocate",
+      "ruleVersion": 1,
+      "source": "types/api.d.ts",
+      "review": false,
+      "size": 89,
+      "sha256": "sha256:d737c8ff5b5e13ebb02a2a11d43f0db30aafd3c8f91be69319c245b397b859c6"
+    },
+    {
+      "kind": "transform",
+      "output": "src/types/assets.d.ts",
+      "rule": "module.relocate",
+      "ruleVersion": 1,
+      "source": "types/assets.d.ts",
+      "review": false,
+      "size": 70,
+      "sha256": "sha256:729c043f5f3c42e8082bdfcd60d4a2787d6cc4af39b7c2c41fb6a8cffdbf8c5b"
+    },
+    {
+      "kind": "config",
+      "output": "tsconfig.json",
+      "rule": "config.tsconfig",
+      "ruleVersion": 1,
+      "source": null,
+      "review": false,
+      "size": 193,
+      "sha256": "sha256:746b4c28adb919320614a80e7d2e9d2f922ca45de0ad25bedba332aa8936ffc1"
+    }
+  ]
+}

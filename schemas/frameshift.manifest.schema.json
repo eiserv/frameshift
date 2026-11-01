@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frameshift output manifest",
+  "description": "The provenance record of one migration, written to .frameshift/manifest.json: the plan hash, the binding of the plan, and the origin and digest of every other output file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "schemaVersion", "planHash", "binding", "files"],
+  "properties": {
+    "kind": { "const": "frameshift.manifest" },
+    "schemaVersion": { "const": 1 },
+    "planHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "binding": { "$ref": "frameshift.plan.schema.json#/properties/binding" },
+    "files": { "$ref": "frameshift.plan.schema.json#/properties/operations" }
+  }
+}

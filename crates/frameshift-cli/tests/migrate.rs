@@ -76,6 +76,20 @@ fn workspace(case: &str, label: &str) -> PathBuf {
     root
 }
 
+// The manifest holds release-dependent members; the golden has placeholders.
+fn normalize_manifest(files: &mut BTreeMap<String, Vec<u8>>) {
+    let key = ".frameshift/manifest.json";
+    let text = String::from_utf8(files[key].clone()).unwrap();
+    let start = text.find("\"planHash\": \"").unwrap() + "\"planHash\": \"".len();
+    let hash = &text[start..start + text[start..].find('"').unwrap()];
+    let version = frameshift_engine::version::info().engine_version;
+    let text = text.replace(hash, "@PLAN_HASH@").replace(
+        &format!("\"engineVersion\": \"{version}\""),
+        "\"engineVersion\": \"@ENGINE_VERSION@\"",
+    );
+    files.insert(key.to_owned(), text.into_bytes());
+}
+
 fn call(root: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_frameshift"))
         .current_dir(root)
@@ -115,7 +129,9 @@ fn migration_writes_the_golden_tree_and_refuses_unsafe_outputs() {
         assert_eq!(output.status.code(), Some(0), "{case}");
         assert!(output.stdout.starts_with(b"Migrated: "));
         let golden = read_tree(&fixtures().join(&case).join("expected/output"));
-        assert_eq!(read_tree(&root.join("out")), golden, "{case}");
+        let mut written = read_tree(&root.join("out"));
+        normalize_manifest(&mut written);
+        assert_eq!(written, golden, "{case}");
         // An existing output and an output inside the source are refused.
         for out in ["out", "source/out"] {
             let args = ["migrate", "source", "--to", "astro-preact", "--out", out];
@@ -256,7 +272,9 @@ fn plan_documents_approve_exactly_the_run_they_describe() {
         assert_eq!(verified.status.code(), Some(0), "{case}");
         assert!(String::from_utf8_lossy(&verified.stdout).starts_with("Plan "));
         let golden = read_tree(&fixtures().join(&case).join("expected/output"));
-        assert_eq!(read_tree(&root.join("verified")), golden, "{case}");
+        let mut written = read_tree(&root.join("verified"));
+        normalize_manifest(&mut written);
+        assert_eq!(written, golden, "{case}");
 
         fs::write(root.join("source/added.txt"), "changed").unwrap();
         let stale = approved("stale", "plan.json");

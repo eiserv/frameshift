@@ -112,6 +112,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-102 | M6 plan document, plan hash, and `frameshift plan` | Accepted |
 | D-103 | The key set of `frameshift.jsonc` | Accepted |
 | D-104 | The rule registry of migrate | Accepted |
+| D-105 | The output manifest | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1208,6 +1209,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale:** Rule selection in migrate v0 is one classification function, so exclusivity holds by construction and the plan-time check is its fail-closed proof. The declarative preconditions and the feature ID index of ARCHITECTURE.md section 12 add nothing until several rules can match one occurrence, so they stay planned and are not simulated by metadata without an effect.
 - **Tradeoffs:** Selection logic is not data yet, so `rules` lists what exists without its preconditions, and rule coverage metrics stay at their current meaning.
 - **Revisit if:** M8 or M9 adds rules that can match the same occurrence. Then preconditions and the `excludes` relation become data.
+
+### D-105: The output manifest
+
+- **Status:** Accepted (2026-11-01), under the owner's instruction to continue the roadmap with M7.
+- **Decision:** Every migration writes `.frameshift/manifest.json`, a `frameshift.manifest` v1 document ([schema](../schemas/frameshift.manifest.schema.json)) with the plan hash, the plan's binding, and one entry per other output file: kind, path, rule and version, source, review flag, size, and SHA-256. It is an operation of the plan with the rule `report.manifest`, but it is outside the plan document and the plan hash, because it names that hash.
+- **Rationale:** The document proves where every output file came from and is the base for `--on-existing replace-managed` and `verify`. Reusing the plan's entries keeps one definition of what an output file is.
+- **Tradeoffs:** A manifest holds no timestamps or absolute paths, so it stays deterministic but cannot tell when a run happened. Source spans and output regions from the provenance model are not recorded yet.
+- **Revisit if:** `verify` needs per-region provenance.
 
 ## Technique proposals and related accepted decisions
 

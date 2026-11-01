@@ -161,18 +161,33 @@ fn outputs(plan: &Plan) -> BTreeMap<String, Vec<u8>> {
         .collect()
 }
 
-/// The plan document with its release-dependent members replaced, because
-/// the engine version is hashed and changes with every release.
+/// A plan or manifest document with its release-dependent members replaced,
+/// because the engine version is hashed and changes with every release.
+fn normalized(text: &str, plan: &Plan) -> String {
+    text.replace(
+        &format!(
+            "\"engineVersion\": \"{}\"",
+            frameshift_engine::version::info().engine_version
+        ),
+        "\"engineVersion\": \"@ENGINE_VERSION@\"",
+    )
+    .replace(&plan.hash().to_string(), "@PLAN_HASH@")
+}
+
 fn document(plan: &Plan) -> String {
-    plan.document()
-        .replace(
-            &format!(
-                "\"engineVersion\": \"{}\"",
-                frameshift_engine::version::info().engine_version
-            ),
-            "\"engineVersion\": \"@ENGINE_VERSION@\"",
-        )
-        .replace(&plan.hash().to_string(), "@PLAN_HASH@")
+    normalized(plan.document(), plan)
+}
+
+/// The golden form of the output files: everything byte for byte, except
+/// the manifest, which holds the release-dependent members.
+fn golden_outputs(plan: &Plan) -> BTreeMap<String, Vec<u8>> {
+    let mut files = outputs(plan);
+    let manifest = String::from_utf8(files[migrate::MANIFEST].clone()).unwrap();
+    files.insert(
+        migrate::MANIFEST.to_owned(),
+        normalized(&manifest, plan).into_bytes(),
+    );
+    files
 }
 
 fn run(case: &Case, label: &str) -> (String, String, BTreeMap<String, Vec<u8>>) {
@@ -183,7 +198,7 @@ fn run(case: &Case, label: &str) -> (String, String, BTreeMap<String, Vec<u8>>) 
     let second = migrate::plan(&source, &MigrateOptions::default()).unwrap();
     assert_eq!(first, second, "{}: repeated plans differ", case.name);
     fs::remove_dir_all(workspace).unwrap();
-    (listing(&first), document(&first), outputs(&first))
+    (listing(&first), document(&first), golden_outputs(&first))
 }
 
 #[test]
@@ -244,6 +259,36 @@ fn execution_writes_exactly_the_plan_and_never_touches_the_source() {
         let error = migrate::check_output(&source, &source.join("out")).unwrap_err();
         assert_eq!(error.kind(), MigrateErrorKind::Output);
         assert_eq!(read_tree(&source), before);
+        fs::remove_dir_all(workspace).unwrap();
+    }
+}
+
+#[test]
+fn manifests_record_the_plan_and_every_other_output_file() {
+    for case in cases() {
+        let workspace = prepare(&case, "manifest");
+        let source = workspace.join("source");
+        let plan = migrate::plan(&source, &MigrateOptions::default()).unwrap();
+        let manifest = outputs(&plan).remove(migrate::MANIFEST).unwrap();
+        let manifest = String::from_utf8(manifest).unwrap();
+        assert!(manifest.contains(&plan.hash().to_string()), "{}", case.name);
+        for operation in &plan.operations {
+            let listed =
+                manifest.contains(&format!("\"output\": \"{}\"", operation.output.as_str()));
+            assert_eq!(
+                listed,
+                operation.output.as_str() != migrate::MANIFEST,
+                "{}: {}",
+                case.name,
+                operation.output.as_str()
+            );
+        }
+        // The plan document never lists the manifest, which depends on its hash.
+        assert!(
+            !plan.document().contains(migrate::MANIFEST),
+            "{}",
+            case.name
+        );
         fs::remove_dir_all(workspace).unwrap();
     }
 }
