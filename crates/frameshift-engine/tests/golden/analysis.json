@@ -356,7 +356,7 @@
     },
     "ruleCoverage": {
       "numerator": 0,
-      "denominator": 14,
+      "denominator": 13,
       "basisPoints": 0
     },
     "routeReadiness": [
@@ -844,10 +844,10 @@
       "detail": "None"
     },
     {
-      "feature": "component.preact-static",
+      "feature": "component.astro-convertible",
       "unit": "route:/private",
       "status": "auto",
-      "rule": "nextjs-to-astro-preact/assessment.component-preact-static",
+      "rule": "nextjs-to-astro-preact/assessment.component-astro-convertible",
       "reason": "The compatibility matrix fixes this feature's V1 status.",
       "location": {
         "scope": "text",
@@ -891,11 +891,6 @@
     },
     {
       "id": "nextjs-to-astro-preact/assessment.component-island",
-      "version": 1,
-      "phase": "assessment"
-    },
-    {
-      "id": "nextjs-to-astro-preact/assessment.component-preact-static",
       "version": 1,
       "phase": "assessment"
     },

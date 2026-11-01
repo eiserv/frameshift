@@ -168,7 +168,7 @@ impl Target {
                 "apply_edits with decoded edits; provenance, accounting, and order independence"
             }
             Self::Astro => {
-                "convert_jsx and print_astro_component on JSX and TSX modules; determinism, anchors, and provenance"
+                "convert_jsx, convert_component, and print_astro_component on JSX and TSX modules; determinism, anchors, comments, and provenance"
             }
             Self::Paths => {
                 "source and output paths from arbitrary bytes; acceptance model, limits, spelling, and conversions"

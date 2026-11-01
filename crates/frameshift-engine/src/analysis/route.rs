@@ -10,11 +10,38 @@ use std::collections::BTreeSet;
 pub(crate) struct Summary {
     generator: Option<bool>,
     parameters: Option<Parameters>,
+    default_function: Option<NodeId>,
 }
 #[derive(Clone, Debug, Default)]
 struct Parameters {
     direct: BTreeSet<String>,
     destructured: BTreeSet<String>,
+    // `params` in `params.x` and `await params` in its destructuring; both
+    // read `Astro.params` in an Astro page.
+    substitutions: Vec<frameshift_core::Span>,
+}
+impl Summary {
+    /// The default export's function, with the expressions that read its
+    /// page parameters when every use is recognized.
+    pub(crate) fn page(&self) -> Option<(NodeId, Option<&[frameshift_core::Span]>)> {
+        Some((
+            self.default_function?,
+            self.parameters.as_ref().map(|p| p.substitutions.as_slice()),
+        ))
+    }
+    /// Whether the default export provably never reads route parameters:
+    /// every `params` use is recognized and there is none.
+    pub(crate) fn parameters_unread(&self) -> bool {
+        self.parameters
+            .as_ref()
+            .is_some_and(|p| p.substitutions.is_empty())
+    }
+    /// Parameter names that the default export reads, if every use is recognized.
+    pub(crate) fn parameter_keys(&self) -> Option<impl Iterator<Item = &String>> {
+        self.parameters
+            .as_ref()
+            .map(|p| p.direct.iter().chain(&p.destructured))
+    }
 }
 fn contains(outer: frameshift_core::Span, inner: frameshift_core::Span) -> bool {
     outer.start() <= inner.start() && inner.end() <= outer.end()
@@ -110,11 +137,12 @@ pub(crate) fn summarize(tree: &SyntaxTree<'_>, bindings: &Bindings) -> Summary {
                 Target::Dynamic => false,
             })
     });
-    let parameters = function(tree, bindings, ExportName::Default)
-        .and_then(|node| page_parameters(tree, bindings, node));
+    let default_function = function(tree, bindings, ExportName::Default);
+    let parameters = default_function.and_then(|node| page_parameters(tree, bindings, node));
     Summary {
         generator,
         parameters,
+        default_function,
     }
 }
 fn page_parameters(tree: &SyntaxTree<'_>, bindings: &Bindings, node: NodeId) -> Option<Parameters> {
@@ -194,6 +222,7 @@ fn page_parameters(tree: &SyntaxTree<'_>, bindings: &Bindings, node: NodeId) -> 
             {
                 accepted.insert(object);
                 result.direct.insert(tree.identifier_value(property)?);
+                result.substitutions.push(tree.node(object)?.span());
             }
         } else if let N::VariableDeclarator {
             target,
@@ -237,6 +266,7 @@ fn page_parameters(tree: &SyntaxTree<'_>, bindings: &Bindings, node: NodeId) -> 
                 result.destructured.insert(key);
             }
             accepted.insert(argument);
+            result.substitutions.push(tree.node(init)?.span());
         }
     }
     bindings
