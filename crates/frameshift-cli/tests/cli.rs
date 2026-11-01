@@ -121,7 +121,7 @@ fn invalid_arguments_and_planned_commands_fail_without_echoing_input() {
         &["plan", "--to", "astro-preact", "--show", "units"],
         &["plan", "--to", "astro-preact", "--dry-run"],
         &["migrate", "--to", "astro-preact"],
-        &["migrate", "--to", "astro-preact", "--out", "o", "--strict"],
+        &["migrate", "--to", "astro-preact", "--out", "o", "--report"],
         &["version", "extra"],
         &["help", "help", "extra"],
         &["--version", "version"],

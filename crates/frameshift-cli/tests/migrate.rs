@@ -327,6 +327,26 @@ fn replace_managed_replaces_only_unmodified_output() {
 }
 
 #[test]
+fn strict_refuses_unresolved_units_and_show_files_lists_a_real_run() {
+    let root = workspace("static-site", "strict");
+    let mut strict = MIGRATE.to_vec();
+    strict.push("--strict");
+    // The fixture preserves a dynamic route that the analysis rates unsupported.
+    let refused = call(&root, &strict);
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&refused.stdout).starts_with("Nothing written: "));
+    assert!(!root.join("out").exists());
+    let mut show = MIGRATE.to_vec();
+    show.push("--show-files");
+    let listed = call(&root, &show);
+    assert_eq!(listed.status.code(), Some(0));
+    let text = String::from_utf8(listed.stdout).unwrap();
+    assert!(text.contains("layout.chain  from app/layout.tsx"), "{text}");
+    assert!(text.contains("Migrated: "), "{text}");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn clean_staging_recovers_from_an_interrupted_run() {
     let root = workspace("static-site", "staging");
     let staging = root.join(".out.frameshift-staging");

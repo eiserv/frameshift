@@ -149,6 +149,9 @@ pub struct Plan {
     pub tasks: Vec<ManualTask>,
     /// What the plan depends on.
     pub binding: Binding,
+    /// Assessed units rated `unknown` or `unsupported`, which `--strict`
+    /// refuses to commit.
+    pub unresolved_units: usize,
     hash: Sha256Digest,
     document: String,
 }
@@ -1161,6 +1164,14 @@ impl<'a> Planner<'a> {
             operations,
             tasks,
             binding,
+            unresolved_units: self
+                .parts
+                .analysis
+                .assessment
+                .units
+                .iter()
+                .filter(|unit| matches!(unit.status, Status::Unknown | Status::Unsupported))
+                .count(),
             hash: printed.hash,
             document: printed.document,
         })

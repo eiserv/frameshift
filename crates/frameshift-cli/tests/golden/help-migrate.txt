@@ -1,6 +1,6 @@
 Usage: frameshift migrate [<source>] [--to astro-preact] --out <dir> [--package <dir>]
-       [--config <file>|--no-config] [--plan <plan.json>] [--dry-run] [--clean-staging]
-       [--on-existing fail|replace-managed]
+       [--config <file>|--no-config] [--plan <plan.json>] [--dry-run] [--show-files] [--strict]
+       [--clean-staging] [--on-existing fail|replace-managed]
 Migrate the Next.js App Router project at <source>, by default the current directory, into a
 new Astro project with Preact at <dir> (migrate v0, D-101). Static pages, layouts,
 and components that the analysis rates auto or review are converted; everything else is
@@ -9,7 +9,9 @@ copied unchanged below .frameshift/unmigrated/ and listed in .frameshift/SUMMARY
 staging directory next to <dir> and renamed into place when complete. The source is never
 modified, and no project code or external tool runs. --plan refuses to continue unless the
 recomputed plan document equals the given one byte for byte; the given file is compared, never
-executed. --dry-run lists the planned files and writes nothing. --clean-staging first removes
+executed. --dry-run lists the planned files and writes nothing, and --show-files lists them in
+a real run. --strict writes nothing and exits with 1 if any unit is unknown or unsupported.
+--clean-staging first removes
 the marked staging directory of an interrupted run next to <dir>. --on-existing replace-managed
 replaces an existing <dir> only if its manifest records it exactly, and moves the old tree next
 to it instead of deleting it. frameshift.jsonc in <source>
