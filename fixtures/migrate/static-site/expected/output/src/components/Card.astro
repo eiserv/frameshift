@@ -1,0 +1,7 @@
+---
+const { title, tone = 'plain' } = Astro.props;
+const label = `${title} (${tone})`;
+---
+<article class={tone}>
+  {`${label}`}
+</article>

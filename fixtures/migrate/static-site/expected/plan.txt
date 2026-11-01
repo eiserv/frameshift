@@ -8,6 +8,7 @@ config     package.json config.package-manifest -
 copy       public/paper.svg asset.verbatim public/paper.svg
 copy       public/robots.txt asset.verbatim public/robots.txt
 transform  src/components/Badge.tsx component.preact-static components/Badge.tsx
+create     src/components/Card.astro component.astro components/Card.tsx review
 create     src/components/SiteHeader.astro component.astro components/SiteHeader.tsx review
 create     src/components/Stamp.astro component.astro components/Stamp.tsx review
 create     src/layouts/DocsLayout.astro layout.chain app/docs/layout.tsx
@@ -15,11 +16,13 @@ create     src/layouts/RootLayout.astro layout.chain app/layout.tsx
 transform  src/lib/site.ts module.relocate lib/site.ts
 transform  src/lib/types.ts module.relocate lib/types.ts
 create     src/pages/about.astro route.static-page app/about/page.tsx
+create     src/pages/arrow.astro route.static-page app/arrow/page.tsx
 create     src/pages/changelog.astro route.static-page app/changelog/page.tsx review
 create     src/pages/docs.astro route.static-page app/docs/page.tsx
 create     src/pages/docs/intro.astro route.static-page app/docs/intro/page.tsx
 create     src/pages/index.astro route.static-page app/page.tsx review
 create     src/pages/pricing.astro route.static-page app/(marketing)/pricing/page.tsx
+create     src/pages/statements.astro route.static-page app/statements/page.tsx
 copy       src/styles/globals.css style.relocate app/globals.css
 transform  src/types/api.d.ts module.relocate types/api.d.ts
 transform  src/types/assets.d.ts module.relocate types/assets.d.ts
@@ -33,6 +36,7 @@ task Preserved app/contact/page.tsx: preserved for manual migration: client comp
 task Preserved tests/site.test.ts: preserved for manual migration: tests and repository tooling are outside V1
 task Review app/changelog/page.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)
 task Review app/page.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)
+task Review components/Card.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (attribute-value-serialization)
 task Review components/SiteHeader.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)
 task Review components/Stamp.tsx: converted; check the result, because the conversion relies on assumptions that a review must confirm (module-per-render)
 task NotCopied next.config.mjs: replaced by the generated astro.config.mjs

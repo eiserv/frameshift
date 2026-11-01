@@ -9,16 +9,16 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use frameshift_core::{SourcePath, SourceText, Span};
 use frameshift_emit::{
-    Anchor, AstroComponent, AttributeItem, AttributeName, AttributeValue, ComponentName,
-    ComponentReference, ComponentStrategy, Element, ElementResolver, EmittedText, Expression,
-    ExpressionPiece, FrontmatterItem, HtmlTagName, ImportItem, JsIdentifier, JsxConversion,
+    Anchor, AstroComponent, AttributeItem, AttributeName, AttributeValue, ComponentConversion,
+    ComponentName, ComponentReference, ComponentStrategy, Element, ElementResolver, EmittedText,
+    Expression, ExpressionPiece, FrontmatterItem, HtmlTagName, ImportItem, JsIdentifier,
     NamedImport, PrintOptions, PropMember, PropType, RegionOrigin, SourceId, TagName, TemplateNode,
-    convert_jsx, print_astro_component,
+    convert_component, print_astro_component,
 };
 use frameshift_modules::{ModuleGraph, Resolution};
 use frameshift_syntax::{
-    ChildList, FunctionKind, JsDialect, MetaPropertyKind, NodeId, SourceGoal, SyntaxNodeKind,
-    SyntaxTree, TemplatePart, TypeScriptKind, VariableKind, parse_js_program,
+    ChildList, JsDialect, MetaPropertyKind, NodeId, SourceGoal, SyntaxNodeKind, SyntaxTree,
+    TemplatePart, TypeScriptKind, VariableKind, parse_js_program,
 };
 use frameshift_transform::{Edit, EditOrder, apply_edits};
 
@@ -280,12 +280,70 @@ struct Analysis {
     module_items: Vec<NodeId>,
     // Module declarations that the frontmatter copies.
     module_copies: Vec<NodeId>,
-    // Function body statements that the frontmatter copies.
-    leading: Vec<NodeId>,
     metadata: Option<Metadata>,
-    function: Span,
-    props: Vec<String>,
-    returned: NodeId,
+    function: NodeId,
+}
+
+// Whether a node is a function that can be a component.
+fn is_function(tree: &SyntaxTree<'_>, id: NodeId) -> Result<bool> {
+    Ok(matches!(
+        kind(tree, id)?,
+        SyntaxNodeKind::FunctionDeclaration { .. }
+            | SyntaxNodeKind::FunctionExpression { .. }
+            | SyntaxNodeKind::ArrowFunction { .. }
+    ))
+}
+
+// The name in `export default <name>`, whose declaration is the component.
+fn default_export_name(tree: &SyntaxTree<'_>) -> Result<Option<String>> {
+    for item in program_body(tree)? {
+        if let SyntaxNodeKind::ExportDefault { declaration } = kind(tree, item)?
+            && matches!(kind(tree, declaration)?, SyntaxNodeKind::Identifier { .. })
+        {
+            return Ok(Some(node_text(tree, declaration)?.to_owned()));
+        }
+    }
+    Ok(None)
+}
+
+// The function that a module-level `const` or function declaration holds.
+fn declared_function(tree: &SyntaxTree<'_>, item: NodeId) -> Result<Option<(String, NodeId)>> {
+    if let SyntaxNodeKind::FunctionDeclaration {
+        name: Some(name), ..
+    } = kind(tree, item)?
+    {
+        return Ok(Some((node_text(tree, name)?.to_owned(), item)));
+    }
+    if let Some((name, init)) = const_export(tree, item)?
+        && is_function(tree, init)?
+    {
+        return Ok(Some((name, init)));
+    }
+    Ok(None)
+}
+
+// The parameter list and the statements before the final `return`.
+fn function_parts(tree: &SyntaxTree<'_>, function: NodeId) -> Result<(NodeId, Vec<NodeId>)> {
+    let (parameters, body) = if let SyntaxNodeKind::FunctionDeclaration {
+        parameters, body, ..
+    }
+    | SyntaxNodeKind::FunctionExpression {
+        parameters, body, ..
+    }
+    | SyntaxNodeKind::ArrowFunction {
+        parameters, body, ..
+    } = kind(tree, function)?
+    {
+        (parameters, body)
+    } else {
+        return refuse("the component is not a function");
+    };
+    let mut leading = Vec::new();
+    if let SyntaxNodeKind::FunctionBody { body, .. } = kind(tree, body)? {
+        leading = list(tree, body)?;
+        leading.pop();
+    }
+    Ok((parameters, leading))
 }
 
 struct Resolver {
@@ -318,11 +376,10 @@ pub(crate) fn component_name(path: &str, text: &SourceText, limits: &Limits) -> 
         else {
             continue;
         };
-        if let SyntaxNodeKind::FunctionDeclaration {
-            name: Some(name), ..
-        } = kind(&tree, declaration)?
-        {
-            names.push(node_text(&tree, name)?.to_owned());
+        if let Some((name, _)) = declared_function(&tree, declaration)? {
+            names.push(name);
+        } else if matches!(kind(&tree, declaration)?, SyntaxNodeKind::Identifier { .. }) {
+            names.push(node_text(&tree, declaration)?.to_owned());
         } else {
             return refuse("a component module exports something other than a function");
         }
@@ -380,9 +437,10 @@ pub(crate) fn astro(
     if binds_any(&tree, tree.root(), &generated)? {
         return refuse("the file already binds a name that the conversion generates");
     }
-    check_frontmatter_scope(&tree, &analysis)?;
+    let (parameters, leading) = function_parts(&tree, analysis.function)?;
+    check_frontmatter_scope(&tree, &analysis, parameters, &leading)?;
     let anchor = |span: Span| Anchor { source, span };
-    let function_anchor = anchor(analysis.function);
+    let function_anchor = anchor(node_span(&tree, analysis.function)?);
     let mut frontmatter = Vec::new();
     let mut resolver = Resolver {
         link: None,
@@ -408,22 +466,26 @@ pub(crate) fn astro(
             }
         }
     }
-    let children = analysis.props.iter().any(|prop| prop == "children");
-    let mut props: Vec<String> = analysis
-        .props
-        .iter()
-        .filter(|prop| prop.as_str() != "children")
-        .cloned()
-        .collect();
+    // A component's whole parameter pattern reads `Astro.props`. Pages and
+    // layouts receive route values instead, so their pattern is checked here
+    // and never copied.
+    let mut props: Vec<String> = Vec::new();
+    if !matches!(role, Role::Component) {
+        let names = self::props(&tree, parameters)?;
+        if matches!(role, Role::Page { .. }) && !names.is_empty() {
+            return refuse("pages that read props are not converted by migrate v0");
+        }
+        props = names
+            .into_iter()
+            .filter(|name| name != "children")
+            .collect();
+    }
     match role {
         Role::Page {
             layout_name,
             layout_output,
             ..
         } => {
-            if !analysis.props.is_empty() {
-                return refuse("pages that read props are not converted by migrate v0");
-            }
             frontmatter.push(FrontmatterItem::Import(ImportItem {
                 default: Some(identifier(layout_name)?),
                 named: Vec::new(),
@@ -480,9 +542,6 @@ pub(crate) fn astro(
             }
         }
     }
-    if children && matches!(role, Role::Page { .. }) {
-        return refuse("pages do not render children");
-    }
     if !props.is_empty() {
         frontmatter.push(FrontmatterItem::PropsBinding {
             names: props
@@ -498,15 +557,20 @@ pub(crate) fn astro(
             .iter()
             .map(|span| FrontmatterItem::Copied(anchor(*span))),
     );
-    check_links(&tree, resolver.link.as_deref(), analysis.returned)?;
-    let conversion = JsxConversion {
-        children_binding: children.then_some("children"),
-        ..JsxConversion::default()
-    };
-    let markup = convert_jsx(&tree, source, analysis.returned, &conversion, &mut resolver)
-        .map_err(|error| format!("the JSX is outside the converted subset ({error})"))?;
+    check_links(&tree, resolver.link.as_deref(), analysis.function)?;
+    let converted = convert_component(
+        &tree,
+        source,
+        analysis.function,
+        &ComponentConversion::default(),
+        &mut resolver,
+    )
+    .map_err(|error| format!("the component is outside the converted subset ({error})"))?;
+    frontmatter.extend(converted.component.frontmatter.into_iter().filter(|item| {
+        matches!(role, Role::Component) || !matches!(item, FrontmatterItem::PropsPattern(_))
+    }));
     let mut assumptions: Vec<&'static str> =
-        markup.assumptions.iter().map(|a| a.kind.id()).collect();
+        converted.assumptions.iter().map(|a| a.kind.id()).collect();
     // Frontmatter runs on every render, a module once. A v0 page renders once
     // per route, but a layout or component may render many times.
     if !matches!(role, Role::Page { .. }) {
@@ -518,7 +582,7 @@ pub(crate) fn astro(
     }
     assumptions.sort_unstable();
     assumptions.dedup();
-    let mut template = markup.nodes;
+    let mut template = converted.component.template;
     let root_source;
     let sources: Vec<&SourceText> = match role {
         Role::RootLayout => {
@@ -586,22 +650,24 @@ fn binds_any(tree: &SyntaxTree<'_>, id: NodeId, names: &[&str]) -> Result<bool> 
 // A function's parameter and body statements leave their function scope for
 // the module's frontmatter scope, where they must not meet another binding of
 // the same name, and where no copied module declaration may start to read them.
-fn check_frontmatter_scope(tree: &SyntaxTree<'_>, analysis: &Analysis) -> Result<()> {
+fn check_frontmatter_scope(
+    tree: &SyntaxTree<'_>,
+    analysis: &Analysis,
+    parameters: NodeId,
+    leading: &[NodeId],
+) -> Result<()> {
     let mut module = BTreeSet::new();
     for &item in &analysis.module_items {
         bound_names(tree, item, &mut module)?;
     }
     let mut body = BTreeSet::new();
-    for &statement in &analysis.leading {
+    for &statement in leading {
         bound_names(tree, statement, &mut body)?;
     }
-    // `children` becomes the slot and binds nothing in the frontmatter.
-    let props: BTreeSet<String> = analysis
-        .props
-        .iter()
-        .filter(|prop| prop.as_str() != "children")
-        .cloned()
-        .collect();
+    let mut props = BTreeSet::new();
+    bound_names(tree, parameters, &mut props)?;
+    // `children` becomes the slot, which nothing else can read.
+    props.remove("children");
     if !module.is_disjoint(&body) || !module.is_disjoint(&props) || !body.is_disjoint(&props) {
         return refuse("a function binding would share the frontmatter scope with another binding");
     }
@@ -767,6 +833,7 @@ fn analyze(
     role: &Role<'_>,
 ) -> Result<Analysis> {
     let is_component = matches!(role, Role::Component);
+    let default_name = default_export_name(tree)?;
     let mut imports = Vec::new();
     let mut copies = Vec::new();
     let mut module_items = Vec::new();
@@ -802,13 +869,11 @@ fn analyze(
             }
             imports.push(Import::Dropped);
         } else if let SyntaxNodeKind::ExportDeclaration { declaration } = item_kind {
-            if let SyntaxNodeKind::FunctionDeclaration { .. } = kind(tree, declaration)?
-                && is_component
-            {
+            if is_component && let Some((_, found)) = declared_function(tree, declaration)? {
                 if function.is_some() {
                     return refuse("a component module exports several functions");
                 }
-                function = Some(declaration);
+                function = Some(found);
             } else if is_dropped_segment_option(tree, declaration)? {
             } else if let Some(found) =
                 metadata_export(tree, declaration, matches!(role, Role::RootLayout))?
@@ -821,16 +886,31 @@ fn analyze(
                 return refuse("an export other than metadata or the component");
             }
         } else if let SyntaxNodeKind::ExportDefault { declaration } = item_kind {
-            if function.is_some() {
-                return refuse("a module exports several functions");
+            // `export default <name>` names a declaration of this module.
+            if !matches!(kind(tree, declaration)?, SyntaxNodeKind::Identifier { .. }) {
+                if !is_function(tree, declaration)? {
+                    return refuse("the default export is not a function");
+                }
+                if function.is_some() {
+                    return refuse("a module exports several functions");
+                }
+                function = Some(declaration);
             }
-            function = Some(declaration);
         } else if let SyntaxNodeKind::VariableDeclaration {
             kind: VariableKind::Const,
             ..
         }
         | SyntaxNodeKind::FunctionDeclaration { .. } = item_kind
         {
+            if let Some((name, found)) = declared_function(tree, item)?
+                && default_name.as_deref() == Some(name.as_str())
+            {
+                if function.is_some() {
+                    return refuse("a module exports several functions");
+                }
+                function = Some(found);
+                continue;
+            }
             if contains_jsx(tree, item)? {
                 return refuse("module-level JSX is not converted by migrate v0");
             }
@@ -847,64 +927,13 @@ fn analyze(
     let Some(function) = function else {
         return refuse("no exported function component");
     };
-    let SyntaxNodeKind::FunctionDeclaration {
-        name: _,
-        parameters,
-        body,
-        kind: function_kind,
-    } = kind(tree, function)?
-    else {
-        return refuse("the component must be a function declaration");
-    };
-    if !matches!(function_kind, FunctionKind::Normal | FunctionKind::Async) {
-        return refuse("generator components are not converted");
-    }
-    let props = props(tree, parameters)?;
-    let SyntaxNodeKind::FunctionBody {
-        body: statements, ..
-    } = kind(tree, body)?
-    else {
-        return refuse("the component has no function body");
-    };
-    let statements = list(tree, statements)?;
-    let Some((&last, leading)) = statements.split_last() else {
-        return refuse("the component body is empty");
-    };
-    let mut previous_end = node_span(tree, body)?.start() + 1;
-    for &statement in leading {
-        let statement_span = node_span(tree, statement)?;
-        if let Some(comments) = comments_between(tree, previous_end, statement_span.start()) {
-            copies.push(comments);
-        }
-        previous_end = statement_span.end();
-        let SyntaxNodeKind::VariableDeclaration { .. } = kind(tree, statement)? else {
-            return refuse("only declarations may precede the final return");
-        };
-        if contains_jsx(tree, statement)? {
-            return refuse("JSX outside the returned markup is not converted");
-        }
-        copies.push(statement_span);
-    }
-    let last_span = node_span(tree, last)?;
-    if let Some(comments) = comments_between(tree, previous_end, last_span.start()) {
-        copies.push(comments);
-    }
-    let SyntaxNodeKind::ReturnStatement {
-        argument: Some(returned),
-    } = kind(tree, last)?
-    else {
-        return refuse("the body must end with a return of JSX");
-    };
     Ok(Analysis {
         imports,
         copies,
         module_items,
         module_copies,
-        leading: leading.to_vec(),
         metadata,
-        function: node_span(tree, function)?,
-        props,
-        returned,
+        function,
     })
 }
 
