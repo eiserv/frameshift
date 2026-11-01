@@ -113,6 +113,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-103 | The key set of `frameshift.jsonc` | Accepted |
 | D-104 | The rule registry of migrate | Accepted |
 | D-105 | The output manifest | Accepted |
+| D-106 | Replacing managed output | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1217,6 +1218,14 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale:** The document proves where every output file came from and is the base for `--on-existing replace-managed` and `verify`. Reusing the plan's entries keeps one definition of what an output file is.
 - **Tradeoffs:** A manifest holds no timestamps or absolute paths, so it stays deterministic but cannot tell when a run happened. Source spans and output regions from the provenance model are not recorded yet.
 - **Revisit if:** `verify` needs per-region provenance.
+
+### D-106: Replacing managed output
+
+- **Status:** Accepted (2026-11-01), implementing the overwrite policy of section 4.4 of [CLI.md](CLI.md) and section 7 of [SECURITY.md](SECURITY.md).
+- **Decision:** `migrate --on-existing replace-managed` replaces an existing output only if the set of files below it equals the set that `.frameshift/manifest.json` lists plus the manifest itself, and every digest matches. A missing or invalid manifest, a link or special entry, an edited, added, or removed file, and an output inside the source all refuse the run with exit code 4. The replaced tree moves to `.<name>.frameshift-previous` next to the output and is never deleted; an existing tree at that name refuses the run, so the user decides when to remove it. If the second rename fails, the old tree moves back.
+- **Rationale:** The manifest proves that a location is Frameshift's and unchanged, so no manual edit can be lost. Moving instead of deleting keeps every failure recoverable.
+- **Tradeoffs:** A user must remove the moved tree before the next replacement. The manifest is not authenticated, so someone who edits both a file and its digest can pass the check; the policy protects against accidental loss, not against an attacker with write access to the output.
+- **Revisit if:** Repeated regeneration makes removing the moved tree a burden.
 
 ## Technique proposals and related accepted decisions
 

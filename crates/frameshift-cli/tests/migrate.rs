@@ -285,6 +285,48 @@ fn plan_documents_approve_exactly_the_run_they_describe() {
 }
 
 #[test]
+fn replace_managed_replaces_only_unmodified_output() {
+    let root = workspace("static-site", "replace");
+    let mut args = MIGRATE.to_vec();
+    args.extend(["--on-existing", "replace-managed"]);
+    // An absent location is simply written.
+    assert_eq!(call(&root, &args).status.code(), Some(0));
+    let golden = read_tree(&root.join("out"));
+    let previous = root.join(".out.frameshift-previous");
+    // Unmodified output is replaced, and the old tree moves aside.
+    assert_eq!(call(&root, &args).status.code(), Some(0));
+    assert_eq!(read_tree(&root.join("out")), golden);
+    assert_eq!(read_tree(&previous), golden);
+    // The default still refuses, and a moved tree is never overwritten.
+    assert_eq!(call(&root, MIGRATE).status.code(), Some(4));
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    fs::remove_dir_all(&previous).unwrap();
+    // An edited, added, or removed file protects the whole tree.
+    let edited = root.join("out/src/pages/index.astro");
+    let original = fs::read(&edited).unwrap();
+    fs::write(&edited, "edited").unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    assert_eq!(fs::read(&edited).unwrap(), b"edited");
+    fs::write(&edited, &original).unwrap();
+    fs::write(root.join("out/notes.txt"), "mine").unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    fs::remove_file(root.join("out/notes.txt")).unwrap();
+    fs::remove_file(root.join("out/public/robots.txt")).unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    assert!(!previous.exists());
+    // A directory without a manifest is not Frameshift's to replace.
+    fs::remove_dir_all(root.join("out")).unwrap();
+    fs::create_dir_all(root.join("out")).unwrap();
+    fs::write(root.join("out/mine.txt"), "mine").unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    assert!(root.join("out/mine.txt").exists());
+    let mut invalid = MIGRATE.to_vec();
+    invalid.extend(["--on-existing", "overwrite"]);
+    assert_eq!(call(&root, &invalid).status.code(), Some(2));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn clean_staging_recovers_from_an_interrupted_run() {
     let root = workspace("static-site", "staging");
     let staging = root.join(".out.frameshift-staging");

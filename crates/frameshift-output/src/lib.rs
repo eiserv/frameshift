@@ -12,7 +12,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write as _};
 use std::path::{Component, Path, PathBuf};
 
-use frameshift_core::OutputPath;
+use frameshift_core::{OutputPath, RunLimits};
 
 /// Name of the marker file that identifies a Frameshift staging directory.
 pub const STAGING_MARKER: &str = ".frameshift-staging";
@@ -76,6 +76,8 @@ pub struct OutputFile {
 pub struct Destination {
     output: PathBuf,
     staging: PathBuf,
+    // Where a replaced output moves, which never exists beforehand.
+    previous: Option<PathBuf>,
 }
 
 /// Checks that `output` can receive a new tree for the source at `source`.
@@ -90,7 +92,40 @@ pub fn prepare(source: &Path, output: &Path) -> Result<Destination, OutputError>
         return Err(OutputError::refused("the output location already exists"));
     }
     let (output, staging) = locations(output)?;
-    if output.starts_with(&source) || source.starts_with(&output) {
+    checked(&source, output, staging, None)
+}
+
+/// Checks that the existing directory at `output` can be replaced by a new
+/// tree. The caller has established that the tree is safe to replace. The
+/// replaced tree moves next to the output; nothing is deleted.
+pub fn prepare_replacement(source: &Path, output: &Path) -> Result<Destination, OutputError> {
+    let source = fs::canonicalize(source)
+        .map_err(|_| OutputError::refused("the source directory cannot be resolved"))?;
+    let is_directory =
+        fs::symlink_metadata(output).is_ok_and(|metadata| metadata.file_type().is_dir());
+    if !is_directory {
+        return Err(OutputError::refused(
+            "the output location is not a real directory",
+        ));
+    }
+    let (resolved, staging) = locations(output)?;
+    let mut previous = staging.clone();
+    previous.set_extension("frameshift-previous");
+    if fs::symlink_metadata(&previous).is_ok() {
+        return Err(OutputError::refused(
+            "a previous output that was moved aside still exists next to the output",
+        ));
+    }
+    checked(&source, resolved, staging, Some(previous))
+}
+
+fn checked(
+    source: &Path,
+    output: PathBuf,
+    staging: PathBuf,
+    previous: Option<PathBuf>,
+) -> Result<Destination, OutputError> {
+    if output.starts_with(source) || source.starts_with(&output) {
         return Err(OutputError::refused(
             "the output must not be inside the source or contain it",
         ));
@@ -100,7 +135,11 @@ pub fn prepare(source: &Path, output: &Path) -> Result<Destination, OutputError>
             "a staging directory from an interrupted run exists next to the output",
         ));
     }
-    Ok(Destination { output, staging })
+    Ok(Destination {
+        output,
+        staging,
+        previous,
+    })
 }
 
 // The resolved output path and the staging directory next to it.
@@ -179,20 +218,103 @@ pub fn write(destination: &Destination, files: &[OutputFile]) -> Result<(), Outp
             OutputError::io("creating the staging directory failed", &error)
         }
     })?;
-    let result = fill(&destination.staging, files).and_then(|()| {
-        if fs::symlink_metadata(&destination.output).is_ok() {
-            return Err(OutputError::refused(
-                "the output location appeared during the run",
-            ));
-        }
-        rename(&destination.staging, &destination.output)
-            .map_err(|error| OutputError::io("moving the output into place failed", &error))
-    });
+    let result = fill(&destination.staging, files).and_then(|()| commit(destination));
     if result.is_err() {
         // Only this run's own staging directory is removed.
         let _ = fs::remove_dir_all(&destination.staging);
     }
     result
+}
+
+fn commit(destination: &Destination) -> Result<(), OutputError> {
+    let failed = |error: &io::Error| OutputError::io("moving the output into place failed", error);
+    let Some(previous) = &destination.previous else {
+        if fs::symlink_metadata(&destination.output).is_ok() {
+            return Err(OutputError::refused(
+                "the output location appeared during the run",
+            ));
+        }
+        return rename(&destination.staging, &destination.output).map_err(|e| failed(&e));
+    };
+    rename(&destination.output, previous).map_err(|e| failed(&e))?;
+    if let Err(error) = rename(&destination.staging, &destination.output) {
+        // The replaced tree goes back, so a failed run changes nothing.
+        let _ = rename(previous, &destination.output);
+        return Err(failed(&error));
+    }
+    Ok(())
+}
+
+/// Calls `visit` with every file below `root`, by slash-separated relative
+/// path, in byte order. A link or any other entry that is not a regular file
+/// or directory stops the walk, and so does exceeding `limits`.
+pub fn visit_tree(
+    root: &Path,
+    limits: RunLimits,
+    visit: &mut dyn FnMut(&str, &[u8]),
+) -> Result<(), OutputError> {
+    let mut files = 0;
+    let mut total = 0;
+    walk(root, "", 0, limits, &mut files, &mut total, visit)
+}
+
+fn walk(
+    directory: &Path,
+    prefix: &str,
+    depth: usize,
+    limits: RunLimits,
+    files: &mut usize,
+    total: &mut u64,
+    visit: &mut dyn FnMut(&str, &[u8]),
+) -> Result<(), OutputError> {
+    let unreadable =
+        |error: &io::Error| OutputError::io("reading the existing output failed", error);
+    let too_large = || OutputError::refused("the existing output exceeds the run limits");
+    if depth > limits.max_directory_depth {
+        return Err(too_large());
+    }
+    let mut entries = fs::read_dir(directory)
+        .map_err(|e| unreadable(&e))?
+        .collect::<io::Result<Vec<_>>>()
+        .map_err(|e| unreadable(&e))?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+    for entry in entries {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            return Err(OutputError::refused(
+                "the existing output holds a name that is not valid UTF-8",
+            ));
+        };
+        let relative = format!("{prefix}{name}");
+        let kind = entry.file_type().map_err(|e| unreadable(&e))?;
+        if kind.is_dir() {
+            walk(
+                &entry.path(),
+                &format!("{relative}/"),
+                depth + 1,
+                limits,
+                files,
+                total,
+                visit,
+            )?;
+        } else if kind.is_file() {
+            *files += 1;
+            let bytes = fs::read(entry.path()).map_err(|e| unreadable(&e))?;
+            *total += bytes.len() as u64;
+            if *files > limits.max_files
+                || bytes.len() as u64 > limits.max_file_bytes
+                || *total > limits.max_total_bytes
+            {
+                return Err(too_large());
+            }
+            visit(&relative, &bytes);
+        } else {
+            return Err(OutputError::refused(
+                "the existing output holds a link or another special entry",
+            ));
+        }
+    }
+    Ok(())
 }
 
 // On Windows, a scanner or indexer may briefly hold files of the new tree
@@ -294,6 +416,66 @@ mod tests {
         fs::create_dir(root.join(".out.frameshift-staging")).unwrap();
         let error = prepare(&source, &root.join("out")).unwrap_err();
         assert!(error.to_string().contains("staging"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn replacement_moves_the_old_tree_aside() {
+        let root = temporary("replace");
+        let out = root.join("out");
+        let source = root.join("source");
+        write(&prepare(&source, &out).unwrap(), &[file("a.txt", b"old")]).unwrap();
+        let destination = prepare_replacement(&source, &out).unwrap();
+        write(&destination, &[file("a.txt", b"new")]).unwrap();
+        assert_eq!(fs::read(out.join("a.txt")).unwrap(), b"new");
+        let previous = root.join(".out.frameshift-previous");
+        assert_eq!(fs::read(previous.join("a.txt")).unwrap(), b"old");
+        // The moved tree is never overwritten by a second replacement.
+        assert!(prepare_replacement(&source, &out).is_err());
+        fs::remove_dir_all(&previous).unwrap();
+        assert!(prepare_replacement(&source, &root.join("missing")).is_err());
+        assert!(prepare_replacement(&source, &source).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_failed_replacement_keeps_the_old_tree() {
+        let root = temporary("replace-fail");
+        let out = root.join("out");
+        let source = root.join("source");
+        write(&prepare(&source, &out).unwrap(), &[file("a.txt", b"old")]).unwrap();
+        let destination = prepare_replacement(&source, &out).unwrap();
+        // Duplicate paths fail in the staging directory, before the commit.
+        assert!(write(&destination, &[file("a", b"1"), file("a", b"2")]).is_err());
+        assert_eq!(fs::read(out.join("a.txt")).unwrap(), b"old");
+        assert!(!root.join(".out.frameshift-previous").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn visiting_a_tree_is_ordered_and_bounded() {
+        let root = temporary("visit");
+        let tree = root.join("tree");
+        fs::create_dir_all(tree.join("b")).unwrap();
+        fs::write(tree.join("b/c.txt"), "c").unwrap();
+        fs::write(tree.join("a.txt"), "a").unwrap();
+        let mut seen = Vec::new();
+        visit_tree(&tree, RunLimits::default(), &mut |path, bytes| {
+            seen.push((path.to_owned(), bytes.to_vec()));
+        })
+        .unwrap();
+        assert_eq!(
+            seen,
+            [
+                ("a.txt".to_owned(), b"a".to_vec()),
+                ("b/c.txt".to_owned(), b"c".to_vec())
+            ]
+        );
+        let limits = RunLimits {
+            max_files: 1,
+            ..RunLimits::default()
+        };
+        assert!(visit_tree(&tree, limits, &mut |_, _| {}).is_err());
         fs::remove_dir_all(root).unwrap();
     }
 

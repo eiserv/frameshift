@@ -10,6 +10,7 @@
 //! through `frameshift-output`, into a new directory outside the source.
 
 mod convert;
+mod managed;
 mod plan_document;
 pub mod rules;
 mod scaffold;
@@ -225,6 +226,23 @@ impl From<frameshift_output::OutputError> for MigrateError {
 /// Checks the output location without creating anything.
 pub fn check_output(source: &Path, output: &Path) -> Result<Destination, MigrateError> {
     Ok(frameshift_output::prepare(source, output)?)
+}
+
+/// Checks that the tree at `output` may be replaced: an absent location is
+/// checked as new, and an existing one must be exactly what its manifest
+/// records, so no manual edit can be lost (`D-106`).
+pub fn check_replacement(
+    source: &Path,
+    output: &Path,
+    limits: &Limits,
+) -> Result<Destination, MigrateError> {
+    if std::fs::symlink_metadata(output).is_err() {
+        return check_output(source, output);
+    }
+    // The location is checked first, so a tree inside the source is never read.
+    let destination = frameshift_output::prepare_replacement(source, output)?;
+    managed::check(output, limits)?;
+    Ok(destination)
 }
 
 /// Removes the marked staging directory that an interrupted run left next to

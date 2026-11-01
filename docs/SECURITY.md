@@ -146,7 +146,7 @@ There is no boundary to the network in Frameshift itself. A future optional mode
 - The output location must not exist or must be empty, unless `--on-existing replace-managed` applies.
 - The output must not be the source, inside the source, or contain the source. It must not be a filesystem root or the user's home directory.
 - Writes go to a staging directory next to the output, then are committed atomically by rename.
-- `replace-managed` requires a valid Frameshift manifest, and every file must still match its recorded hash. Modified output is never replaced (`FS7004`). The previous output is moved aside, not deleted.
+- `replace-managed` requires a valid Frameshift manifest, and every file must still match its recorded hash. Modified output is never replaced (`FS7004`). The previous output is moved aside, not deleted (implemented, `D-106`). The manifest is not authenticated, so this protects against accidental loss, not against an attacker with write access to the output.
 - Staging cleanup removes only directories that carry Frameshift's staging marker.
 - Output paths are validated: no traversal, no absolute paths, no drive letters or alternate data streams, no Windows reserved names, no control characters, and no collisions that differ only in case or Unicode normalization.
 
