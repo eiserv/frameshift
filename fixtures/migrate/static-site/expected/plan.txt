@@ -10,6 +10,8 @@ copy       public/paper.svg asset.verbatim public/paper.svg
 copy       public/robots.txt asset.verbatim public/robots.txt
 transform  src/components/Badge.tsx component.preact-static components/Badge.tsx
 create     src/components/Card.astro component.astro components/Card.tsx review
+create     src/components/Panel.astro component.astro components/Panel.tsx review
+copy       src/components/Panel.module.css style.relocate components/Panel.module.css
 create     src/components/SiteHeader.astro component.astro components/SiteHeader.tsx review
 create     src/components/Stamp.astro component.astro components/Stamp.tsx review
 create     src/layouts/DocsLayout.astro layout.chain app/docs/layout.tsx
@@ -38,6 +40,7 @@ task Preserved tests/site.test.ts: preserved for manual migration: tests and rep
 task Review app/changelog/page.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)
 task Review app/page.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)
 task Review components/Card.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (attribute-value-serialization)
+task Review components/Panel.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (attribute-value-serialization)
 task Review components/SiteHeader.tsx: converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)
 task Review components/Stamp.tsx: converted; check the result, because the conversion relies on assumptions that a review must confirm (module-per-render)
 task NotCopied next.config.mjs: replaced by the generated astro.config.mjs

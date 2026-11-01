@@ -1,0 +1,7 @@
+.panel {
+  padding: 1rem;
+}
+
+.panel :global(a) {
+  color: inherit;
+}

@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "planHash": "@PLAN_HASH@",
   "binding": {
-    "snapshot": "sha256:392a22ad93d5e9a2d85f8c0859ed816dcc7134bf2562e2930a4eaba5ca08f40c",
+    "snapshot": "sha256:ecb45733676a5af1501a421af68d2627880b7e636061c66269a19e19b9248484",
     "engineVersion": "@ENGINE_VERSION@",
     "ruleset": "nextjs-to-astro-preact/assessment-v1",
     "knowledgeBases": [
@@ -27,8 +27,8 @@
       "ruleVersion": 1,
       "source": null,
       "review": false,
-      "size": 2514,
-      "sha256": "sha256:5b96fddcbf6a7c4b4cde7c833dc415ca301ef0e3210451c96c378260a1e797ea"
+      "size": 2707,
+      "sha256": "sha256:37f6396e319d029df2a62bc14e61f79a2ff86a745be86d9f22e062c292165dae"
     },
     {
       "kind": "preserve",
@@ -129,6 +129,26 @@
       "review": true,
       "size": 140,
       "sha256": "sha256:9decbb8f327c8f1fe90a3982f45a463b0a27125541cb6eaf2608eda4673c2cd3"
+    },
+    {
+      "kind": "create",
+      "output": "src/components/Panel.astro",
+      "rule": "component.astro",
+      "ruleVersion": 1,
+      "source": "components/Panel.tsx",
+      "review": true,
+      "size": 137,
+      "sha256": "sha256:8be4bc314d627aa8c7be113986a4199856ad05ae5591237a3a8d5943c3e3f71a"
+    },
+    {
+      "kind": "copy",
+      "output": "src/components/Panel.module.css",
+      "rule": "style.relocate",
+      "ruleVersion": 1,
+      "source": "components/Panel.module.css",
+      "review": false,
+      "size": 69,
+      "sha256": "sha256:e3acbf3d4371bb2224af544ca187c09a5de056759bcca4eee781e611d0a229f5"
     },
     {
       "kind": "create",
@@ -267,8 +287,8 @@
       "ruleVersion": 1,
       "source": "app/statements/page.tsx",
       "review": false,
-      "size": 367,
-      "sha256": "sha256:4b4f039977c24238866718114a89e38267ee054d2399cf987193d5b835ff4934"
+      "size": 445,
+      "sha256": "sha256:6990ccfe4cbc33314638ec3fed8a4ac83af8fad153bb208455ca7b6ae6b37f98"
     },
     {
       "kind": "copy",

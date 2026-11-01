@@ -1,0 +1,8 @@
+---
+import styles from './Panel.module.css';
+
+const { children } = Astro.props;
+---
+<section class={styles.panel}>
+  <slot />
+</section>

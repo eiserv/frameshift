@@ -1,4 +1,5 @@
 ---
+import Panel from '../components/Panel.astro';
 import RootLayout from '../layouts/RootLayout.astro';
 
 const items = ['first', 'second'];
@@ -6,9 +7,11 @@ const items = ['first', 'second'];
 items.reverse();
 ---
 <RootLayout title="Statements | Lumen Studio" description="A small, fictional design studio.">
-  <ul>
-    {items.map((item) => (
-        <li>{`${item}`}</li>
-      ))}
-  </ul>
+  <Panel>
+    <ul>
+      {items.map((item) => (
+          <li>{`${item}`}</li>
+        ))}
+    </ul>
+  </Panel>
 </RootLayout>
