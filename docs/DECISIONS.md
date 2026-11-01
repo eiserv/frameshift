@@ -112,6 +112,9 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-102 | M6 plan document, plan hash, and `frameshift plan` | Accepted |
 | D-103 | The key set of `frameshift.jsonc` | Accepted |
 | D-104 | The rule registry of migrate | Accepted |
+| D-105 | The output manifest | Accepted |
+| D-106 | Replacing managed output | Accepted |
+| D-107 | The structural postcondition of generated scripts | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1208,6 +1211,30 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Rationale:** Rule selection in migrate v0 is one classification function, so exclusivity holds by construction and the plan-time check is its fail-closed proof. The declarative preconditions and the feature ID index of ARCHITECTURE.md section 12 add nothing until several rules can match one occurrence, so they stay planned and are not simulated by metadata without an effect.
 - **Tradeoffs:** Selection logic is not data yet, so `rules` lists what exists without its preconditions, and rule coverage metrics stay at their current meaning.
 - **Revisit if:** M8 or M9 adds rules that can match the same occurrence. Then preconditions and the `excludes` relation become data.
+
+### D-105: The output manifest
+
+- **Status:** Accepted (2026-11-01), under the owner's instruction to continue the roadmap with M7.
+- **Decision:** Every migration writes `.frameshift/manifest.json`, a `frameshift.manifest` v1 document ([schema](../schemas/frameshift.manifest.schema.json)) with the plan hash, the plan's binding, and one entry per other output file: kind, path, rule and version, source, review flag, size, and SHA-256. It is an operation of the plan with the rule `report.manifest`, but it is outside the plan document and the plan hash, because it names that hash.
+- **Rationale:** The document proves where every output file came from and is the base for `--on-existing replace-managed` and `verify`. Reusing the plan's entries keeps one definition of what an output file is.
+- **Tradeoffs:** A manifest holds no timestamps or absolute paths, so it stays deterministic but cannot tell when a run happened. Source spans and output regions from the provenance model are not recorded yet.
+- **Revisit if:** `verify` needs per-region provenance.
+
+### D-106: Replacing managed output
+
+- **Status:** Accepted (2026-11-01), implementing the overwrite policy of section 4.4 of [CLI.md](CLI.md) and section 7 of [SECURITY.md](SECURITY.md).
+- **Decision:** `migrate --on-existing replace-managed` replaces an existing output only if the set of files below it equals the set that `.frameshift/manifest.json` lists plus the manifest itself, and every digest matches. A missing or invalid manifest, a link or special entry, an edited, added, or removed file, and an output inside the source all refuse the run with exit code 4. The replaced tree moves to `.<name>.frameshift-previous` next to the output and is never deleted; an existing tree at that name refuses the run, so the user decides when to remove it. If the second rename fails, the old tree moves back.
+- **Rationale:** The manifest proves that a location is Frameshift's and unchanged, so no manual edit can be lost. Moving instead of deleting keeps every failure recoverable.
+- **Tradeoffs:** A user must remove the moved tree before the next replacement. The manifest is not authenticated, so someone who edits both a file and its digest can pass the check; the policy protects against accidental loss, not against an attacker with write access to the output.
+- **Revisit if:** Repeated regeneration makes removing the moved tree a burden.
+
+### D-107: The structural postcondition of generated scripts
+
+- **Status:** Accepted (2026-11-01), implementing the postconditions of section 12.2 of [ARCHITECTURE.md](ARCHITECTURE.md) for the rules that exist.
+- **Decision:** Before a plan is final, every generated script and the frontmatter of every generated Astro file must parse again in a strict parse. A runtime import, re-export, or literal dynamic import must not name `next` or `next/*`, and a relative one must name a file that the plan writes. A `use client` or `use server` directive must not remain. A file that fails is preserved with its reason, and preservation propagates as usual. Type-only imports and declaration files are not checked for imports, because they do not exist at run time.
+- **Rationale:** The rules are designed to make these failures impossible, so this is a net for rule defects. Preserving keeps a defect from reaching the output and reports it as a manual task, as the fail-closed rule requires.
+- **Tradeoffs:** The Astro template is not re-parsed, because no template parser exists. A failure appears as a preserved file with a generic reason, not as a `failed` unit or `FS5001`, because units have no such state yet. `frameshift verify` remains planned.
+- **Revisit if:** M10 adds an Astro template parser and `verify`.
 
 ## Technique proposals and related accepted decisions
 

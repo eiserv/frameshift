@@ -15,6 +15,9 @@ use crate::limits::Limits;
 /// The version of the `frameshift.plan` document.
 pub const PLAN_SCHEMA_VERSION: u64 = 1;
 
+/// The version of the `frameshift.manifest` document.
+pub const MANIFEST_SCHEMA_VERSION: u64 = 1;
+
 // Starts the hashed stream, so this hash can equal no other Frameshift digest.
 const HASH_DOMAIN: &[u8] = b"frameshift.plan.v1\n";
 
@@ -37,10 +40,11 @@ pub struct Binding {
     pub package: Option<SourcePath>,
 }
 
-/// The hash and the printed document of one plan.
+/// The hash, the printed document, and the manifest of one plan.
 pub(super) struct Printed {
     pub(super) hash: Sha256Digest,
     pub(super) document: String,
+    pub(super) manifest: Vec<u8>,
 }
 
 fn too_large() -> MigrateError {
@@ -121,8 +125,8 @@ pub(super) fn print(
         ("schemaVersion", V::Number(PLAN_SCHEMA_VERSION)),
     ];
     let content = [
-        ("binding", binding),
-        ("operations", V::Array(entries)),
+        ("binding", binding.clone()),
+        ("operations", V::Array(entries.clone())),
         ("tasks", V::Array(tasks)),
     ];
     let max = limits.analysis.max_report_bytes;
@@ -140,5 +144,20 @@ pub(super) fn print(
         .cloned()
         .collect();
     let document = document::print_bounded(&V::Object(members), max).ok_or_else(too_large)?;
-    Ok(Printed { hash, document })
+    // The manifest names the plan by its hash, so the plan cannot cover it.
+    let manifest = V::Object(vec![
+        ("kind", V::string("frameshift.manifest")),
+        ("schemaVersion", V::Number(MANIFEST_SCHEMA_VERSION)),
+        member,
+        ("binding", binding),
+        ("files", V::Array(entries)),
+    ]);
+    let manifest = document::print_bounded(&manifest, max)
+        .ok_or_else(too_large)?
+        .into_bytes();
+    Ok(Printed {
+        hash,
+        document,
+        manifest,
+    })
 }

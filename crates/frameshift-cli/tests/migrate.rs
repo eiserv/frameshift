@@ -76,6 +76,20 @@ fn workspace(case: &str, label: &str) -> PathBuf {
     root
 }
 
+// The manifest holds release-dependent members; the golden has placeholders.
+fn normalize_manifest(files: &mut BTreeMap<String, Vec<u8>>) {
+    let key = ".frameshift/manifest.json";
+    let text = String::from_utf8(files[key].clone()).unwrap();
+    let start = text.find("\"planHash\": \"").unwrap() + "\"planHash\": \"".len();
+    let hash = &text[start..start + text[start..].find('"').unwrap()];
+    let version = frameshift_engine::version::info().engine_version;
+    let text = text.replace(hash, "@PLAN_HASH@").replace(
+        &format!("\"engineVersion\": \"{version}\""),
+        "\"engineVersion\": \"@ENGINE_VERSION@\"",
+    );
+    files.insert(key.to_owned(), text.into_bytes());
+}
+
 fn call(root: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_frameshift"))
         .current_dir(root)
@@ -115,7 +129,9 @@ fn migration_writes_the_golden_tree_and_refuses_unsafe_outputs() {
         assert_eq!(output.status.code(), Some(0), "{case}");
         assert!(output.stdout.starts_with(b"Migrated: "));
         let golden = read_tree(&fixtures().join(&case).join("expected/output"));
-        assert_eq!(read_tree(&root.join("out")), golden, "{case}");
+        let mut written = read_tree(&root.join("out"));
+        normalize_manifest(&mut written);
+        assert_eq!(written, golden, "{case}");
         // An existing output and an output inside the source are refused.
         for out in ["out", "source/out"] {
             let args = ["migrate", "source", "--to", "astro-preact", "--out", out];
@@ -256,7 +272,9 @@ fn plan_documents_approve_exactly_the_run_they_describe() {
         assert_eq!(verified.status.code(), Some(0), "{case}");
         assert!(String::from_utf8_lossy(&verified.stdout).starts_with("Plan "));
         let golden = read_tree(&fixtures().join(&case).join("expected/output"));
-        assert_eq!(read_tree(&root.join("verified")), golden, "{case}");
+        let mut written = read_tree(&root.join("verified"));
+        normalize_manifest(&mut written);
+        assert_eq!(written, golden, "{case}");
 
         fs::write(root.join("source/added.txt"), "changed").unwrap();
         let stale = approved("stale", "plan.json");
@@ -264,6 +282,90 @@ fn plan_documents_approve_exactly_the_run_they_describe() {
         assert!(!root.join("stale").exists(), "{case}");
         fs::remove_dir_all(root).unwrap();
     }
+}
+
+#[test]
+fn replace_managed_replaces_only_unmodified_output() {
+    let root = workspace("static-site", "replace");
+    let mut args = MIGRATE.to_vec();
+    args.extend(["--on-existing", "replace-managed"]);
+    // An absent location is simply written.
+    assert_eq!(call(&root, &args).status.code(), Some(0));
+    let golden = read_tree(&root.join("out"));
+    let previous = root.join(".out.frameshift-previous");
+    // Unmodified output is replaced, and the old tree moves aside.
+    assert_eq!(call(&root, &args).status.code(), Some(0));
+    assert_eq!(read_tree(&root.join("out")), golden);
+    assert_eq!(read_tree(&previous), golden);
+    // The default still refuses, and a moved tree is never overwritten.
+    assert_eq!(call(&root, MIGRATE).status.code(), Some(4));
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    fs::remove_dir_all(&previous).unwrap();
+    // An edited, added, or removed file protects the whole tree.
+    let edited = root.join("out/src/pages/index.astro");
+    let original = fs::read(&edited).unwrap();
+    fs::write(&edited, "edited").unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    assert_eq!(fs::read(&edited).unwrap(), b"edited");
+    fs::write(&edited, &original).unwrap();
+    fs::write(root.join("out/notes.txt"), "mine").unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    fs::remove_file(root.join("out/notes.txt")).unwrap();
+    fs::remove_file(root.join("out/public/robots.txt")).unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    assert!(!previous.exists());
+    // A directory without a manifest is not Frameshift's to replace.
+    fs::remove_dir_all(root.join("out")).unwrap();
+    fs::create_dir_all(root.join("out")).unwrap();
+    fs::write(root.join("out/mine.txt"), "mine").unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    assert!(root.join("out/mine.txt").exists());
+    let mut invalid = MIGRATE.to_vec();
+    invalid.extend(["--on-existing", "overwrite"]);
+    assert_eq!(call(&root, &invalid).status.code(), Some(2));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn strict_refuses_unresolved_units_and_show_files_lists_a_real_run() {
+    let root = workspace("static-site", "strict");
+    let mut strict = MIGRATE.to_vec();
+    strict.push("--strict");
+    // The fixture preserves a dynamic route that the analysis rates unsupported.
+    let refused = call(&root, &strict);
+    assert_eq!(refused.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&refused.stdout).starts_with("Nothing written: "));
+    assert!(!root.join("out").exists());
+    let mut show = MIGRATE.to_vec();
+    show.push("--show-files");
+    let listed = call(&root, &show);
+    assert_eq!(listed.status.code(), Some(0));
+    let text = String::from_utf8(listed.stdout).unwrap();
+    assert!(text.contains("layout.chain  from app/layout.tsx"), "{text}");
+    assert!(text.contains("Migrated: "), "{text}");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn clean_staging_recovers_from_an_interrupted_run() {
+    let root = workspace("static-site", "staging");
+    let staging = root.join(".out.frameshift-staging");
+    fs::create_dir(&staging).unwrap();
+    fs::write(staging.join("notes.txt"), "kept").unwrap();
+    let mut args = MIGRATE.to_vec();
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    args.push("--clean-staging");
+    // Without the marker, the directory is not Frameshift's to remove.
+    assert_eq!(call(&root, &args).status.code(), Some(4));
+    assert!(staging.join("notes.txt").exists());
+    fs::write(staging.join(".frameshift-staging"), "").unwrap();
+    assert_eq!(call(&root, &args).status.code(), Some(0));
+    assert!(!staging.exists());
+    assert!(root.join("out/.frameshift/manifest.json").exists());
+    // A dry run writes nothing, so it cannot clean.
+    args.push("--dry-run");
+    assert_eq!(call(&root, &args).status.code(), Some(2));
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

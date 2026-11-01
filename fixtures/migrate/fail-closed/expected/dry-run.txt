@@ -1,5 +1,6 @@
 Dry run: nothing will be written.
 config     .frameshift/SUMMARY.md  report.summary
+config     .frameshift/manifest.json  report.manifest
 preserve   .frameshift/unmigrated/src/app/captured/page.tsx  preserve.unmigrated  from src/app/captured/page.tsx
 preserve   .frameshift/unmigrated/src/app/counter/page.tsx  preserve.unmigrated  from src/app/counter/page.tsx
 preserve   .frameshift/unmigrated/src/app/hoisted/page.tsx  preserve.unmigrated  from src/app/hoisted/page.tsx
@@ -20,5 +21,5 @@ create     src/layouts/RootLayout.astro  layout.chain  from src/app/layout.tsx
 transform  src/lib/greeting.ts  module.relocate  from src/lib/greeting.ts
 create     src/pages/index.astro  route.static-page  from src/app/page.tsx  review
 config     tsconfig.json  config.tsconfig
-21 operations planned (2 converted to Astro, 13 preserved); 0 files written.
+22 operations planned (2 converted to Astro, 13 preserved); 0 files written.
 Manual tasks: 17. See .frameshift/SUMMARY.md in the output directory.

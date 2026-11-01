@@ -88,6 +88,11 @@ pub const RULES: &[Rule] = &[
         "Copies an unmigrated file below .frameshift/unmigrated/ and adds a manual task.",
     ),
     rule(
+        "report.manifest",
+        OperationKind::Config,
+        "Generates .frameshift/manifest.json with the versions, plan hash, and file digests.",
+    ),
+    rule(
         "report.summary",
         OperationKind::Config,
         "Generates .frameshift/SUMMARY.md with the results and manual tasks.",

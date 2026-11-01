@@ -10,9 +10,11 @@
 //! through `frameshift-output`, into a new directory outside the source.
 
 mod convert;
+mod managed;
 mod plan_document;
 pub mod rules;
 mod scaffold;
+mod structure;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -27,7 +29,7 @@ use crate::analysis::{self, AnalyzeErrorKind, AnalyzeOptions, FileClass, Strateg
 use crate::limits::Limits;
 use crate::project::FileState;
 use convert::{Context, Role as AstroRole, RootFacts, Target, TargetKind};
-pub use plan_document::{Binding, PLAN_SCHEMA_VERSION};
+pub use plan_document::{Binding, MANIFEST_SCHEMA_VERSION, PLAN_SCHEMA_VERSION};
 
 pub use frameshift_output::Destination;
 
@@ -39,6 +41,9 @@ pub const UNMIGRATED: &str = ".frameshift/unmigrated";
 
 /// Path of the human-readable summary in the output.
 pub const SUMMARY: &str = ".frameshift/SUMMARY.md";
+
+/// The provenance record that every migration writes.
+pub const MANIFEST: &str = ".frameshift/manifest.json";
 
 /// Explicit inputs to one migration plan.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -145,6 +150,9 @@ pub struct Plan {
     pub tasks: Vec<ManualTask>,
     /// What the plan depends on.
     pub binding: Binding,
+    /// Assessed units rated `unknown` or `unsupported`, which `--strict`
+    /// refuses to commit.
+    pub unresolved_units: usize,
     hash: Sha256Digest,
     document: String,
 }
@@ -222,6 +230,29 @@ impl From<frameshift_output::OutputError> for MigrateError {
 /// Checks the output location without creating anything.
 pub fn check_output(source: &Path, output: &Path) -> Result<Destination, MigrateError> {
     Ok(frameshift_output::prepare(source, output)?)
+}
+
+/// Checks that the tree at `output` may be replaced: an absent location is
+/// checked as new, and an existing one must be exactly what its manifest
+/// records, so no manual edit can be lost (`D-106`).
+pub fn check_replacement(
+    source: &Path,
+    output: &Path,
+    limits: &Limits,
+) -> Result<Destination, MigrateError> {
+    if std::fs::symlink_metadata(output).is_err() {
+        return check_output(source, output);
+    }
+    // The location is checked first, so a tree inside the source is never read.
+    let destination = frameshift_output::prepare_replacement(source, output)?;
+    managed::check(output, limits)?;
+    Ok(destination)
+}
+
+/// Removes the marked staging directory that an interrupted run left next to
+/// `output`, and returns whether there was one.
+pub fn clean_staging(output: &Path) -> Result<bool, MigrateError> {
+    Ok(frameshift_output::clean_staging(output)?)
 }
 
 /// Writes every operation of `plan` into the checked destination, through
@@ -778,6 +809,26 @@ impl<'a> Planner<'a> {
                 }
             }
             if refused.is_empty() {
+                let outputs: BTreeSet<String> = self
+                    .fates
+                    .values()
+                    .filter_map(|fate| match fate {
+                        Fate::Convert(candidate) => Some(candidate.output.clone()),
+                        Fate::Preserve(_) | Fate::NotCopied(_) | Fate::Gitignore => None,
+                    })
+                    .collect();
+                for (path, output) in &rendered {
+                    let Some(Fate::Convert(candidate)) = self.fates.get(path) else {
+                        continue;
+                    };
+                    if let Err(reason) =
+                        structure::check(&candidate.output, &output.bytes, &outputs, self.limits)
+                    {
+                        refused.push((path.clone(), reason));
+                    }
+                }
+            }
+            if refused.is_empty() {
                 return Ok(rendered);
             }
             for (path, reason) in refused {
@@ -1115,10 +1166,33 @@ impl<'a> Planner<'a> {
             package: self.package,
         };
         let printed = plan_document::print(&binding, &operations, &tasks, self.limits)?;
+        // The insertion point keeps the operations sorted by output path.
+        let manifest = output(MANIFEST)?;
+        let index = operations
+            .partition_point(|o| o.output.as_str().as_bytes() < manifest.as_str().as_bytes());
+        operations.insert(
+            index,
+            Operation {
+                kind: OperationKind::Config,
+                output: manifest,
+                rule: "report.manifest",
+                source: None,
+                review: false,
+                bytes: printed.manifest,
+            },
+        );
         Ok(Plan {
             operations,
             tasks,
             binding,
+            unresolved_units: self
+                .parts
+                .analysis
+                .assessment
+                .units
+                .iter()
+                .filter(|unit| matches!(unit.status, Status::Unknown | Status::Unsupported))
+                .count(),
             hash: printed.hash,
             document: printed.document,
         })

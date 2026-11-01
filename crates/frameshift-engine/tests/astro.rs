@@ -593,6 +593,14 @@ fn component_props_and_statements_become_frontmatter() {
 fn unsupported_component_bodies_fail_closed() {
     let cases = [
         (
+            "function P() { return ( /* lost */ <p /> ); }",
+            ConvertErrorKind::CommentInMarkup,
+        ),
+        (
+            "const P = () => (<p /> /* lost */);",
+            ConvertErrorKind::CommentInMarkup,
+        ),
+        (
             "async function P({ x }) { const a = await x; if (!a) return null; return <p>{a}</p>; }",
             ConvertErrorKind::UnsupportedBody,
         ),

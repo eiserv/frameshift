@@ -1,5 +1,6 @@
 Dry run: nothing will be written.
 config     .frameshift/SUMMARY.md  report.summary
+config     .frameshift/manifest.json  report.manifest
 preserve   .frameshift/unmigrated/app/blog/[slug]/page.tsx  preserve.unmigrated  from app/blog/[slug]/page.tsx
 preserve   .frameshift/unmigrated/app/contact/page.tsx  preserve.unmigrated  from app/contact/page.tsx
 preserve   .frameshift/unmigrated/tests/site.test.ts  preserve.unmigrated  from tests/site.test.ts
@@ -9,6 +10,9 @@ config     package.json  config.package-manifest
 copy       public/paper.svg  asset.verbatim  from public/paper.svg
 copy       public/robots.txt  asset.verbatim  from public/robots.txt
 transform  src/components/Badge.tsx  component.preact-static  from components/Badge.tsx
+create     src/components/Card.astro  component.astro  from components/Card.tsx  review
+create     src/components/Panel.astro  component.astro  from components/Panel.tsx  review
+copy       src/components/Panel.module.css  style.relocate  from components/Panel.module.css
 create     src/components/SiteHeader.astro  component.astro  from components/SiteHeader.tsx  review
 create     src/components/Stamp.astro  component.astro  from components/Stamp.tsx  review
 create     src/layouts/DocsLayout.astro  layout.chain  from app/docs/layout.tsx
@@ -16,14 +20,16 @@ create     src/layouts/RootLayout.astro  layout.chain  from app/layout.tsx
 transform  src/lib/site.ts  module.relocate  from lib/site.ts
 transform  src/lib/types.ts  module.relocate  from lib/types.ts
 create     src/pages/about.astro  route.static-page  from app/about/page.tsx
+create     src/pages/arrow.astro  route.static-page  from app/arrow/page.tsx
 create     src/pages/changelog.astro  route.static-page  from app/changelog/page.tsx  review
 create     src/pages/docs.astro  route.static-page  from app/docs/page.tsx
 create     src/pages/docs/intro.astro  route.static-page  from app/docs/intro/page.tsx
 create     src/pages/index.astro  route.static-page  from app/page.tsx  review
 create     src/pages/pricing.astro  route.static-page  from app/(marketing)/pricing/page.tsx
+create     src/pages/statements.astro  route.static-page  from app/statements/page.tsx
 copy       src/styles/globals.css  style.relocate  from app/globals.css
 transform  src/types/api.d.ts  module.relocate  from types/api.d.ts
 transform  src/types/assets.d.ts  module.relocate  from types/assets.d.ts
 config     tsconfig.json  config.tsconfig
-26 operations planned (10 converted to Astro, 3 preserved); 0 files written.
-Manual tasks: 10. See .frameshift/SUMMARY.md in the output directory.
+32 operations planned (14 converted to Astro, 3 preserved); 0 files written.
+Manual tasks: 12. See .frameshift/SUMMARY.md in the output directory.

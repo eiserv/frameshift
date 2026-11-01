@@ -31,6 +31,10 @@ pub(crate) struct Options {
     output: PathBuf,
     selection: Selection,
     dry_run: bool,
+    clean_staging: bool,
+    replace_managed: bool,
+    strict: bool,
+    show_files: bool,
     plan: Option<PathBuf>,
 }
 
@@ -51,7 +55,7 @@ enum Show {
     Tasks,
 }
 
-pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] [--to astro-preact] --out <dir> [--package <dir>]\n       [--config <file>|--no-config] [--plan <plan.json>] [--dry-run]\n\
+pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] [--to astro-preact] --out <dir> [--package <dir>]\n       [--config <file>|--no-config] [--plan <plan.json>] [--dry-run] [--show-files] [--strict]\n       [--clean-staging] [--on-existing fail|replace-managed]\n\
 Migrate the Next.js App Router project at <source>, by default the current directory, into a\n\
 new Astro project with Preact at <dir> (migrate v0, D-101). Static pages, layouts,\n\
 and components that the analysis rates auto or review are converted; everything else is\n\
@@ -60,7 +64,12 @@ copied unchanged below .frameshift/unmigrated/ and listed in .frameshift/SUMMARY
 staging directory next to <dir> and renamed into place when complete. The source is never\n\
 modified, and no project code or external tool runs. --plan refuses to continue unless the\n\
 recomputed plan document equals the given one byte for byte; the given file is compared, never\n\
-executed. --dry-run lists the planned files and writes nothing. frameshift.jsonc in <source>\n\
+executed. --dry-run lists the planned files and writes nothing, and --show-files lists them in\n\
+a real run. --strict writes nothing and exits with 1 if any unit is unknown or unsupported.\n\
+--clean-staging first removes\n\
+the marked staging directory of an interrupted run next to <dir>. --on-existing replace-managed\n\
+replaces an existing <dir> only if its manifest records it exactly, and moves the old tree next\n\
+to it instead of deleting it. frameshift.jsonc in <source>\n\
 or the --config file can set the target and the package; flags override it. Exit status: 0 on\n\
 success, 2 for invalid arguments, 3 when the source or configuration cannot be read or the plan\n\
 document differs, 4 when the output location is refused or cannot be written.\n";
@@ -79,14 +88,7 @@ configuration cannot be read, 4 when the plan document cannot be written.\n";
 const OVERVIEW_OPERATIONS: usize = 8;
 
 // Options that CLI.md specifies for later milestones.
-const PLANNED: &[&str] = &[
-    "--strict",
-    "--on-existing",
-    "--clean-staging",
-    "--report",
-    "--show-files",
-    "--env-names",
-];
+const PLANNED: &[&str] = &["--report", "--env-names"];
 
 const VALUE_OPTIONS: &[&str] = &[
     "--to",
@@ -96,6 +98,7 @@ const VALUE_OPTIONS: &[&str] = &[
     "--plan",
     "--show",
     "--config",
+    "--on-existing",
 ];
 
 fn command(args: &[OsString]) -> Option<(usize, &str)> {
@@ -154,8 +157,9 @@ fn parse_command(
     let mut seen = BTreeSet::new();
     let mut operands = Vec::new();
     let (mut target, mut output, mut dry_run, mut help) = (None, None, false, false);
-    let (mut package, mut config, mut no_config) = (None, None, false);
+    let (mut package, mut config, mut no_config, mut clean_staging) = (None, None, false, false);
     let (mut approved, mut show, mut format) = (None, Show::Overview, Format::Text);
+    let (mut replace_managed, mut strict, mut show_files) = (false, false, false);
     let mut i = 0;
     while i < args.len() {
         if i == command {
@@ -182,16 +186,38 @@ fn parse_command(
         if PLANNED.contains(&key) {
             return Err("option is not available in migrate v0");
         }
-        if (planning && matches!(key, "--dry-run" | "--plan")) || (!planning && key == "--show") {
+        if (planning
+            && matches!(
+                key,
+                "--dry-run"
+                    | "--plan"
+                    | "--clean-staging"
+                    | "--on-existing"
+                    | "--strict"
+                    | "--show-files"
+            ))
+            || (!planning && key == "--show")
+        {
             return Err("unknown option; run 'frameshift help' for usage");
         }
-        if matches!(key, "--help" | "--dry-run" | "--no-config") {
+        if matches!(
+            key,
+            "--help"
+                | "--dry-run"
+                | "--no-config"
+                | "--clean-staging"
+                | "--strict"
+                | "--show-files"
+        ) {
             if inline.is_some() {
                 return Err("flag does not accept a value");
             }
             match key {
                 "--help" => help = true,
                 "--dry-run" => dry_run = true,
+                "--clean-staging" => clean_staging = true,
+                "--strict" => strict = true,
+                "--show-files" => show_files = true,
                 _ => no_config = true,
             }
             continue;
@@ -222,6 +248,13 @@ fn parse_command(
         let value = value.to_str().ok_or("option values must be valid UTF-8")?;
         match key {
             "--to" => target = Some(value.to_owned()),
+            "--on-existing" => {
+                replace_managed = match value {
+                    "fail" => false,
+                    "replace-managed" => true,
+                    _ => return Err("--on-existing requires fail or replace-managed"),
+                };
+            }
             "--format" if value == "text" => {}
             "--format" if planning && value == "json" => format = Format::Json,
             "--format" if planning => return Err("--format requires text or json"),
@@ -286,11 +319,18 @@ fn parse_command(
         }));
     }
     let output = output.ok_or("migrate requires --out <dir>")?;
+    if dry_run && clean_staging {
+        return Err("--clean-staging writes, so it cannot be part of a dry run");
+    }
     Ok(Request::Migrate(Options {
         source,
         output,
         selection,
         dry_run,
+        clean_staging,
+        replace_managed,
+        strict,
+        show_files,
         plan: approved,
     }))
 }
@@ -493,7 +533,25 @@ pub(crate) fn run(
             Err(message) => return fail(stderr, 3, message),
         }
     }
-    let destination = match migrate::check_output(source, &options.output) {
+    if options.strict && plan.unresolved_units > 0 {
+        writeln!(
+            stdout,
+            "Nothing written: {} units are unknown or unsupported (--strict).",
+            plan.unresolved_units
+        )?;
+        return Ok(1);
+    }
+    if options.clean_staging
+        && let Err(error) = migrate::clean_staging(&options.output)
+    {
+        return fail(stderr, code(error.kind()), &error.to_string());
+    }
+    let checked = if options.replace_managed {
+        migrate::check_replacement(source, &options.output, &Limits::default())
+    } else {
+        migrate::check_output(source, &options.output)
+    };
+    let destination = match checked {
         Ok(destination) => destination,
         Err(error) => return fail(stderr, code(error.kind()), &error.to_string()),
     };
@@ -514,6 +572,11 @@ pub(crate) fn run(
     } else {
         if let Err(error) = migrate::execute(&plan, &destination) {
             return fail(stderr, code(error.kind()), &error.to_string());
+        }
+        if options.show_files {
+            for operation in &plan.operations {
+                write_operation(stdout, operation)?;
+            }
         }
         writeln!(
             stdout,
@@ -597,7 +660,7 @@ mod tests {
                 "the only available target is astro-preact",
             ),
             (
-                vec!["migrate", "--to", "astro-preact", "--out", "o", "--strict"],
+                vec!["migrate", "--to", "astro-preact", "--out", "o", "--report"],
                 "option is not available in migrate v0",
             ),
             (

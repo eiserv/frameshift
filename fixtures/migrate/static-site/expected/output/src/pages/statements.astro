@@ -1,0 +1,17 @@
+---
+import Panel from '../components/Panel.astro';
+import RootLayout from '../layouts/RootLayout.astro';
+
+const items = ['first', 'second'];
+// An expression statement keeps its place before the markup.
+items.reverse();
+---
+<RootLayout title="Statements | Lumen Studio" description="A small, fictional design studio.">
+  <Panel>
+    <ul>
+      {items.map((item) => (
+          <li>{`${item}`}</li>
+        ))}
+    </ul>
+  </Panel>
+</RootLayout>

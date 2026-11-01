@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "planHash": "@PLAN_HASH@",
   "binding": {
-    "snapshot": "sha256:c6038f37662573e1670fc1f27fc91c0b35e79fe50788b588ffed285a3d047ba0",
+    "snapshot": "sha256:ecb45733676a5af1501a421af68d2627880b7e636061c66269a19e19b9248484",
     "engineVersion": "@ENGINE_VERSION@",
     "ruleset": "nextjs-to-astro-preact/assessment-v1",
     "knowledgeBases": [
@@ -27,8 +27,8 @@
       "ruleVersion": 1,
       "source": null,
       "review": false,
-      "size": 2322,
-      "sha256": "sha256:c91dead2bc92213e44b6d74b8d995657f654455c0e8daeb1f61c46b517c8c717"
+      "size": 2707,
+      "sha256": "sha256:37f6396e319d029df2a62bc14e61f79a2ff86a745be86d9f22e062c292165dae"
     },
     {
       "kind": "preserve",
@@ -122,6 +122,36 @@
     },
     {
       "kind": "create",
+      "output": "src/components/Card.astro",
+      "rule": "component.astro",
+      "ruleVersion": 1,
+      "source": "components/Card.tsx",
+      "review": true,
+      "size": 140,
+      "sha256": "sha256:9decbb8f327c8f1fe90a3982f45a463b0a27125541cb6eaf2608eda4673c2cd3"
+    },
+    {
+      "kind": "create",
+      "output": "src/components/Panel.astro",
+      "rule": "component.astro",
+      "ruleVersion": 1,
+      "source": "components/Panel.tsx",
+      "review": true,
+      "size": 137,
+      "sha256": "sha256:8be4bc314d627aa8c7be113986a4199856ad05ae5591237a3a8d5943c3e3f71a"
+    },
+    {
+      "kind": "copy",
+      "output": "src/components/Panel.module.css",
+      "rule": "style.relocate",
+      "ruleVersion": 1,
+      "source": "components/Panel.module.css",
+      "review": false,
+      "size": 69,
+      "sha256": "sha256:e3acbf3d4371bb2224af544ca187c09a5de056759bcca4eee781e611d0a229f5"
+    },
+    {
+      "kind": "create",
       "output": "src/components/SiteHeader.astro",
       "rule": "component.astro",
       "ruleVersion": 1,
@@ -192,6 +222,16 @@
     },
     {
       "kind": "create",
+      "output": "src/pages/arrow.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/arrow/page.tsx",
+      "review": false,
+      "size": 305,
+      "sha256": "sha256:af69d25b981c0403f0f5987e8c6db6e10a72dadcd91c6325295d8bfde909fa50"
+    },
+    {
+      "kind": "create",
       "output": "src/pages/changelog.astro",
       "rule": "route.static-page",
       "ruleVersion": 1,
@@ -239,6 +279,16 @@
       "review": false,
       "size": 221,
       "sha256": "sha256:eb0be37f6c3c378e30f6c55769076cab8016b8c8237a2bcadc8fd1163e6404a3"
+    },
+    {
+      "kind": "create",
+      "output": "src/pages/statements.astro",
+      "rule": "route.static-page",
+      "ruleVersion": 1,
+      "source": "app/statements/page.tsx",
+      "review": false,
+      "size": 445,
+      "sha256": "sha256:6990ccfe4cbc33314638ec3fed8a4ac83af8fad153bb208455ca7b6ae6b37f98"
     },
     {
       "kind": "copy",
@@ -321,6 +371,16 @@
       "kind": "review",
       "source": "app/page.tsx",
       "text": "converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (child-not-true)"
+    },
+    {
+      "kind": "review",
+      "source": "components/Card.tsx",
+      "text": "converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (attribute-value-serialization)"
+    },
+    {
+      "kind": "review",
+      "source": "components/Panel.tsx",
+      "text": "converted; check the result, because the analysis rates it review, and the conversion relies on assumptions that a review must confirm (attribute-value-serialization)"
     },
     {
       "kind": "review",
