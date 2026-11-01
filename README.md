@@ -74,11 +74,11 @@ The executable is `target/debug/frameshift` (`frameshift.exe` on Windows) after 
 
 `analyze` assesses one App Router package read-only: counting units, weighted and unweighted feasibility, transitive route readiness, dependency compatibility, and explained unknowns and blockers. Reports are deterministic JSON with a versioned schema, and stored reports can be rendered without reopening project source. A high feasibility value does not establish behavioral equivalence. No transformation or verification runs (`D-100`, IMPLEMENTATION.md section 51).
 
-`migrate` (v0, `D-101`) writes a new Astro project with Preact into a directory that must not exist and must lie outside the source. Static pages, layouts, and components that the analysis rates `auto` or `review` are converted; every other file is copied unchanged below `.frameshift/unmigrated/` and listed in `.frameshift/SUMMARY.md`. The source is never modified, output appears only after a complete write through a staging directory, and `--dry-run` lists the planned files without writing (IMPLEMENTATION.md section 52).
+`migrate` (v0, `D-101`) writes a new Astro project with Preact into a directory that must not exist and must lie outside the source. Static pages, layouts, and components that the analysis rates `auto` or `review` are converted; every other file is copied unchanged below `.frameshift/unmigrated/` and listed in `.frameshift/SUMMARY.md`. The source is never modified, output appears only after a complete write through a staging directory, and `--dry-run` lists the planned files without writing (IMPLEMENTATION.md section 52). `plan --out plan.json` records the plan for review, and `migrate --plan plan.json` runs only if the recomputed plan is identical (`D-102`, section 53).
 
 ## Planned command-line interface
 
-The following commands illustrate the intended interface. `inspect`, `analyze`, and a reduced `migrate` exist. Planning, the full migration contract, and verification are a specification, not working software:
+The following commands illustrate the intended interface. `inspect`, `analyze`, `plan`, and a reduced `migrate` exist. The full migration contract and verification are a specification, not working software:
 
 ```text
 frameshift inspect ./my-project
@@ -110,7 +110,7 @@ See [docs/CLI.md](docs/CLI.md) for the full specification.
 
 ## Project status
 
-- **Implementation:** M0 through M4 are complete; M5 is implemented (`D-100`). The `help`, `version`, `inspect`, `analyze`, `report`, `explain`, and assessment `rules` commands exist, and a reduced `migrate` exists under `D-101`; planning and verification remain planned. Rust is the primary implementation language. Other languages may be used for specific, important tasks where they offer a demonstrable quality advantage (see [docs/DECISIONS.md](docs/DECISIONS.md)).
+- **Implementation:** M0 through M4 are complete; M5 is implemented (`D-100`). The `help`, `version`, `inspect`, `analyze`, `report`, `explain`, and assessment `rules` commands exist, `plan` exists under `D-102`, and a reduced `migrate` exists under `D-101`; verification remains planned. Rust is the primary implementation language. Other languages may be used for specific, important tasks where they offer a demonstrable quality advantage (see [docs/DECISIONS.md](docs/DECISIONS.md)).
 - **Repository:** `eiserv/frameshift` on GitHub. The repository is public under `D-066`. Release 0.1.0 is published with binaries for six platforms.
 - **License:** GNU Affero General Public License, version 3 or later (`AGPL-3.0-or-later`). See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - **Contributions:** external code contributions are not being accepted yet. See [CONTRIBUTING.md](CONTRIBUTING.md).
