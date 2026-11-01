@@ -148,6 +148,70 @@ fn migration_writes_the_golden_tree_and_refuses_unsafe_outputs() {
 const PLAN: &[&str] = &["plan", "source", "--to", "astro-preact"];
 
 #[test]
+fn configuration_files_set_options_that_flags_override() {
+    let case = "static-site";
+    let root = workspace(case, "config");
+    let file = root.join("source/frameshift.jsonc");
+    let code = |args: &[&str]| call(&root, args).status.code();
+    // Without a target from a flag or a file, the command is a usage error.
+    assert_eq!(code(&["plan", "source"]), Some(2));
+    fs::write(
+        &file,
+        "// The project's options\n{ \"$schema\": \"x\", \"to\": \"astro-preact\", \"package\": \".\" }\n",
+    )
+    .unwrap();
+    assert_eq!(code(&["plan", "source"]), Some(0));
+    assert_eq!(code(&["analyze", "source"]), Some(0));
+    // --no-config ignores the file, so the target is missing again.
+    assert_eq!(code(&["plan", "source", "--no-config"]), Some(2));
+    assert_eq!(
+        code(&["plan", "source", "--no-config", "--to", "astro-preact"]),
+        Some(0)
+    );
+    assert_eq!(
+        code(&["plan", "source", "--config", "c", "--no-config"]),
+        Some(2)
+    );
+    // The configuration is not copied, and migrate uses it too.
+    assert_eq!(code(&["migrate", "source", "--out", "out"]), Some(0));
+    assert!(!root.join("out/frameshift.jsonc").exists());
+    assert!(
+        !root
+            .join("out/.frameshift/unmigrated/frameshift.jsonc")
+            .exists()
+    );
+    // A file outside the source replaces the one inside it, and a flag
+    // overrides the package that a file selects.
+    fs::write(&file, "{ \"unknown\": true }").unwrap();
+    assert_eq!(code(&["plan", "source", "--to", "astro-preact"]), Some(3));
+    fs::write(
+        root.join("other.jsonc"),
+        "{ \"to\": \"astro-preact\", \"package\": \"missing\" }",
+    )
+    .unwrap();
+    assert_eq!(
+        code(&["plan", "source", "--config", "other.jsonc"]),
+        Some(3)
+    );
+    assert_eq!(
+        code(&[
+            "plan",
+            "source",
+            "--config",
+            "other.jsonc",
+            "--package",
+            "."
+        ]),
+        Some(0)
+    );
+    assert_eq!(
+        code(&["plan", "source", "--config", "absent.jsonc"]),
+        Some(3)
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn plan_documents_approve_exactly_the_run_they_describe() {
     for case in cases() {
         let root = workspace(&case, "approve");

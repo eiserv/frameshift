@@ -2,6 +2,7 @@
 
 mod analysis_cli;
 mod args;
+mod config_cli;
 mod migrate_cli;
 mod render;
 

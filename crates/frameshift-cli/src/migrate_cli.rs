@@ -7,13 +7,14 @@ use std::ffi::OsString;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
-use frameshift_engine::foundation::{PathLimits, SourcePath};
+use frameshift_engine::config::PackageChoice;
 use frameshift_engine::limits::Limits;
 use frameshift_engine::migrate::{
     self, MigrateErrorKind, MigrateOptions, Operation, OperationKind, Plan, TaskKind,
 };
 
 use crate::args::{Format, UsageError};
+use crate::config_cli::{ConfigChoice, Selection};
 use crate::render::{self, escape};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,7 +29,7 @@ pub(crate) enum Request {
 pub(crate) struct Options {
     source: OsString,
     output: PathBuf,
-    package: Option<SourcePath>,
+    selection: Selection,
     dry_run: bool,
     plan: Option<PathBuf>,
 }
@@ -37,7 +38,7 @@ pub(crate) struct Options {
 pub(crate) struct PlanOptions {
     source: OsString,
     output: Option<PathBuf>,
-    package: Option<SourcePath>,
+    selection: Selection,
     show: Show,
     format: Format,
 }
@@ -50,7 +51,7 @@ enum Show {
     Tasks,
 }
 
-pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] --to astro-preact --out <dir> [--package <dir>]\n       [--plan <plan.json>] [--dry-run]\n\
+pub(crate) const HELP: &str = "Usage: frameshift migrate [<source>] [--to astro-preact] --out <dir> [--package <dir>]\n       [--config <file>|--no-config] [--plan <plan.json>] [--dry-run]\n\
 Migrate the Next.js App Router project at <source>, by default the current directory, into a\n\
 new Astro project with Preact at <dir> (migrate v0, D-101). Static pages, layouts,\n\
 and components that the analysis rates auto or review are converted; everything else is\n\
@@ -59,18 +60,20 @@ copied unchanged below .frameshift/unmigrated/ and listed in .frameshift/SUMMARY
 staging directory next to <dir> and renamed into place when complete. The source is never\n\
 modified, and no project code or external tool runs. --plan refuses to continue unless the\n\
 recomputed plan document equals the given one byte for byte; the given file is compared, never\n\
-executed. --dry-run lists the planned files and writes nothing. Exit status: 0 on success,\n\
-2 for invalid arguments, 3 when the source cannot be analyzed or the plan document differs,\n\
-4 when the output location is refused or cannot be written.\n";
+executed. --dry-run lists the planned files and writes nothing. frameshift.jsonc in <source>\n\
+or the --config file can set the target and the package; flags override it. Exit status: 0 on\n\
+success, 2 for invalid arguments, 3 when the source or configuration cannot be read or the plan\n\
+document differs, 4 when the output location is refused or cannot be written.\n";
 
-pub(crate) const PLAN_HELP: &str = "Usage: frameshift plan [<source>] --to astro-preact [--package <dir>] [--out <plan.json>]\n       [--show operations|files|tasks] [--format text|json]\n\
+pub(crate) const PLAN_HELP: &str = "Usage: frameshift plan [<source>] [--to astro-preact] [--package <dir>] [--out <plan.json>]\n       [--config <file>|--no-config] [--show operations|files|tasks] [--format text|json]\n\
 Compute what `frameshift migrate` would do for the project at <source>, by default the current\n\
 directory, without writing project files. The frameshift.plan document records the source\n\
 snapshot, versions, options, the digest of every output file, and the manual tasks, under one\n\
 plan hash. --out writes it to a new file outside <source> for review or approval, and\n\
---format json prints it. --show lists every operation, output file, or manual task. Exit\n\
-status: 0 on success, 2 for invalid arguments, 3 when the source cannot be analyzed, 4 when the\n\
-plan document cannot be written.\n";
+--format json prints it. --show lists every operation, output file, or manual task.\n\
+frameshift.jsonc in <source> or the --config file can set the target and the package; flags\n\
+override it. Exit status: 0 on success, 2 for invalid arguments, 3 when the source or\n\
+configuration cannot be read, 4 when the plan document cannot be written.\n";
 
 // How many operations the plan overview lists.
 const OVERVIEW_OPERATIONS: usize = 8;
@@ -83,11 +86,17 @@ const PLANNED: &[&str] = &[
     "--report",
     "--show-files",
     "--env-names",
-    "--config",
-    "--no-config",
 ];
 
-const VALUE_OPTIONS: &[&str] = &["--to", "--out", "--package", "--format", "--plan", "--show"];
+const VALUE_OPTIONS: &[&str] = &[
+    "--to",
+    "--out",
+    "--package",
+    "--format",
+    "--plan",
+    "--show",
+    "--config",
+];
 
 fn command(args: &[OsString]) -> Option<(usize, &str)> {
     let mut index = 0;
@@ -144,8 +153,8 @@ fn parse_command(
 ) -> Result<Request, &'static str> {
     let mut seen = BTreeSet::new();
     let mut operands = Vec::new();
-    let (mut target, mut output, mut package, mut dry_run, mut help) =
-        (None, None, None, false, false);
+    let (mut target, mut output, mut dry_run, mut help) = (None, None, false, false);
+    let (mut package, mut config, mut no_config) = (None, None, false);
     let (mut approved, mut show, mut format) = (None, Show::Overview, Format::Text);
     let mut i = 0;
     while i < args.len() {
@@ -176,14 +185,14 @@ fn parse_command(
         if (planning && matches!(key, "--dry-run" | "--plan")) || (!planning && key == "--show") {
             return Err("unknown option; run 'frameshift help' for usage");
         }
-        if matches!(key, "--help" | "--dry-run") {
+        if matches!(key, "--help" | "--dry-run" | "--no-config") {
             if inline.is_some() {
                 return Err("flag does not accept a value");
             }
-            if key == "--help" {
-                help = true;
-            } else {
-                dry_run = true;
+            match key {
+                "--help" => help = true,
+                "--dry-run" => dry_run = true,
+                _ => no_config = true,
             }
             continue;
         }
@@ -206,6 +215,10 @@ fn parse_command(
             approved = Some(PathBuf::from(value));
             continue;
         }
+        if key == "--config" {
+            config = Some(PathBuf::from(value));
+            continue;
+        }
         let value = value.to_str().ok_or("option values must be valid UTF-8")?;
         match key {
             "--to" => target = Some(value.to_owned()),
@@ -222,14 +235,10 @@ fn parse_command(
                 };
             }
             _ => {
-                package =
-                    if value == "." {
-                        None
-                    } else {
-                        Some(SourcePath::new(value, PathLimits::default()).map_err(
-                            |_| "--package requires a canonical root-relative directory",
-                        )?)
-                    };
+                package = Some(
+                    PackageChoice::parse(value, &Limits::default())
+                        .ok_or("--package requires a canonical root-relative directory")?,
+                );
             }
         }
     }
@@ -243,12 +252,19 @@ fn parse_command(
             Request::Help
         });
     }
-    match target.as_deref() {
-        Some("astro-preact") => {}
-        Some(_) => return Err("the only available target is astro-preact"),
-        None if planning => return Err("plan requires --to astro-preact"),
-        None => return Err("migrate requires --to astro-preact"),
+    if target.as_deref().is_some_and(|t| t != "astro-preact") {
+        return Err("the only available target is astro-preact");
     }
+    let selection = Selection {
+        target: target.is_some(),
+        package,
+        config: match (config, no_config) {
+            (Some(_), true) => return Err("--config and --no-config exclude each other"),
+            (Some(path), false) => ConfigChoice::File(path),
+            (None, true) => ConfigChoice::Ignored,
+            (None, false) => ConfigChoice::Source,
+        },
+    };
     if operands.len() > 1 {
         return Err(if planning {
             "plan takes at most one source"
@@ -264,7 +280,7 @@ fn parse_command(
         return Ok(Request::Plan(PlanOptions {
             source,
             output,
-            package,
+            selection,
             show,
             format,
         }));
@@ -273,7 +289,7 @@ fn parse_command(
     Ok(Request::Migrate(Options {
         source,
         output,
-        package,
+        selection,
         dry_run,
         plan: approved,
     }))
@@ -318,10 +334,17 @@ fn run_plan(
         }
         fail(stderr, code, message)
     };
+    let package = match options
+        .selection
+        .resolve(source, "plan requires --to astro-preact")
+    {
+        Ok(package) => package,
+        Err(failure) => return failed(stdout, stderr, failure.code, &failure.message),
+    };
     let plan = match migrate::plan(
         source,
         &MigrateOptions {
-            package: options.package.clone(),
+            package,
             ..MigrateOptions::default()
         },
     ) {
@@ -438,10 +461,17 @@ pub(crate) fn run(
         Request::Migrate(options) => options,
     };
     let source = Path::new(&options.source);
+    let package = match options
+        .selection
+        .resolve(source, "migrate requires --to astro-preact")
+    {
+        Ok(package) => package,
+        Err(failure) => return fail(stderr, failure.code, &failure.message),
+    };
     let plan = match migrate::plan(
         source,
         &MigrateOptions {
-            package: options.package.clone(),
+            package,
             ..MigrateOptions::default()
         },
     ) {
@@ -546,8 +576,17 @@ mod tests {
         assert_eq!(parse_strings(&["help", "migrate"]), Some(Ok(Request::Help)));
         for (args, message) in [
             (
-                vec!["migrate", "--out", "o"],
-                "migrate requires --to astro-preact",
+                vec![
+                    "migrate",
+                    "--to",
+                    "astro-preact",
+                    "--out",
+                    "o",
+                    "--config",
+                    "c",
+                    "--no-config",
+                ],
+                "--config and --no-config exclude each other",
             ),
             (
                 vec!["migrate", "--to", "astro-preact"],
