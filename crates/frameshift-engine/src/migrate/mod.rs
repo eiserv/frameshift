@@ -10,13 +10,14 @@
 //! through `frameshift-output`, into a new directory outside the source.
 
 mod convert;
+mod plan_document;
 mod scaffold;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use frameshift_catalog::Status;
-use frameshift_core::{OutputPath, SourcePath, SourceText, UnitKind};
+use frameshift_core::{OutputPath, Sha256Digest, SourcePath, SourceText, UnitKind};
 use frameshift_emit::{Indent, LineEnding, PrintOptions};
 use frameshift_input::{EntryKind, FileRead, Snapshot};
 use frameshift_nextjs::{AppRoute, Convention, Metadata, RouteKind, SegmentKind};
@@ -25,6 +26,7 @@ use crate::analysis::{self, AnalyzeErrorKind, AnalyzeOptions, FileClass, Strateg
 use crate::limits::Limits;
 use crate::project::FileState;
 use convert::{Context, Role as AstroRole, RootFacts, Target, TargetKind};
+pub use plan_document::{Binding, PLAN_SCHEMA_VERSION};
 
 pub use frameshift_output::Destination;
 
@@ -110,6 +112,18 @@ pub enum TaskKind {
     NotCopied,
 }
 
+impl TaskKind {
+    /// Stable lowercase spelling.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Project => "project",
+            Self::Preserved => "preserved",
+            Self::Review => "review",
+            Self::NotCopied => "not-copied",
+        }
+    }
+}
+
 /// Work that remains for a person after the migration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ManualTask {
@@ -124,12 +138,33 @@ pub struct ManualTask {
 /// The complete plan: every output file with its bytes, and the remaining work.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Plan {
-    /// Established Next.js version, if known.
-    pub source_version: Option<String>,
     /// Operations sorted by output path bytes.
     pub operations: Vec<Operation>,
     /// Manual tasks sorted by kind and source path.
     pub tasks: Vec<ManualTask>,
+    /// What the plan depends on.
+    pub binding: Binding,
+    hash: Sha256Digest,
+    document: String,
+}
+
+impl Plan {
+    /// The plan hash, which covers the binding, the digest of every output
+    /// file, and the manual tasks (`D-102`).
+    pub const fn hash(&self) -> Sha256Digest {
+        self.hash
+    }
+
+    /// The `frameshift.plan` document.
+    pub fn document(&self) -> &str {
+        &self.document
+    }
+
+    /// Whether `stored` is exactly the document of this recomputed plan. A
+    /// stored document is only ever compared, never interpreted (`P-005`).
+    pub fn matches_document(&self, stored: &[u8]) -> bool {
+        stored == self.document.as_bytes()
+    }
 }
 
 /// Failure category of planning or execution.
@@ -257,12 +292,13 @@ pub fn plan(root: &Path, options: &MigrateOptions) -> Result<Plan, MigrateError>
         },
         message: error.to_string(),
     })?;
-    Planner::new(&parts, &options.limits).plan()
+    Planner::new(&parts, options).plan()
 }
 
 struct Planner<'a> {
     parts: &'a analysis::Parts,
     limits: &'a Limits,
+    package: Option<SourcePath>,
     prefix: String,
     app: String,
     units: BTreeMap<&'a SourcePath, Vec<&'a Unit>>,
@@ -273,7 +309,7 @@ struct Planner<'a> {
 }
 
 impl<'a> Planner<'a> {
-    fn new(parts: &'a analysis::Parts, limits: &'a Limits) -> Self {
+    fn new(parts: &'a analysis::Parts, options: &'a MigrateOptions) -> Self {
         let prefix = parts
             .project
             .package()
@@ -305,7 +341,8 @@ impl<'a> Planner<'a> {
             .collect();
         Self {
             parts,
-            limits,
+            limits: &options.limits,
+            package: options.package.clone(),
             prefix,
             app,
             units,
@@ -1059,10 +1096,26 @@ impl<'a> Planner<'a> {
                 "two operations write one output path",
             ));
         }
-        Ok(Plan {
+        let snapshot = self.snapshot().identity().map_err(|error| MigrateError {
+            kind: MigrateErrorKind::Input,
+            message: error.to_string(),
+        })?;
+        let binding = Binding {
+            snapshot,
+            engine_version: crate::version::info().engine_version,
+            ruleset: analysis::RULESET,
+            knowledge_bases: crate::version::info().knowledge_bases,
+            target_profile: analysis::TARGET_PROFILE,
             source_version: self.parts.analysis.source_version.clone(),
+            package: self.package,
+        };
+        let printed = plan_document::print(&binding, &operations, &tasks, self.limits)?;
+        Ok(Plan {
             operations,
             tasks,
+            binding,
+            hash: printed.hash,
+            document: printed.document,
         })
     }
 }

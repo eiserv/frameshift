@@ -475,7 +475,10 @@ pub(crate) fn run(
         },
     }
 }
-fn report_destination(source: &Path, destination: &Path) -> Result<PathBuf, &'static str> {
+pub(crate) fn report_destination(
+    source: &Path,
+    destination: &Path,
+) -> Result<PathBuf, &'static str> {
     let root =
         std::fs::canonicalize(source).map_err(|_| "cannot establish report output containment")?;
     let parent = destination
@@ -492,7 +495,7 @@ fn report_destination(source: &Path, destination: &Path) -> Result<PathBuf, &'st
         .ok_or("report output must name a new file")?;
     Ok(parent.join(name))
 }
-fn write_new(path: &Path, bytes: &[u8]) -> Result<(), &'static str> {
+pub(crate) fn write_new(path: &Path, bytes: &[u8]) -> Result<(), &'static str> {
     // create_new rejects existing files and links. Report destinations are
     // explicit output paths; never overwrite an analyzed or stored source.
     let mut file = std::fs::OpenOptions::new()

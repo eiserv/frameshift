@@ -109,6 +109,7 @@ Statuses change through an edit to this file under the integration workflow in D
 | D-099 | Close M4 and begin M5 with the feature catalog and its detection | Accepted |
 | D-100 | Complete M5 with read-only analysis and reporting | Accepted |
 | D-101 | Migrate v0: a reduced first `migrate` for static App Router sites | Accepted |
+| D-102 | M6 plan document, plan hash, and `frameshift plan` | Accepted |
 | P-001 | Go as the single implementation language, CGO disabled | Superseded by D-018 |
 | P-002 | Purpose-built parsers | Accepted |
 | P-003 | Span-based edits and targeted printers; no concrete syntax tree initially | Accepted |
@@ -1172,6 +1173,22 @@ Statuses change through an edit to this file under the integration workflow in D
 - **Tradeoffs:** No approval artifact or plan hash yet (`P-005`), so a reviewer cannot bind a run to a reviewed plan. Relative import rewriting changes alias spellings that a human might prefer to keep. Many units that the analysis rates `auto` stay preserved in v0 when the converter subset does not cover them yet, which understates what V1 will migrate. Without `manifest.json`, `--on-existing replace-managed` cannot exist yet.
 - **Evolution (`D-033`):** The operation kinds, output path mapping, and manual tasks are the M6 plan model; a later step adds the plan document, its hash and binding, the configuration file, and the remaining options without changing v0 output for the same input. Rules can widen the converter subset one construct at a time, each with fixtures.
 - **Revisit if:** The owner prefers to implement the full M6 plan document first, or a converter limitation makes the preserved share of typical static sites so large that v0 is not useful.
+
+### D-102: M6 plan document, plan hash, and `frameshift plan`
+
+- **Status:** Accepted (2026-11-01), under the owner's instruction to continue the roadmap. It implements the accepted `P-005`.
+- **Context:** Migrate v0 (`D-101`) left out the approval artifact. M6 requires a plan document with hashing and binding. Its configuration file and rule registry are separate increments and are not part of this decision.
+- **Decision:**
+  - **Document:** `frameshift.plan`, schema version 1 ([frameshift.plan.schema.json](../schemas/frameshift.plan.schema.json)), printed by the deterministic document writer. It holds `planHash`, `binding` (snapshot identity, engine version, ruleset, knowledge bases, target profile, source framework and version, and the options `to` and `package`), `operations` (kind, output, rule, source, review flag, size, and SHA-256 of the exact output bytes), and `tasks`. It holds no output bytes.
+  - **Hash:** SHA-256 of the domain line `frameshift.plan.v1` followed by the printed document without `planHash`. Output bytes enter through their digests.
+  - **Binding:** The snapshot identity covers every admitted file and inventory entry of the run root, so any source change makes a plan stale, also in a file that no operation copies. A new engine version also makes it stale.
+  - **Approval:** `migrate --plan <file>` recomputes the plan and requires the stored file to equal the recomputed document byte for byte. The stored file is read with an explicit size bound and compared; it is never parsed or interpreted, so no field of it can influence a run. A mismatch exits with 3 before the output location is checked.
+  - **Command:** `frameshift plan [<source>] --to astro-preact [--package <dir>] [--out <plan.json>] [--show operations|files|tasks] [--format text|json]`. `--out` writes only a new file outside the source, as `analyze --report` does; a refused or failed write exits with 4.
+  - **Limit:** The document shares the 64 MiB bound `analysis.max-report-bytes` instead of adding a limit that would have the same value and purpose.
+- **Rationale:** Byte comparison is stricter than comparing hashes and needs no parser for untrusted input, so a tampered plan cannot reach any engine code path other than an equality check.
+- **Tradeoffs:** A plan document that an editor or a line-ending conversion changed is refused, even when its hash is intact. Plans do not survive an engine upgrade. The effective resource limits are not part of the binding, because no command-line option changes them yet.
+- **Evolution (`D-033`):** `frameshift.jsonc` adds its effective options to `binding.options`, which changes the document and therefore requires a new `schemaVersion` only if existing members change meaning. Per-operation rule versions and source spans follow with the rule registry.
+- **Revisit if:** Users need plans to survive reformatting. Then compare hashes after a validated parse.
 
 ## Technique proposals and related accepted decisions
 

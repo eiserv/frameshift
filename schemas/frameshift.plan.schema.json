@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frameshift plan document",
+  "description": "An approval artifact that binds one migration plan to its source snapshot, versions, and options. It is compared with a recomputed plan and never executed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "schemaVersion", "planHash", "binding", "operations", "tasks"],
+  "properties": {
+    "kind": { "const": "frameshift.plan" },
+    "schemaVersion": { "const": 1 },
+    "planHash": { "$ref": "#/$defs/digest" },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot", "engineVersion", "ruleset", "knowledgeBases", "targetProfile", "source", "options"],
+      "properties": {
+        "snapshot": { "$ref": "#/$defs/digest" },
+        "engineVersion": { "type": "string", "minLength": 1 },
+        "ruleset": { "type": "string", "minLength": 1 },
+        "knowledgeBases": { "type": "array", "items": { "type": "string" } },
+        "targetProfile": { "type": "string", "minLength": 1 },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["framework", "version"],
+          "properties": {
+            "framework": { "const": "nextjs" },
+            "version": { "type": ["string", "null"] }
+          }
+        },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["to", "package"],
+          "properties": {
+            "to": { "const": "astro-preact" },
+            "package": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "output", "rule", "source", "review", "size", "sha256"],
+        "properties": {
+          "kind": { "enum": ["create", "transform", "copy", "config", "preserve"] },
+          "output": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 },
+          "source": { "type": ["string", "null"] },
+          "review": { "type": "boolean" },
+          "size": { "type": "integer", "minimum": 0 },
+          "sha256": { "$ref": "#/$defs/digest" }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "source", "text"],
+        "properties": {
+          "kind": { "enum": ["project", "preserved", "review", "not-copied"] },
+          "source": { "type": ["string", "null"] },
+          "text": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

@@ -22,6 +22,7 @@ const ROOT_HELP: &str = concat!(
     "  report <file>       Render a stored analysis report\n",
     "  explain <id>        Explain a finding, feature, or assessment rule\n",
     "  rules               List assessment rule metadata\n",
+    "  plan [<source>]     Compute and record the migration plan\n",
     "  migrate [<source>]  Migrate static pages into a new Astro project (v0)\n",
     "  version             Print engine and build information\n",
     "\nOptions:\n",
@@ -29,14 +30,14 @@ const ROOT_HELP: &str = concat!(
     "  --version           Print the short version string\n",
     "  --format text|json  Select command output (default: text)\n",
     "  --package <dir>     Select one workspace package\n",
-    "\nPlanning and verification commands are not implemented.\n",
+    "\nVerification commands are not implemented.\n",
 );
 
 pub(crate) fn help(topic: HelpTopic) -> &'static str {
     match topic {
         HelpTopic::Root => ROOT_HELP,
         HelpTopic::Help => {
-            "Usage: frameshift help [help|inspect|analyze|report|explain|rules|migrate|version]\n\
+            "Usage: frameshift help [help|inspect|analyze|report|explain|rules|plan|migrate|version]\n\
 Print usage for the available commands. Without a topic, print the command overview.\n"
         }
         HelpTopic::Inspect => {
