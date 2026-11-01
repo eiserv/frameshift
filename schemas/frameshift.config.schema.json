@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Frameshift project configuration",
+  "description": "The optional frameshift.jsonc file, written as JSON with comments. It describes the project and the desired migration. It cannot enable code execution, change overwrite policies, choose the output location, or name a path outside the source root.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "to": { "const": "astro-preact", "description": "The migration target." },
+    "package": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The analyzed workspace member as a canonical root-relative directory, or . for the root."
+    }
+  }
+}
