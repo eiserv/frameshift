@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/eiserv/frameshift/compare/v0.2.0...v0.3.0) (2026-11-01)
+
+
+### Features
+
+* **analyzer:** convert async pages with body statements to Astro ([#64](https://github.com/eiserv/frameshift/issues/64)) ([5941c4d](https://github.com/eiserv/frameshift/commit/5941c4d86d922534638be1f7e7f46da830d76768))
+* **config:** add the frameshift.jsonc project configuration ([#67](https://github.com/eiserv/frameshift/issues/67)) ([282e8bd](https://github.com/eiserv/frameshift/commit/282e8bd372f9ca73ba169e6d86ddf910c76184f3))
+* **migrate:** add migrate v0 for static App Router sites ([#63](https://github.com/eiserv/frameshift/issues/63)) ([47dfceb](https://github.com/eiserv/frameshift/commit/47dfceb0cc0b39041493bc6fe0dfe1dd29bc036a))
+* **migrate:** add plan documents and frameshift plan ([#66](https://github.com/eiserv/frameshift/issues/66)) ([1c336ef](https://github.com/eiserv/frameshift/commit/1c336ef8f3d5b7669c3916de27a0ccc7b6babbb3))
+* **migrate:** register transformation rules with versions ([#68](https://github.com/eiserv/frameshift/issues/68)) ([519ce78](https://github.com/eiserv/frameshift/commit/519ce780b63f88e0439896c599b3a397991e779f))
+* **migrate:** widen conversion and add manifest, replacement, and structural checks ([#69](https://github.com/eiserv/frameshift/issues/69)) ([fb2ef37](https://github.com/eiserv/frameshift/commit/fb2ef371da074eaaf1091a42667fea8521696c8d))
+
 ## [0.2.0](https://github.com/eiserv/frameshift/compare/v0.1.0...v0.2.0) (2026-10-28)
 
 
